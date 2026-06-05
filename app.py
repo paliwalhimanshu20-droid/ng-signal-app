@@ -11,7 +11,10 @@ def send_telegram(message):
         "chat_id": CHAT_ID,
         "text": message
     }
-    requests.post(url, data=payload)
+    response = requests.post(url, data=payload)
+
+st.write("Status Code:", response.status_code)
+st.write("Response:", response.json())
 
 # ---------------- APP UI ----------------
 st.title("📊 Natural Gas Signal App (MCX)")
