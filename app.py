@@ -2,28 +2,33 @@ import streamlit as st
 import requests
 
 # ---------------- TELEGRAM CONFIG ----------------
-BOT_TOKEN = "8281917891:AAEM1gWz7jaJMpIZj5Wlu9D75RQv2JcPtsQ"
+
+BOT_TOKEN = "8281917891:AAHKMHhOh9ZbIoqC57xfwWRHIhdJsCg0Rmk"
 CHAT_ID = "8351444537"
+
+# ---------------- TELEGRAM FUNCTION ----------------
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
     payload = {
         "chat_id": CHAT_ID,
         "text": message
     }
+
     response = requests.post(url, data=payload)
 
-st.write("Status Code:", response.status_code)
-st.write("Response:", response.json())
+    return response.json()
 
 # ---------------- APP UI ----------------
+
 st.title("📊 Natural Gas Signal App (MCX)")
 st.write("Click the button to generate signal")
 
-# ---------------- SIMPLE STRATEGY (A+ FILTER BASE) ----------------
+# ---------------- SIGNAL LOGIC ----------------
+
 def generate_signal():
 
-    # Example logic (we will replace with real Upstox data later)
     high = 290.0
     atr = 2.5
 
@@ -42,6 +47,7 @@ def generate_signal():
     return signal
 
 # ---------------- BUTTON ACTION ----------------
+
 if st.button("Run Analysis"):
 
     sig = generate_signal()
@@ -58,7 +64,16 @@ Target 2: {sig['t2']}
 Timeframe: DAILY
 """
 
-    send_telegram(message)
+    result = send_telegram(message)
 
-    st.success("Signal sent to Telegram!")
+    st.subheader("Telegram Response")
+    st.write(result)
+
+    if result.get("ok"):
+        st.success("Signal sent to Telegram successfully!")
+    else:
+        st.error("Telegram message failed!")
+        st.write(result)
+
+    st.subheader("Generated Signal")
     st.write(sig)
