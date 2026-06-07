@@ -5,7 +5,11 @@ import requests
 
 BOT_TOKEN = "8281917891:AAHKMHhOh9ZbIoqC57xfwWRHIhdJsCg0Rmk"
 CHAT_ID = "8351444537"
-UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTI1YTI4ODFjNGM3YTE0YmVjMmQzZDEiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSwiaWF0IjoxNzgwODUxMzM2LCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3ODA4Njk2MDB9.Isi-qnqat8SMSXjlTlFYmvRstBpxI8TQf7_o8uXEj2s"
+
+# ---------------- UPSTOX CONFIG ----------------
+
+UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTI1YTY3OTIyZTRjMzMyZDkwNWQxYTUiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSwiaWF0IjoxNzgwODUyMzQ1LCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3ODA4Njk2MDB9.O9U_wuO83TRw62YAElftXeqlAtqucKp8md8dnT6VtpU"
+
 # ---------------- TELEGRAM FUNCTION ----------------
 
 def send_telegram(message):
@@ -47,11 +51,14 @@ def load_instruments():
     url = "https://api.upstox.com/v2/instruments"
 
     headers = {
-        "Authorization": f"Bearer {eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTI1YTI4ODFjNGM3YTE0YmVjMmQzZDEiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSw}",
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
         "Accept": "application/json"
     }
 
     response = requests.get(url, headers=headers)
+
+    st.write("Status Code:", response.status_code)
+    st.write("Response:", response.text)
 
     return response
 
@@ -60,47 +67,33 @@ def load_instruments():
 st.title("📊 Natural Gas Signal App (MCX)")
 st.write("NG Signal Pro - Testing Phase")
 
-# ---------------- RUN ANALYSIS ----------------
-
 if st.button("Run Analysis"):
 
-    sig = generate_signal()
+    signal = generate_signal()
 
-    message = f"""
-NATURAL GAS SIGNAL (MCX)
+    msg = f"""
+🔥 NG BUY SIGNAL
 
-Type: {sig['type']}
-Entry: {sig['entry']}
-Stop Loss: {sig['sl']}
-Target 1: {sig['t1']}
-Target 2: {sig['t2']}
+Entry: {signal['entry']}
+Stop Loss: {signal['sl']}
+Target 1: {signal['t1']}
+Target 2: {signal['t2']}
 """
 
-    st.subheader("Generated Signal")
-    st.write(sig)
+    st.success(msg)
 
-    result = send_telegram(message)
+    telegram_response = send_telegram(msg)
 
-    st.subheader("Telegram Response")
-    st.write(result)
-
-    if result.get("ok"):
-        st.success("Signal sent successfully!")
-    else:
-        st.error("Telegram message failed!")
-
-# ---------------- FIND CONTRACTS ----------------
+    st.write("Telegram Response:")
+    st.json(telegram_response)
 
 if st.button("Find NATGAS Contracts"):
 
-    res = load_instruments()
+    response = load_instruments()
 
-    st.write("Status Code:", res.status_code)
+    st.write("Status Code:", response.status_code)
 
-    if res.status_code != 200:
-        st.error("API Error")
-        st.write(res.text)
-
-    else:
-        st.success("Instrument API Connected")
-        st.write(res.json())
+    try:
+        st.json(response.json())
+    except:
+        st.write(response.text)
