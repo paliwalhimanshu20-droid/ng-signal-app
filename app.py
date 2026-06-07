@@ -3,11 +3,9 @@ import requests
 
 # ---------------- TELEGRAM CONFIG ----------------
 
-BOT_TOKEN = st.secrets["BOT_TOKEN"]
-CHAT_ID = st.secrets["CHAT_ID"]
-
-UPSTOX_ACCESS_TOKEN = st.secrets["UPSTOX_ACCESS_TOKEN"]
-
+BOT_TOKEN = "8281917891:AAHKMHhOh9ZbIoqC57xfwWRHIhdJsCg0Rmk"
+CHAT_ID = "8351444537"
+UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTI0NWEwOWEzZjdhMjFjZjNhMjFjN2QiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSwiaWF0IjoxNzgwNzY3MjQxLCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3ODA3ODMyMDB9.nv_r4ovuOer_Q3tVLsMDTtnXZgJ4fDNeJx6YjdgcJuU"
 # ---------------- TELEGRAM FUNCTION ----------------
 
 def send_telegram(message):
