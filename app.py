@@ -1,16 +1,13 @@
 import streamlit as st
 import requests
 
-def get_instruments():
-    url = "https://api.upstox.com/v2/instruments"
+import pandas as pd
 
-    headers = {
-        "Authorization": f"Bearer {st.secrets['UPSTOX_ACCESS_TOKEN']}",
-        "Accept": "application/json"
-    }
+def load_instruments():
+    url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.csv"
 
-    response = requests.get(url, headers=headers)
-    return response.text
+    df = pd.read_csv(url)
+    return df
 # ---------------- TELEGRAM CONFIG ----------------
 
 BOT_TOKEN = "8281917891:AAHKMHhOh9ZbIoqC57xfwWRHIhdJsCg0Rmk"
@@ -59,6 +56,12 @@ def generate_signal():
 # ---------------- BUTTON ACTION ----------------
 
 if st.button("Run Analysis"):
+    if st.button("Find NATGAS Contracts"):
+    df = load_instruments()
+
+    natgas = df[df['tradingsymbol'].str.contains("GAS", na=False)]
+
+    st.write(natgas.head(20))
 
     sig = generate_signal()
 
