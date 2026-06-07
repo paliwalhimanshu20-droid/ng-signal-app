@@ -47,7 +47,7 @@ def load_instruments():
     url = "https://api.upstox.com/v2/instruments"
 
     headers = {
-        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTI1YTI4ODFjNGM3YTE0YmVjMmQzZDEiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSw}",
         "Accept": "application/json"
     }
 
