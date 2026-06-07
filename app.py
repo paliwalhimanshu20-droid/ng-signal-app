@@ -76,7 +76,7 @@ if st.button("Find NATGAS Contracts"):
     natgas = df[df['tradingsymbol'].str.contains("GAS", na=False)]
 
     st.write(natgas.head(20))
-🔥 NATURAL GAS SIGNAL (MCX)
+NATURAL GAS SIGNAL (MCX)
 
 Type: {sig['type']}
 Entry: {sig['entry']}
