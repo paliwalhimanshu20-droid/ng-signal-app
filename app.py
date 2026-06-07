@@ -1,6 +1,16 @@
 import streamlit as st
 import requests
 
+def get_instruments():
+    url = "https://api.upstox.com/v2/instruments"
+
+    headers = {
+        "Authorization": f"Bearer {st.secrets['UPSTOX_ACCESS_TOKEN']}",
+        "Accept": "application/json"
+    }
+
+    response = requests.get(url, headers=headers)
+    return response.text
 # ---------------- TELEGRAM CONFIG ----------------
 
 BOT_TOKEN = "8281917891:AAHKMHhOh9ZbIoqC57xfwWRHIhdJsCg0Rmk"
