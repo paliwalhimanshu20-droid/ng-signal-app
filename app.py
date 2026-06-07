@@ -64,8 +64,7 @@ Type: {sig['type']}
 Entry: {sig['entry']}
 SL: {sig['sl']}
 T1: {sig['t1']}
-T2: {sig['t2']}
-"""
+T2: {sig['t2']}"""
 
     st.write(message)
 
