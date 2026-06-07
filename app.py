@@ -56,16 +56,26 @@ def generate_signal():
 # ---------------- BUTTON ACTION ----------------
 
 if st.button("Run Analysis"):
-    if st.button("Find NATGAS Contracts"):
+    sig = generate_signal()
+
+    message = f"""
+SIGNAL GENERATED
+Type: {sig['type']}
+Entry: {sig['entry']}
+SL: {sig['sl']}
+T1: {sig['t1']}
+T2: {sig['t2']}
+"""
+
+    st.write(message)
+
+
+if st.button("Find NATGAS Contracts"):
     df = load_instruments()
 
     natgas = df[df['tradingsymbol'].str.contains("GAS", na=False)]
 
     st.write(natgas.head(20))
-
-    sig = generate_signal()
-
-    message = f"""
 🔥 NATURAL GAS SIGNAL (MCX)
 
 Type: {sig['type']}
