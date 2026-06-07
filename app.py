@@ -1,17 +1,12 @@
 import streamlit as st
 import requests
 
-import pandas as pd
-
-def load_instruments():
-    url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.csv"
-
-    df = pd.read_csv(url)
-    return df
 # ---------------- TELEGRAM CONFIG ----------------
 
-BOT_TOKEN = "8281917891:AAHKMHhOh9ZbIoqC57xfwWRHIhdJsCg0Rmk"
-CHAT_ID = "8351444537"
+BOT_TOKEN = st.secrets["BOT_TOKEN"]
+CHAT_ID = st.secrets["CHAT_ID"]
+
+UPSTOX_ACCESS_TOKEN = st.secrets["UPSTOX_ACCESS_TOKEN"]
 
 # ---------------- TELEGRAM FUNCTION ----------------
 
@@ -41,17 +36,31 @@ def generate_signal():
         "type": "BUY",
         "entry": round(entry, 2),
         "sl": round(sl, 2),
-        "t1": round(entry + 2 * risk, 2),
-        "t2": round(entry + 3 * risk, 2)
+        "t1": round(entry + (2 * risk), 2),
+        "t2": round(entry + (3 * risk), 2)
     }
 
     return signal
 
+# ---------------- UPSTOX TEST ----------------
 
-# ---------------- STREAMLIT UI ----------------
+def load_instruments():
+
+    url = "https://api.upstox.com/v2/instruments"
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    response = requests.get(url, headers=headers)
+
+    return response
+
+# ---------------- APP UI ----------------
 
 st.title("📊 Natural Gas Signal App (MCX)")
-st.write("Click buttons below to run system")
+st.write("NG Signal Pro - Testing Phase")
 
 # ---------------- RUN ANALYSIS ----------------
 
@@ -60,7 +69,7 @@ if st.button("Run Analysis"):
     sig = generate_signal()
 
     message = f"""
-🔥 NATURAL GAS SIGNAL (MCX)
+NATURAL GAS SIGNAL (MCX)
 
 Type: {sig['type']}
 Entry: {sig['entry']}
@@ -72,40 +81,28 @@ Target 2: {sig['t2']}
     st.subheader("Generated Signal")
     st.write(sig)
 
-    st.subheader("Message Preview")
-    st.text(message)
-
     result = send_telegram(message)
 
     st.subheader("Telegram Response")
     st.write(result)
 
     if result.get("ok"):
-        st.success("Signal sent to Telegram successfully!")
+        st.success("Signal sent successfully!")
     else:
         st.error("Telegram message failed!")
 
-
-# ---------------- NATGAS CONTRACT TEST (PLACEHOLDER) ----------------
-
-def load_instruments():
-    url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.csv"
-    df = None
-    try:
-        import pandas as pd
-        df = pd.read_csv(url)
-    except Exception as e:
-        return str(e)
-
-    return df
-
+# ---------------- FIND CONTRACTS ----------------
 
 if st.button("Find NATGAS Contracts"):
 
-    df = load_instruments()
+    res = load_instruments()
 
-    if isinstance(df, str):
-        st.error(df)
+    st.write("Status Code:", res.status_code)
+
+    if res.status_code != 200:
+        st.error("API Error")
+        st.write(res.text)
+
     else:
-        natgas = df[df['tradingsymbol'].str.contains("GAS", na=False)]
-        st.write(natgas.head(20))
+        st.success("Instrument API Connected")
+        st.write(res.json())
