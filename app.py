@@ -24,13 +24,7 @@ def send_telegram(message):
     }
 
     response = requests.post(url, data=payload)
-
     return response.json()
-
-# ---------------- APP UI ----------------
-
-st.title("📊 Natural Gas Signal App (MCX)")
-st.write("Click the button to generate signal")
 
 # ---------------- SIGNAL LOGIC ----------------
 
@@ -53,38 +47,33 @@ def generate_signal():
 
     return signal
 
-# ---------------- BUTTON ACTION ----------------
+
+# ---------------- STREAMLIT UI ----------------
+
+st.title("📊 Natural Gas Signal App (MCX)")
+st.write("Click buttons below to run system")
+
+# ---------------- RUN ANALYSIS ----------------
 
 if st.button("Run Analysis"):
+
     sig = generate_signal()
 
     message = f"""
-SIGNAL GENERATED
-Type: {sig['type']}
-Entry: {sig['entry']}
-SL: {sig['sl']}
-T1: {sig['t1']}
-T2: {sig['t2']}"""
-
-    st.write(message)
-
-
-if st.button("Find NATGAS Contracts"):
-    df = load_instruments()
-
-    natgas = df[df['tradingsymbol'].str.contains("GAS", na=False)]
-
-    st.write(natgas.head(20))
-NATURAL GAS SIGNAL (MCX)
+🔥 NATURAL GAS SIGNAL (MCX)
 
 Type: {sig['type']}
 Entry: {sig['entry']}
 Stop Loss: {sig['sl']}
 Target 1: {sig['t1']}
 Target 2: {sig['t2']}
-
-Timeframe: DAILY
 """
+
+    st.subheader("Generated Signal")
+    st.write(sig)
+
+    st.subheader("Message Preview")
+    st.text(message)
 
     result = send_telegram(message)
 
@@ -95,7 +84,28 @@ Timeframe: DAILY
         st.success("Signal sent to Telegram successfully!")
     else:
         st.error("Telegram message failed!")
-        st.write(result)
 
-    st.subheader("Generated Signal")
-    st.write(sig)
+
+# ---------------- NATGAS CONTRACT TEST (PLACEHOLDER) ----------------
+
+def load_instruments():
+    url = "https://assets.upstox.com/market-quote/instruments/exchange/complete.csv"
+    df = None
+    try:
+        import pandas as pd
+        df = pd.read_csv(url)
+    except Exception as e:
+        return str(e)
+
+    return df
+
+
+if st.button("Find NATGAS Contracts"):
+
+    df = load_instruments()
+
+    if isinstance(df, str):
+        st.error(df)
+    else:
+        natgas = df[df['tradingsymbol'].str.contains("GAS", na=False)]
+        st.write(natgas.head(20))
