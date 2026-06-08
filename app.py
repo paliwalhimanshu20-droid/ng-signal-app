@@ -187,3 +187,15 @@ if st.button("View Signal History"):
 
     except Exception as e:
         st.error(f"Unable to load signal history: {e}")
+        # ---------------- MARKET DATA TEST ----------------
+
+if st.button("Market Data Test"):
+
+    st.write("Upstox token is loaded")
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    st.write(headers)
