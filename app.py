@@ -97,3 +97,16 @@ if st.button("Find NATGAS Contracts"):
         st.json(response.json())
     except:
         st.write(response.text)
+        if st.button("Test Upstox Token"):
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.upstox.com/v2/user/profile"
+
+    response = requests.get(url, headers=headers)
+
+    st.write("Status:", response.status_code)
+    st.write(response.text)
