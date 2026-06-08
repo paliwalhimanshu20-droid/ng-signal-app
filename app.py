@@ -187,6 +187,33 @@ if st.button("View Signal History"):
 
     except Exception as e:
         st.error(f"Unable to load signal history: {e}")
+        # ---------------- SIGNAL STATS ----------------
+
+if st.button("Signal Statistics"):
+
+    try:
+
+        df = pd.read_csv("signal_history.csv")
+
+        total_signals = len(df)
+
+        buy_signals = len(df[df["Signal"] == "BUY"])
+
+        sell_signals = len(df[df["Signal"] == "SELL"])
+
+        st.metric("Total Signals", total_signals)
+
+        st.metric("BUY Signals", buy_signals)
+
+        st.metric("SELL Signals", sell_signals)
+
+        st.write("Latest Signal")
+
+        st.dataframe(df.tail(1))
+
+    except Exception as e:
+
+        st.error(f"Error: {e}")
         # ---------------- MARKET DATA TEST ----------------
 
 # ---------------- MARKET DATA TEST ----------------
