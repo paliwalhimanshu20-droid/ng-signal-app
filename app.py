@@ -25,7 +25,40 @@ def send_telegram(message):
 
     response = requests.post(url, data=payload)
     return response.json()
+def save_signal(signal):
 
+    file_name = "signal_history.csv"
+
+    file_exists = os.path.isfile(file_name)
+
+    with open(file_name, mode="a", newline="") as file:
+
+        writer = csv.writer(file)
+
+        if not file_exists:
+            writer.writerow([
+                "Time",
+                "Signal",
+                "Price",
+                "EMA20",
+                "EMA50",
+                "ATR",
+                "SL",
+                "Target1",
+                "Target2"
+            ])
+
+        writer.writerow([
+            datetime.now().strftime("%d-%m-%Y %H:%M"),
+            signal["type"],
+            signal["price"],
+            signal["ema20"],
+            signal["ema50"],
+            signal["atr"],
+            signal["sl"],
+            signal["t1"],
+            signal["t2"]
+        ])
 # ---------------- SIGNAL LOGIC ----------------
 
 def generate_signal():
