@@ -73,9 +73,17 @@ if st.button("Run Analysis"):
     signal = generate_signal()
 
     msg = f"""
-🔥 NG BUY SIGNAL
+🔥 NG {signal['type']} SIGNAL
 
-Entry: {signal['entry']}
+Timeframe: 1 Hour
+
+Price: {signal['price']}
+
+EMA20: {signal['ema20']}
+EMA50: {signal['ema50']}
+
+ATR: {signal['atr']}
+
 Stop Loss: {signal['sl']}
 Target 1: {signal['t1']}
 Target 2: {signal['t2']}
