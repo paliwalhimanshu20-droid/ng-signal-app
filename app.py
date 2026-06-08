@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 import csv
 import os
+import pandas as pd
 
 # ---------------- TELEGRAM CONFIG ----------------
 
@@ -176,3 +177,13 @@ if st.button("Test Upstox Token"):
 
     st.write("Status:", response.status_code)
     st.write(response.text)
+    # ---------------- VIEW SIGNAL HISTORY ----------------
+
+if st.button("View Signal History"):
+
+    try:
+        df = pd.read_csv("signal_history.csv")
+        st.dataframe(df)
+
+    except Exception as e:
+        st.error(f"Unable to load signal history: {e}")
