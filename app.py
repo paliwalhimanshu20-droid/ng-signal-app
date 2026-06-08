@@ -73,11 +73,11 @@ def generate_signal():
     signal_type = "BUY"
     trend = "Bullish"
 
-elif ema20 < ema50:
+    elif ema20 < ema50:
     signal_type = "SELL"
     trend = "Bearish"
 
-else:
+    else:
     signal_type = "NO TRADE"
     trend = "Sideways"
 
