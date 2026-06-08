@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+from datetime import datetime
 
 # ---------------- TELEGRAM CONFIG ----------------
 
@@ -89,6 +90,7 @@ if st.button("Run Analysis"):
 
     msg = f"""
 🔥 NG {signal['type']} SIGNAL
+Time: {datetime.now().strftime("%d-%m-%Y %H:%M")}
 
 Timeframe: 1 Hour
 
