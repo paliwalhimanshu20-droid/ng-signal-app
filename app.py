@@ -97,7 +97,11 @@ if st.button("Find NATGAS Contracts"):
         st.json(response.json())
     except:
         st.write(response.text)
-        if st.button("Test Upstox Token"):
+
+
+# ---------------- TEST UPSTOX TOKEN ----------------
+
+if st.button("Test Upstox Token"):
 
     headers = {
         "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
