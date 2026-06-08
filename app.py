@@ -198,4 +198,4 @@ if st.button("Market Data Test"):
         "Accept": "application/json"
     }
 
-    st.write(headers)
+    st.success("Token loaded successfully")
