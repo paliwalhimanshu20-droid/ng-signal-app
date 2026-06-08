@@ -48,12 +48,12 @@ def generate_signal():
 
 def load_instruments():
 
-    url = "https://api.upstox.com/v2/instruments"
-
     headers = {
         "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
         "Accept": "application/json"
     }
+
+    url = "https://api.upstox.com/v2/user/profile"
 
     response = requests.get(url, headers=headers)
 
@@ -61,6 +61,7 @@ def load_instruments():
     st.write("Response:", response.text)
 
     return response
+
 
 # ---------------- APP UI ----------------
 
