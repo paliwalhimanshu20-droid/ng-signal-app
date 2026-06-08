@@ -122,6 +122,7 @@ st.write("NG Signal Pro - Testing Phase")
 if st.button("Run Analysis"):
 
     signal = generate_signal()
+    save_signal(signal)
 
     msg = f"""
 🔥 NG {signal['type']} SIGNAL
