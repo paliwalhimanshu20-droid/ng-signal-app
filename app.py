@@ -189,13 +189,22 @@ if st.button("View Signal History"):
         st.error(f"Unable to load signal history: {e}")
         # ---------------- MARKET DATA TEST ----------------
 
-if st.button("Market Data Test"):
+# ---------------- MARKET DATA TEST ----------------
 
-    st.write("Upstox token is loaded")
+if st.button("Market Data Test"):
 
     headers = {
         "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
         "Accept": "application/json"
     }
 
-    st.success("Token loaded successfully")
+    url = "https://api.upstox.com/v2/user/profile"
+
+    response = requests.get(url, headers=headers)
+
+    st.write("Status Code:", response.status_code)
+
+    try:
+        st.json(response.json())
+    except:
+        st.write(response.text)
