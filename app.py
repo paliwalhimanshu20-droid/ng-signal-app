@@ -27,19 +27,34 @@ def send_telegram(message):
 
 def generate_signal():
 
-    high = 290.0
-    atr = 2.5
+    current_price = 290.00
+    ema20 = 292.00
+    ema50 = 288.00
+    atr = 3.00
 
-    entry = high
-    sl = entry - (1.5 * atr)
-    risk = entry - sl
+    if ema20 > ema50:
+        signal_type = "BUY"
+        sl = current_price - (1.5 * atr)
+
+    elif ema20 < ema50:
+        signal_type = "SELL"
+        sl = current_price + (1.5 * atr)
+
+    else:
+        signal_type = "NO TRADE"
+        sl = current_price
+
+    risk = abs(current_price - sl)
 
     signal = {
-        "type": "BUY",
-        "entry": round(entry, 2),
+        "type": signal_type,
+        "price": round(current_price, 2),
+        "ema20": round(ema20, 2),
+        "ema50": round(ema50, 2),
+        "atr": round(atr, 2),
         "sl": round(sl, 2),
-        "t1": round(entry + (2 * risk), 2),
-        "t2": round(entry + (3 * risk), 2)
+        "t1": round(current_price + (2 * risk), 2),
+        "t2": round(current_price + (3 * risk), 2)
     }
 
     return signal
