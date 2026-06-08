@@ -70,16 +70,19 @@ def generate_signal():
     atr = 3.00
 
     if ema20 > ema50:
-    signal_type = "BUY"
-    trend = "Bullish"
+        signal_type = "BUY"
+        trend = "Bullish"
+        sl = current_price - (1.5 * atr)
 
     elif ema20 < ema50:
-    signal_type = "SELL"
-    trend = "Bearish"
+        signal_type = "SELL"
+        trend = "Bearish"
+        sl = current_price + (1.5 * atr)
 
     else:
-    signal_type = "NO TRADE"
-    trend = "Sideways"
+        signal_type = "NO TRADE"
+        trend = "Sideways"
+        sl = current_price
 
     risk = abs(current_price - sl)
 
