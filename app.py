@@ -240,3 +240,16 @@ if st.button("Market Data Test"):
         st.json(response.json())
     except:
         st.write(response.text)
+        # ---------------- FIND MCX INSTRUMENTS ----------------
+
+if st.button("Find MCX Instruments"):
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.upstox.com/v2/market-quote/quotes"
+
+    st.write("Testing market-data access...")
+    st.write("Token OK")
