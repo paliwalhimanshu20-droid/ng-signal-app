@@ -64,7 +64,7 @@ def save_signal(signal):
 
 def generate_signal():
 
-    current_price = 290.00
+    current_price = 302.10
     ema20 = 292.00
     ema50 = 288.00
     atr = 3.00
@@ -84,7 +84,12 @@ def generate_signal():
         trend = "Sideways"
         sl = current_price
 
-    risk = abs(current_price - sl)
+if signal_type == "BUY":
+    sl = current_price - (1.5 * atr)
+    risk = current_price - sl
+else:
+    sl = current_price + (1.5 * atr)
+    risk = sl - current_price
 
     signal = {
         "type": signal_type,
