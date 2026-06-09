@@ -372,3 +372,14 @@ if st.button("Test EMA"):
     ema20 = calculate_ema(closes[:20], 20)
 
     st.write("EMA20:", ema20)
+    # ---------------- TEST EMA50 ----------------
+
+if st.button("Test EMA50"):
+
+    candles = get_historical_candles()
+
+    closes = [candle[4] for candle in candles]
+
+    ema50 = calculate_ema(closes[:50], 50)
+
+    st.write("EMA50:", ema50)
