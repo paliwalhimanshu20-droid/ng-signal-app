@@ -132,6 +132,21 @@ def test_market_quote():
     st.write("Response:", response.text)
 
     return response
+def search_natgas():
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.upstox.com/v2/instruments/search?query=NATGASMINI"
+
+    response = requests.get(url, headers=headers)
+
+    st.write("Status Code:", response.status_code)
+    st.write("Response:", response.text)
+
+    return response
 
 # ---------------- APP UI ----------------
 
@@ -272,6 +287,16 @@ if st.button("Find MCX Instruments"):
 if st.button("Test Market Quote"):
 
     response = test_market_quote()
+
+    try:
+        st.json(response.json())
+    except:
+        st.write(response.text)
+        # ---------------- SEARCH NATGAS ----------------
+
+if st.button("Search NATGASMINI"):
+
+    response = search_natgas()
 
     try:
         st.json(response.json())
