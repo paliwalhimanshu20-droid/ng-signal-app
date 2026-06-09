@@ -124,7 +124,7 @@ def test_market_quote():
         "Accept": "application/json"
     }
 
-    url = "https://api.upstox.com/v2/market-quote/ltp?instrument_key=MCX_FO|TEST"
+    url = "https://api.upstox.com/v2/market-quote/ltp?instrument_key=MCX_FO|504266"
 
     response = requests.get(url, headers=headers)
 
