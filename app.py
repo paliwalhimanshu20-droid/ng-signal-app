@@ -61,7 +61,21 @@ def save_signal(signal):
             signal["t2"]
         ])
 # ---------------- SIGNAL LOGIC ----------------
+def test_historical_data():
 
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.upstox.com/v2/historical-candle/MCX_FO|504266/1hour/2026-06-09"
+
+    response = requests.get(url, headers=headers)
+
+    st.write("Status Code:", response.status_code)
+    st.write("Response:", response.text)
+
+    return response
 def generate_signal():
 
     current_price = 302.10
@@ -288,6 +302,16 @@ if st.button("Find MCX Instruments"):
 if st.button("Test Market Quote"):
 
     response = test_market_quote()
+
+    try:
+        st.json(response.json())
+    except:
+        st.write(response.text)
+        # ---------------- TEST HISTORICAL DATA ----------------
+
+if st.button("Test Historical Data"):
+
+    response = test_historical_data()
 
     try:
         st.json(response.json())
