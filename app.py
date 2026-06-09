@@ -68,7 +68,7 @@ def test_historical_data():
         "Accept": "application/json"
     }
 
-    url = "https://api.upstox.com/v2/historical-candle/MCX_FO|504266/1hour/2026-06-09"
+    url = "https://api.upstox.com/v2/historical-candle/MCX_FO|504266/30minute/2026-06-09"
 
     response = requests.get(url, headers=headers)
 
