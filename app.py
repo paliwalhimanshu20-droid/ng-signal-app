@@ -117,6 +117,36 @@ def load_instruments():
     st.write("Response:", response.text)
 
     return response
+    def test_market_quote():
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.upstox.com/v2/market-quote/ltp"
+
+    response = requests.get(url, headers=headers)
+
+    st.write("Status Code:", response.status_code)
+    st.write("Response:", response.text)
+
+    return response
+    def test_market_quote():
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.upstox.com/v2/market-quote/ltp"
+
+    response = requests.get(url, headers=headers)
+
+    st.write("Status Code:", response.status_code)
+    st.write("Response:", response.text)
+
+    return response
 
 
 # ---------------- APP UI ----------------
@@ -253,3 +283,11 @@ if st.button("Find MCX Instruments"):
 
     st.write("Testing market-data access...")
     st.write("Token OK")
+    if st.button("Test Market Quote"):
+
+    response = test_market_quote()
+
+    try:
+        st.json(response.json())
+    except:
+        st.write(response.text)
