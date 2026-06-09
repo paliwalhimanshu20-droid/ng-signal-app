@@ -268,7 +268,7 @@ if st.button("Find MCX Instruments"):
 
     st.write("Testing market-data access...")
     st.write("Token OK")
-    if st.button("Test Market Quote"):
+if st.button("Test Market Quote"):
 
     response = test_market_quote()
 
