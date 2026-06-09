@@ -124,7 +124,7 @@ def test_market_quote():
         "Accept": "application/json"
     }
 
-    url = "https://api.upstox.com/v2/market-quote/ltp"
+    url = "https://api.upstox.com/v2/market-quote/ltp?instrument_key=MCX_FO|TEST"
 
     response = requests.get(url, headers=headers)
 
@@ -132,7 +132,6 @@ def test_market_quote():
     st.write("Response:", response.text)
 
     return response
-
 
 # ---------------- APP UI ----------------
 
