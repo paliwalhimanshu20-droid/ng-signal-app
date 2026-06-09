@@ -117,6 +117,7 @@ def load_instruments():
     st.write("Response:", response.text)
 
     return response
+    
     def test_market_quote():
 
     headers = {
