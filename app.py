@@ -76,6 +76,22 @@ def test_historical_data():
     st.write("Response:", response.text)
 
     return response
+def get_historical_candles():
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.upstox.com/v2/historical-candle/MCX_FO|504266/30minute/2026-06-09"
+
+    response = requests.get(url, headers=headers)
+
+    data = response.json()
+
+    candles = data["data"]["candles"]
+
+    return candles
 def generate_signal():
 
     current_price = 302.10
@@ -327,3 +343,11 @@ if st.button("Search NATGASMINI"):
         st.json(response.json())
     except:
         st.write(response.text)
+if st.button("Test Close Prices"):
+
+    candles = get_historical_candles()
+
+    closes = [candle[4] for candle in candles[:10]]
+
+    st.write("Close Prices:")
+    st.write(closes)
