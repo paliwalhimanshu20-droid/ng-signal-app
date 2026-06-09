@@ -92,6 +92,16 @@ def get_historical_candles():
     candles = data["data"]["candles"]
 
     return candles
+def calculate_ema(prices, period):
+
+    multiplier = 2 / (period + 1)
+
+    ema = prices[0]
+
+    for price in prices[1:]:
+        ema = (price - ema) * multiplier + ema
+
+    return round(ema, 2)
 def generate_signal():
 
     current_price = 302.10
@@ -351,3 +361,14 @@ if st.button("Test Close Prices"):
 
     st.write("Close Prices:")
     st.write(closes)
+# ---------------- TEST EMA ----------------
+
+if st.button("Test EMA"):
+
+    candles = get_historical_candles()
+
+    closes = [candle[4] for candle in candles]
+
+    ema20 = calculate_ema(closes[:20], 20)
+
+    st.write("EMA20:", ema20)
