@@ -265,8 +265,10 @@ if st.button("Find MCX Instruments"):
 
     url = "https://api.upstox.com/v2/market-quote/quotes"
 
-    st.write("Testing market-data access...")
-    st.write("Token OK")
+    response = requests.get(url, headers=headers)
+
+    st.write("Status Code:", response.status_code)
+    st.write("Response:", response.text)
 if st.button("Test Market Quote"):
 
     response = test_market_quote()
