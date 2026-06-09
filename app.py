@@ -73,23 +73,19 @@ def generate_signal():
         signal_type = "BUY"
         trend = "Bullish"
         sl = current_price - (1.5 * atr)
+        risk = current_price - sl
 
     elif ema20 < ema50:
         signal_type = "SELL"
         trend = "Bearish"
         sl = current_price + (1.5 * atr)
+        risk = sl - current_price
 
     else:
         signal_type = "NO TRADE"
         trend = "Sideways"
         sl = current_price
-
-if signal_type == "BUY":
-    sl = current_price - (1.5 * atr)
-    risk = current_price - sl
-else:
-    sl = current_price + (1.5 * atr)
-    risk = sl - current_price
+        risk = 0
 
     signal = {
         "type": signal_type,
