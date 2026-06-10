@@ -634,7 +634,7 @@ if st.button("🚀 Run Analysis"):
         current_price,
         atr
     )
-    message = f"""
+message = f"""
 📊 NG SIGNAL PRO
 
 {signal_type} SIGNAL
