@@ -112,6 +112,23 @@ def get_trend(ema20, ema50):
 
     else:
         return "Sideways"
+def calculate_score(price, ema20, ema50):
+
+    score = 0
+
+    if ema20 > ema50:
+        score += 4
+
+    if price > ema20:
+        score += 2
+
+    if abs(ema20 - ema50) > 1:
+        score += 2
+
+    if price > ema50:
+        score += 2
+
+    return score
 def generate_signal():
 
     current_price = 302.10
@@ -410,3 +427,23 @@ if st.button("Test Trend"):
     st.write("EMA20:", ema20)
     st.write("EMA50:", ema50)
     st.write("Trend:", trend)
+    # ---------------- TEST SCORE ----------------
+
+if st.button("Test Score"):
+
+    current_price = get_live_price()
+
+    candles = get_historical_candles()
+
+    closes = [candle[4] for candle in reversed(candles)]
+
+    ema20 = calculate_ema(closes, 20)
+
+    ema50 = calculate_ema(closes, 50)
+
+    score = calculate_score(current_price, ema20, ema50)
+
+    st.write("Price:", current_price)
+    st.write("EMA20:", ema20)
+    st.write("EMA50:", ema50)
+    st.write("Score:", score, "/ 10")
