@@ -609,7 +609,7 @@ if st.button("🚀 Run Analysis"):
 
     candles = get_historical_candles()
 
-    closes = [candle[4] for candle in candles]
+    closes = [candle[4] for candle in reversed(candles)]
 
     current_price = closes[-1]
 
