@@ -611,7 +611,7 @@ if st.button("🚀 Run Analysis"):
 
     closes = [candle[4] for candle in candles]
 
-    current_price = get_live_price()
+    current_price = closes[-1]
 
     ema20 = calculate_ema(closes, 20)
 
