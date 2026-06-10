@@ -673,3 +673,10 @@ T2: {t2}
     st.write("Target 2:", t2)
 
     st.success("📨 Telegram Alert Sent")
+    if st.button("Test Live Price"):
+
+    response = test_market_quote()
+
+    data = response.json()
+
+    st.write(data)
