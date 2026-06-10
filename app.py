@@ -431,11 +431,11 @@ if st.button("Test Trend"):
 
 if st.button("Test Score"):
 
-    current_price = closes[-1]
-
     candles = get_historical_candles()
 
     closes = [candle[4] for candle in reversed(candles)]
+
+    current_price = closes[-1]
 
     ema20 = calculate_ema(closes, 20)
 
