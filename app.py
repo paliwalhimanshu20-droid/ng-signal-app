@@ -378,7 +378,7 @@ if st.button("Test EMA50"):
 
     candles = get_historical_candles()
 
-    closes = [candle[4] for candle in candles]
+    closes = [candle[4] for candle in reversed(candles)]
 
     ema50 = calculate_ema(closes[:50], 50)
 
