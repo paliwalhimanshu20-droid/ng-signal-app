@@ -149,6 +149,16 @@ def get_signal_type(ema20, ema50):
 
     else:
         return "NO TRADE"
+def get_recommendation(score):
+
+    if score >= 8:
+        return "Strong Trade"
+
+    elif score >= 5:
+        return "Watch Setup"
+
+    else:
+        return "Avoid Trade"
 def generate_signal():
 
     current_price = 302.10
@@ -511,6 +521,8 @@ if st.button("Test Signal"):
     confidence = get_confidence(score)
 
     signal_type = get_signal_type(ema20, ema50)
+    
+    recommendation = get_recommendation(score)
 
     st.write("Signal:", signal_type)
     st.write("Trend:", trend)
