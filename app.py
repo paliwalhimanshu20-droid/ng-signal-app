@@ -102,6 +102,27 @@ def calculate_ema(prices, period):
         ema = (price - ema) * multiplier + ema
 
     return round(ema, 2)
+def calculate_atr(candles, period=14):
+
+    trs = []
+
+    for i in range(1, len(candles)):
+
+        high = candles[i][1]
+        low = candles[i][2]
+        prev_close = candles[i-1][4]
+
+        tr = max(
+            high - low,
+            abs(high - prev_close),
+            abs(low - prev_close)
+        )
+
+        trs.append(tr)
+
+    atr = sum(trs[:period]) / period
+
+    return round(atr, 2)
 def get_trend(ema20, ema50):
 
     if ema20 > ema50:
@@ -530,3 +551,12 @@ if st.button("Test Signal"):
     st.write("Score:", score, "/10")
     st.write("Confidence:", confidence)
     st.write("Recommendation:", recommendation)
+    # ---------------- TEST ATR ----------------
+
+if st.button("Test ATR"):
+
+    candles = get_historical_candles()
+
+    atr = calculate_atr(candles)
+
+    st.write("ATR:", atr)
