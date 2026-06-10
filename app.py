@@ -123,6 +123,20 @@ def calculate_atr(candles, period=14):
     atr = sum(trs[:period]) / period
 
     return round(atr, 2)
+def get_live_price():
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json"
+    }
+
+    url = "https://api.upstox.com/v2/market-quote/ltp?instrument_key=MCX_FO|504266"
+
+    response = requests.get(url, headers=headers)
+
+    data = response.json()
+
+    return data["data"]["MCX_FO:NATGASMINI26JUNFUT"]["last_price"]
 def calculate_trade_levels(signal_type, current_price, atr):
 
     risk = atr * 1.5
