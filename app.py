@@ -596,14 +596,7 @@ if st.button("Test Signal"):
     st.write("Target 2:", t2)
     # ---------------- TEST ATR ----------------
 
-if st.button("Test ATR"):
-
-    candles = get_historical_candles()
-
-    atr = calculate_atr(candles)
-
-    st.write("ATR:", atr)
-    # ---------------- RUN ANALYSIS ----------------
+# ---------------- RUN ANALYSIS ----------------
 
 if st.button("🚀 Run Analysis"):
 
@@ -634,7 +627,8 @@ if st.button("🚀 Run Analysis"):
         current_price,
         atr
     )
-message = f"""
+
+    message = f"""
 📊 NG SIGNAL PRO
 
 {signal_type} SIGNAL
@@ -658,23 +652,24 @@ T1: {t1}
 T2: {t2}
 """
 
-send_telegram(message)
+    send_telegram(message)
 
-st.success(f"{signal_type} SIGNAL")
+    st.success(f"{signal_type} SIGNAL")
 
-st.write("Trend:", trend)
-st.write("Price:", current_price)
+    st.write("Trend:", trend)
+    st.write("Price:", current_price)
 
-st.write("EMA20:", round(ema20, 2))
-st.write("EMA50:", round(ema50, 2))
+    st.write("EMA20:", round(ema20, 2))
+    st.write("EMA50:", round(ema50, 2))
 
-st.write("Score:", score, "/10")
-st.write("Confidence:", confidence)
-st.write("Recommendation:", recommendation)
+    st.write("Score:", score, "/10")
+    st.write("Confidence:", confidence)
+    st.write("Recommendation:", recommendation)
 
-st.write("ATR:", atr)
+    st.write("ATR:", atr)
 
-st.write("Stop Loss:", sl)
-st.write("Target 1:", t1)
-st.write("Target 2:", t2)
-st.success("📨 Telegram Alert Sent")
+    st.write("Stop Loss:", sl)
+    st.write("Target 1:", t1)
+    st.write("Target 2:", t2)
+
+    st.success("📨 Telegram Alert Sent")
