@@ -634,6 +634,31 @@ if st.button("🚀 Run Analysis"):
         current_price,
         atr
     )
+    message = f"""
+📊 NG SIGNAL PRO
+
+{signal_type} SIGNAL
+
+Trend: {trend}
+
+Price: {current_price}
+
+EMA20: {round(ema20, 2)}
+EMA50: {round(ema50, 2)}
+
+Score: {score}/10
+Confidence: {confidence}
+
+Recommendation: {recommendation}
+
+ATR: {atr}
+
+SL: {sl}
+T1: {t1}
+T2: {t2}
+"""
+
+send_telegram(message)
 
     st.success(f"{signal_type} SIGNAL")
 
@@ -652,3 +677,4 @@ if st.button("🚀 Run Analysis"):
     st.write("Stop Loss:", sl)
     st.write("Target 1:", t1)
     st.write("Target 2:", t2)
+    st.success("📨 Telegram Alert Sent")
