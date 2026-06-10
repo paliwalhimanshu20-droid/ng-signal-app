@@ -562,11 +562,11 @@ if st.button("Test Signal"):
 
     atr = calculate_atr(candles)
 
-sl, t1, t2 = calculate_trade_levels(
+    sl, t1, t2 = calculate_trade_levels(
     signal_type,
     current_price,
     atr
-)
+    )
     
     recommendation = get_recommendation(score)
 
