@@ -129,6 +129,16 @@ def calculate_score(price, ema20, ema50):
         score += 2
 
     return score
+def get_confidence(score):
+
+    if score >= 8:
+        return "High"
+
+    elif score >= 5:
+        return "Medium"
+
+    else:
+        return "Low"
 def generate_signal():
 
     current_price = 302.10
@@ -447,3 +457,26 @@ if st.button("Test Score"):
     st.write("EMA20:", ema20)
     st.write("EMA50:", ema50)
     st.write("Score:", score, "/ 10")
+    # ---------------- TEST CONFIDENCE ----------------
+
+if st.button("Test Confidence"):
+
+    candles = get_historical_candles()
+
+    closes = [candle[4] for candle in reversed(candles)]
+
+    current_price = closes[-1]
+
+    ema20 = calculate_ema(closes, 20)
+
+    ema50 = calculate_ema(closes, 50)
+
+    score = calculate_score(current_price, ema20, ema50)
+
+    confidence = get_confidence(score)
+
+    st.write("Price:", current_price)
+    st.write("EMA20:", ema20)
+    st.write("EMA50:", ema50)
+    st.write("Score:", score, "/ 10")
+    st.write("Confidence:", confidence)
