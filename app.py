@@ -123,6 +123,23 @@ def calculate_atr(candles, period=14):
     atr = sum(trs[:period]) / period
 
     return round(atr, 2)
+def calculate_trade_levels(signal_type, current_price, atr):
+
+    risk = atr * 1.5
+
+    if signal_type == "BUY":
+
+        sl = current_price - risk
+        t1 = current_price + (risk * 2)
+        t2 = current_price + (risk * 3)
+
+    else:
+
+        sl = current_price + risk
+        t1 = current_price - (risk * 2)
+        t2 = current_price - (risk * 3)
+
+    return round(sl, 2), round(t1, 2), round(t2, 2)
 def get_trend(ema20, ema50):
 
     if ema20 > ema50:
@@ -542,6 +559,14 @@ if st.button("Test Signal"):
     confidence = get_confidence(score)
 
     signal_type = get_signal_type(ema20, ema50)
+
+    atr = calculate_atr(candles)
+
+sl, t1, t2 = calculate_trade_levels(
+    signal_type,
+    current_price,
+    atr
+)
     
     recommendation = get_recommendation(score)
 
@@ -551,6 +576,10 @@ if st.button("Test Signal"):
     st.write("Score:", score, "/10")
     st.write("Confidence:", confidence)
     st.write("Recommendation:", recommendation)
+    st.write("ATR:", atr)
+    st.write("Stop Loss:", sl)
+    st.write("Target 1:", t1)
+    st.write("Target 2:", t2)
     # ---------------- TEST ATR ----------------
 
 if st.button("Test ATR"):
