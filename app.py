@@ -660,19 +660,19 @@ T2: {t2}
 
 send_telegram(message)
 
-    st.success(f"{signal_type} SIGNAL")
+st.success(f"{signal_type} SIGNAL")
 
-    st.write("Trend:", trend)
-    st.write("Price:", current_price)
+st.write("Trend:", trend)
+st.write("Price:", current_price)
 
-    st.write("EMA20:", round(ema20, 2))
-    st.write("EMA50:", round(ema50, 2))
+st.write("EMA20:", round(ema20, 2))
+st.write("EMA50:", round(ema50, 2))
 
-    st.write("Score:", score, "/10")
-    st.write("Confidence:", confidence)
-    st.write("Recommendation:", recommendation)
+st.write("Score:", score, "/10")
+st.write("Confidence:", confidence)
+st.write("Recommendation:", recommendation)
 
-    st.write("ATR:", atr)
+st.write("ATR:", atr)
 
     st.write("Stop Loss:", sl)
     st.write("Target 1:", t1)
