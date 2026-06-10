@@ -124,7 +124,6 @@ def calculate_atr(candles, period=14):
 
     return round(atr, 2)
 def get_live_price():
-def get_live_price():
 
     headers = {
         "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
