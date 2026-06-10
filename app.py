@@ -674,7 +674,7 @@ st.write("Recommendation:", recommendation)
 
 st.write("ATR:", atr)
 
-    st.write("Stop Loss:", sl)
-    st.write("Target 1:", t1)
-    st.write("Target 2:", t2)
-    st.success("📨 Telegram Alert Sent")
+st.write("Stop Loss:", sl)
+st.write("Target 1:", t1)
+st.write("Target 2:", t2)
+st.success("📨 Telegram Alert Sent")
