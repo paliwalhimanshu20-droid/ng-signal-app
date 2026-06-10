@@ -589,3 +589,52 @@ if st.button("Test ATR"):
     atr = calculate_atr(candles)
 
     st.write("ATR:", atr)
+    # ---------------- RUN ANALYSIS ----------------
+
+if st.button("🚀 Run Analysis"):
+
+    candles = get_historical_candles()
+
+    closes = [candle[4] for candle in candles]
+
+    current_price = get_live_price()
+
+    ema20 = calculate_ema(closes, 20)
+
+    ema50 = calculate_ema(closes, 50)
+
+    trend = get_trend(ema20, ema50)
+
+    score = calculate_score(current_price, ema20, ema50)
+
+    confidence = get_confidence(score)
+
+    signal_type = get_signal_type(ema20, ema50)
+
+    recommendation = get_recommendation(score)
+
+    atr = calculate_atr(candles)
+
+    sl, t1, t2 = calculate_trade_levels(
+        signal_type,
+        current_price,
+        atr
+    )
+
+    st.success(f"{signal_type} SIGNAL")
+
+    st.write("Trend:", trend)
+    st.write("Price:", current_price)
+
+    st.write("EMA20:", round(ema20, 2))
+    st.write("EMA50:", round(ema50, 2))
+
+    st.write("Score:", score, "/10")
+    st.write("Confidence:", confidence)
+    st.write("Recommendation:", recommendation)
+
+    st.write("ATR:", atr)
+
+    st.write("Stop Loss:", sl)
+    st.write("Target 1:", t1)
+    st.write("Target 2:", t2)
