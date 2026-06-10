@@ -136,9 +136,7 @@ def get_live_price():
 
     data = response.json()
 
-    st.write("Live Price Response:", data)
-
-    return data
+    return data["data"]["MCX_FO:NATGASMINI26JUNFUT"]["last_price"]
 def calculate_trade_levels(signal_type, current_price, atr):
 
     risk = atr * 1.5
@@ -606,7 +604,7 @@ if st.button("🚀 Run Analysis"):
 
     closes = [candle[4] for candle in reversed(candles)]
 
-    current_price = closes[-1]
+    current_price = get_live_price()
 
     ema20 = calculate_ema(closes, 20)
 
