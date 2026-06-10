@@ -431,7 +431,7 @@ if st.button("Test Trend"):
 
 if st.button("Test Score"):
 
-    current_price = get_live_price()
+    current_price = closes[-1]
 
     candles = get_historical_candles()
 
