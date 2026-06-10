@@ -14,7 +14,8 @@ CHAT_ID = "8351444537"
 
 UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTI5YTZlYWNiNzgzMjM4OWUxNzZmNGUiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSwiaWF0IjoxNzgxMTE0NjAyLCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3ODExMjg4MDB9.A26llWp4-Of-Fy7W4Np8QG2LQrFSAGwpCkMJ3mSdvn0"
 
-LAST_SIGNAL = None
+if "last_signal" not in st.session_state:
+    st.session_state.last_signal = None
 # ---------------- TELEGRAM FUNCTION ----------------
 
 def send_telegram(message):
@@ -653,13 +654,11 @@ T1: {t1}
 T2: {t2}
 """
 
-    global LAST_SIGNAL
-
-if signal_type != LAST_SIGNAL:
+if signal_type != st.session_state.last_signal:
 
     send_telegram(message)
 
-    LAST_SIGNAL = signal_type
+    st.session_state.last_signal = signal_type
 
     st.success("📨 New Signal Sent To Telegram")
 
