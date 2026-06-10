@@ -529,3 +529,4 @@ if st.button("Test Signal"):
     st.write("Price:", current_price)
     st.write("Score:", score, "/10")
     st.write("Confidence:", confidence)
+    st.write("Recommendation:", recommendation)
