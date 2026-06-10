@@ -139,6 +139,16 @@ def get_confidence(score):
 
     else:
         return "Low"
+def get_signal_type(ema20, ema50):
+
+    if ema20 > ema50:
+        return "BUY"
+
+    elif ema20 < ema50:
+        return "SELL"
+
+    else:
+        return "NO TRADE"
 def generate_signal():
 
     current_price = 302.10
@@ -479,4 +489,31 @@ if st.button("Test Confidence"):
     st.write("EMA20:", ema20)
     st.write("EMA50:", ema50)
     st.write("Score:", score, "/ 10")
+    st.write("Confidence:", confidence)
+# ---------------- TEST SIGNAL ----------------
+
+if st.button("Test Signal"):
+
+    candles = get_historical_candles()
+
+    closes = [candle[4] for candle in reversed(candles)]
+
+    current_price = closes[-1]
+
+    ema20 = calculate_ema(closes, 20)
+
+    ema50 = calculate_ema(closes, 50)
+
+    trend = get_trend(ema20, ema50)
+
+    score = calculate_score(current_price, ema20, ema50)
+
+    confidence = get_confidence(score)
+
+    signal_type = get_signal_type(ema20, ema50)
+
+    st.write("Signal:", signal_type)
+    st.write("Trend:", trend)
+    st.write("Price:", current_price)
+    st.write("Score:", score, "/10")
     st.write("Confidence:", confidence)
