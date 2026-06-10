@@ -124,6 +124,7 @@ def calculate_atr(candles, period=14):
 
     return round(atr, 2)
 def get_live_price():
+def get_live_price():
 
     headers = {
         "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
@@ -136,7 +137,9 @@ def get_live_price():
 
     data = response.json()
 
-    return data["data"]["MCX_FO:NATGASMINI26JUNFUT"]["last_price"]
+    st.write("Live Price Response:", data)
+
+    return data
 def calculate_trade_levels(signal_type, current_price, atr):
 
     risk = atr * 1.5
@@ -680,3 +683,8 @@ if st.button("Test Live Price"):
     data = response.json()
 
     st.write(data)
+if st.button("Show Live Price Data"):
+
+    data = get_live_price()
+
+    st.json(data)
