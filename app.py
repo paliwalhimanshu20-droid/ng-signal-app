@@ -140,7 +140,7 @@ def get_live_price():
     st.write(data)
 
     instrument_key = list(data["data"].keys())[0]
-return data["data"][instrument_key]["last_price"]
+    return data["data"][instrument_key]["last_price"]
 def calculate_trade_levels(signal_type, current_price, atr):
 
     risk = atr * 1.5
