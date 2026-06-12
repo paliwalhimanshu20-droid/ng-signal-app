@@ -137,6 +137,7 @@ def get_live_price():
     response = requests.get(url, headers=headers)
 
     data = response.json()
+    st.write(data)
 
     return data["data"]["MCX_FO:NATGASMINI26JUNFUT"]["last_price"]
 def calculate_trade_levels(signal_type, current_price, atr):
