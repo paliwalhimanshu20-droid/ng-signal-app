@@ -655,11 +655,9 @@ T1: {t1}
 T2: {t2}
 """
 
-if signal_type != st.session_state.last_signal:
 
     send_telegram(message)
 
-    st.session_state.last_signal = signal_type
 
     st.success("📨 New Signal Sent To Telegram")
 
