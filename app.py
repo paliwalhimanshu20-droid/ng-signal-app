@@ -696,3 +696,4 @@ if st.button("Show Live Price Data"):
     data = get_live_price()
 
     st.json(data)
+    
