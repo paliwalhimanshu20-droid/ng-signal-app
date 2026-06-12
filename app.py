@@ -4,6 +4,7 @@ from datetime import datetime
 import csv
 import os
 import pandas as pd
+import time
 
 # ---------------- TELEGRAM CONFIG ----------------
 
@@ -306,6 +307,21 @@ def search_natgas():
 
 st.title("📊 Natural Gas Signal App (MCX)")
 st.write("NG Signal Pro - Testing Phase")
+if "auto_monitoring" not in st.session_state:
+    st.session_state.auto_monitoring = False
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("▶️ Start Auto Monitoring"):
+        st.session_state.auto_monitoring = True
+
+with col2:
+    if st.button("⏹️ Stop Auto Monitoring"):
+        st.session_state.auto_monitoring = False
+
+st.write("Auto Monitoring Status:",
+         "🟢 ON" if st.session_state.auto_monitoring else "🔴 OFF")
 
 if st.button("Run Analysis"):
 
@@ -697,4 +713,65 @@ if st.button("Show Live Price Data"):
     data = get_live_price()
 
     st.json(data)
+    if st.session_state.auto_monitoring:
+
+    st.info("Auto Monitoring Active - Checking every 5 minutes")
+
+    candles = get_historical_candles()
+
+    closes = [candle[4] for candle in reversed(candles)]
+
+    current_price = get_live_price()
+
+    ema20 = calculate_ema(closes, 20)
+
+    ema50 = calculate_ema(closes, 50)
+
+    signal_type = get_signal_type(ema20, ema50)
+
+    if signal_type != st.session_state.last_signal:
+
+        trend = get_trend(ema20, ema50)
+
+        score = calculate_score(current_price, ema20, ema50)
+
+        confidence = get_confidence(score)
+
+        recommendation = get_recommendation(score)
+
+        atr = calculate_atr(candles)
+
+        sl, t1, t2 = calculate_trade_levels(
+            signal_type,
+            current_price,
+            atr
+        )
+
+        message = f"""
+📊 AUTO SIGNAL
+
+{signal_type} SIGNAL
+
+Trend: {trend}
+Price: {current_price}
+
+EMA20: {round(ema20, 2)}
+EMA50: {round(ema50, 2)}
+
+Confidence: {confidence}
+
+SL: {sl}
+T1: {t1}
+T2: {t2}
+"""
+
+        send_telegram(message)
+
+        st.session_state.last_signal = signal_type
+
+        st.success("📨 Auto Signal Sent")
+
+    time.sleep(300)
+
+    st.rerun()
     
