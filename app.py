@@ -139,7 +139,8 @@ def get_live_price():
     data = response.json()
     st.write(data)
 
-    return data["data"]["MCX_FO:NATGASMINI26JUNFUT"]["last_price"]
+    instrument_key = list(data["data"].keys())[0]
+return data["data"][instrument_key]["last_price"]
 def calculate_trade_levels(signal_type, current_price, atr):
 
     risk = atr * 1.5
@@ -655,9 +656,11 @@ T1: {t1}
 T2: {t2}
 """
 
+if signal_type != st.session_state.last_signal:
 
     send_telegram(message)
 
+    st.session_state.last_signal = signal_type
 
     st.success("📨 New Signal Sent To Telegram")
 
@@ -665,25 +668,23 @@ else:
 
     st.info("ℹ️ Same signal already sent")
 
-    st.success(f"{signal_type} SIGNAL")
+st.success(f"{signal_type} SIGNAL")
 
-    st.write("Trend:", trend)
-    st.write("Price:", current_price)
+st.write("Trend:", trend)
+st.write("Price:", current_price)
 
-    st.write("EMA20:", round(ema20, 2))
-    st.write("EMA50:", round(ema50, 2))
+st.write("EMA20:", round(ema20, 2))
+st.write("EMA50:", round(ema50, 2))
 
-    st.write("Score:", score, "/10")
-    st.write("Confidence:", confidence)
-    st.write("Recommendation:", recommendation)
+st.write("Score:", score, "/10")
+st.write("Confidence:", confidence)
+st.write("Recommendation:", recommendation)
 
-    st.write("ATR:", atr)
+st.write("ATR:", atr)
 
-    st.write("Stop Loss:", sl)
-    st.write("Target 1:", t1)
-    st.write("Target 2:", t2)
-
-    st.success("📨 Telegram Alert Sent")
+st.write("Stop Loss:", sl)
+st.write("Target 1:", t1)
+st.write("Target 2:", t2)
 if st.button("Test Live Price"):
 
     response = test_market_quote()
