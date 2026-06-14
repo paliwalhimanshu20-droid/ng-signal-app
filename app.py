@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import csv
 import os
 import pandas as pd
@@ -53,7 +54,7 @@ def save_signal(signal):
             ])
 
         writer.writerow([
-            datetime.now().strftime("%d-%m-%Y %H:%M"),
+            datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M"),
             signal["type"],
             signal["price"],
             signal["ema20"],
@@ -345,7 +346,7 @@ if st.button("Run Analysis"):
 
     msg = f"""
 🔥 NG {signal['type']} SIGNAL
-Time: {datetime.now().strftime("%d-%m-%Y %H:%M")}
+Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
 
 Timeframe: 1 Hour
 Trend: {signal['trend']}
@@ -684,7 +685,7 @@ Recommendation: {recommendation}
 
 ATR: {atr}
 
-Time: {datetime.now().strftime("%d-%m-%Y %H:%M")}
+Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
 """
 
 if signal_type != st.session_state.last_signal:
