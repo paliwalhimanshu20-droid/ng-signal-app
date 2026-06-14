@@ -32,7 +32,7 @@ def send_telegram(message):
     return response.json()
 def save_signal(signal):
 
-    file_name = "signal_history_v2.csv""
+    file_name = "signal_history_v2.csv"
 
     file_exists = os.path.isfile(file_name)
 
