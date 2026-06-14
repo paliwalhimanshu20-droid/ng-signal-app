@@ -53,17 +53,23 @@ def save_signal(signal):
                 "Target2"
             ])
 
-        writer.writerow([
-            datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M"),
-            signal["type"],
-            signal["price"],
-            signal["ema20"],
-            signal["ema50"],
-            signal["atr"],
-            signal["sl"],
-            signal["t1"],
-            signal["t2"]
-        ])
+        signal_id = int(time.time())
+
+writer.writerow([
+    signal_id,
+    datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M"),
+    signal["type"],
+    signal["price"],
+    signal["ema20"],
+    signal["ema50"],
+    signal["atr"],
+    signal["sl"],
+    signal["t1"],
+    signal["t2"],
+    "OPEN",
+    "PENDING",
+    0
+])
 # ---------------- SIGNAL LOGIC ----------------
 def test_historical_data():
 
