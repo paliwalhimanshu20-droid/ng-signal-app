@@ -265,9 +265,9 @@ def generate_signal():
     "sl": round(sl, 2),
     "t1": round(t1, 2),
     "t2": round(t2, 2)
-}
+    }
 
-return signal
+    return signal
 
 
 # ---------------- UPSTOX TEST ----------------
