@@ -32,7 +32,7 @@ def send_telegram(message):
     return response.json()
 def save_signal(signal):
 
-    file_name = "signal_history.csv"
+    file_name = "signal_history_v2.csv""
 
     file_exists = os.path.isfile(file_name)
 
@@ -42,16 +42,20 @@ def save_signal(signal):
 
         if not file_exists:
             writer.writerow([
-                "Time",
-                "Signal",
-                "Price",
-                "EMA20",
-                "EMA50",
-                "ATR",
-                "SL",
-                "Target1",
-                "Target2"
-            ])
+              "Signal_ID",
+              "Time",
+              "Signal",
+              "Price",
+              "EMA20",
+              "EMA50",
+              "ATR",
+              "SL",
+              "Target1",
+              "Target2",
+              "Status",
+              "Result",
+              "Duration_Hours"
+             ])
 
         signal_id = int(time.time())
 
@@ -411,7 +415,7 @@ if st.button("Test Upstox Token"):
 if st.button("View Signal History"):
 
     try:
-        df = pd.read_csv("signal_history.csv")
+        df = pd.read_csv("signal_history_v2.csv")
         st.dataframe(df)
 
     except Exception as e:
