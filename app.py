@@ -241,19 +241,34 @@ def generate_signal():
         sl = current_price
         risk = 0
 
-    signal = {
-        "type": signal_type,
-        "trend": trend,
-        "price": round(current_price, 2),
-        "ema20": round(ema20, 2),
-        "ema50": round(ema50, 2),
-        "atr": round(atr, 2),
-        "sl": round(sl, 2),
-        "t1": round(current_price + (2 * risk), 2),
-        "t2": round(current_price + (3 * risk), 2)
-    }
+    if signal_type == "BUY":
 
-    return signal
+    t1 = current_price + (2 * risk)
+    t2 = current_price + (3 * risk)
+
+    elif signal_type == "SELL":
+
+    t1 = current_price - (2 * risk)
+    t2 = current_price - (3 * risk)
+
+    else:
+
+    t1 = current_price
+    t2 = current_price
+
+signal = {
+    "type": signal_type,
+    "trend": trend,
+    "price": round(current_price, 2),
+    "ema20": round(ema20, 2),
+    "ema50": round(ema50, 2),
+    "atr": round(atr, 2),
+    "sl": round(sl, 2),
+    "t1": round(t1, 2),
+    "t2": round(t2, 2)
+}
+
+return signal
 
 # ---------------- UPSTOX TEST ----------------
 
@@ -648,7 +663,7 @@ if st.button("🚀 Run Analysis"):
         atr
     )
 
-    message = f"""
+message = f"""
 📊 NG SIGNAL PRO
 
 {signal_type} SIGNAL
