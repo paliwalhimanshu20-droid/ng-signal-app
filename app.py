@@ -93,6 +93,15 @@ def test_historical_data():
     st.write("Response:", response.text)
 
     return response
+def update_signal_results():
+
+    df = pd.read_csv("signal_history_v2.csv")
+
+    open_signals = df[df["Status"] == "OPEN"]
+
+    st.write("Open Signals Found:", len(open_signals))
+
+    st.dataframe(open_signals)
 def get_historical_candles():
 
     headers = {
@@ -755,4 +764,7 @@ if st.button("Show Live Price Data"):
     data = get_live_price()
 
     st.json(data)
+if st.button("Check Open Signals"):
+
+    update_signal_results()
     
