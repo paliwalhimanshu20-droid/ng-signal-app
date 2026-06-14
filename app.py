@@ -241,17 +241,17 @@ def generate_signal():
         sl = current_price
         risk = 0
 
-    if signal_type == "BUY":
+if signal_type == "BUY":
 
     t1 = current_price + (2 * risk)
     t2 = current_price + (3 * risk)
 
-    elif signal_type == "SELL":
+elif signal_type == "SELL":
 
     t1 = current_price - (2 * risk)
     t2 = current_price - (3 * risk)
 
-    else:
+else:
 
     t1 = current_price
     t2 = current_price
