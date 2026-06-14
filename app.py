@@ -666,25 +666,25 @@ if st.button("🚀 Run Analysis"):
 message = f"""
 📊 NG SIGNAL PRO
 
-{signal_type} SIGNAL
+Instrument: Natural Gas
 
-Trend: {trend}
+Trend: {trend.upper()}
+Decision: {signal_type}
 
-Price: {current_price}
-
-EMA20: {round(ema20, 2)}
-EMA50: {round(ema50, 2)}
-
-Score: {score}/10
 Confidence: {confidence}
 
-Recommendation: {recommendation}
-
-ATR: {atr}
+Entry: {round(current_price, 2)}
 
 SL: {sl}
 T1: {t1}
 T2: {t2}
+
+Score: {score}/10
+Recommendation: {recommendation}
+
+ATR: {atr}
+
+Time: {datetime.now().strftime("%d-%m-%Y %H:%M")}
 """
 
 if signal_type != st.session_state.last_signal:
