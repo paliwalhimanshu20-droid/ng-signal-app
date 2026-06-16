@@ -685,19 +685,19 @@ if st.button("🚀 Run Analysis"):
         current_price,
         atr
     )
-signal = {
-    "type": signal_type,
-    "trend": trend,
-    "price": round(current_price, 2),
-    "ema20": round(ema20, 2),
-    "ema50": round(ema50, 2),
-    "atr": round(atr, 2),
-    "sl": round(sl, 2),
-    "t1": round(t1, 2),
-    "t2": round(t2, 2)
-}
+    signal = {
+      "type": signal_type,
+      "trend": trend,
+      "price": round(current_price, 2),
+      "ema20": round(ema20, 2),
+      "ema50": round(ema50, 2),
+      "atr": round(atr, 2),
+      "sl": round(sl, 2),
+      "t1": round(t1, 2),
+      "t2": round(t2, 2)
+    }
 
-save_signal(signal)
+    save_signal(signal)
 
 message = f"""
 📊 NG SIGNAL PRO
