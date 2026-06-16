@@ -366,8 +366,13 @@ def search_natgas():
 
 # ---------------- APP UI ----------------
 
-st.title("📊 Natural Gas Signal App (MCX)")
+st.title("📊 Signal Pro")
 st.write("NG Signal Pro - Testing Phase")
+
+selected_instrument = st.selectbox(
+    "Select Instrument",
+    list(INSTRUMENTS.keys())
+)
 if "auto_monitoring" not in st.session_state:
     st.session_state.auto_monitoring = False
 
