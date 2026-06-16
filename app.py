@@ -722,12 +722,14 @@ Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
 
 if signal_type != st.session_state.last_signal:
 
-    send_telegram(message)
+    telegram_response = send_telegram(message)
+
+    st.write("Telegram Response:")
+    st.json(telegram_response)
 
     st.session_state.last_signal = signal_type
 
     st.success("📨 New Signal Sent To Telegram")
-
 else:
 
     st.info("ℹ️ Same signal already sent")
