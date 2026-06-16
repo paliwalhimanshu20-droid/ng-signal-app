@@ -196,29 +196,30 @@ def calculate_score(price, ema20, ema50):
 
     score = 0
 
+    # Trend exists
     if ema20 > ema50:
-        score += 4
+        score += 3
+    elif ema20 < ema50:
+        score += 3
 
-    if price > ema20:
+    # Price confirms trend
+    if ema20 > ema50 and price > ema20:
         score += 2
 
-    if abs(ema20 - ema50) > 1:
+    elif ema20 < ema50 and price < ema20:
         score += 2
 
-    if price > ema50:
+    # EMA separation strength
+    ema_gap = abs(ema20 - ema50)
+
+    if ema_gap > 1:
         score += 2
 
-    return score
-def get_confidence(score):
+    # Strong move away from EMA20
+    if abs(price - ema20) > 0.5:
+        score += 3
 
-    if score >= 8:
-        return "High"
-
-    elif score >= 5:
-        return "Medium"
-
-    else:
-        return "Low"
+    return min(score, 10)
 def get_signal_type(ema20, ema50):
 
     if ema20 > ema50:
