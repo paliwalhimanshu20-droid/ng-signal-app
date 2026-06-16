@@ -18,6 +18,15 @@ UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyN
 
 if "last_signal" not in st.session_state:
     st.session_state.last_signal = None
+    # ---------------- INSTRUMENT REGISTRY ----------------
+
+INSTRUMENTS = {
+
+    "Natural Gas": {
+        "instrument_key": "MCX_FO|504266"
+    }
+
+}
 # ---------------- TELEGRAM FUNCTION ----------------
 
 def send_telegram(message):
