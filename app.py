@@ -205,7 +205,6 @@ def calculate_score(price, ema20, ema50):
     # Price confirms trend
     if ema20 > ema50 and price > ema20:
         score += 2
-
     elif ema20 < ema50 and price < ema20:
         score += 2
 
@@ -220,6 +219,20 @@ def calculate_score(price, ema20, ema50):
         score += 3
 
     return min(score, 10)
+
+
+def get_confidence(score):
+
+    if score >= 8:
+        return f"{score}/10 🔥 High"
+
+    elif score >= 5:
+        return f"{score}/10 ⚡ Medium"
+
+    else:
+        return f"{score}/10 ⚠️ Low"
+
+
 def get_signal_type(ema20, ema50):
 
     if ema20 > ema50:
@@ -361,37 +374,6 @@ with col2:
 
 st.write("Auto Monitoring Status:",
          "🟢 ON" if st.session_state.auto_monitoring else "🔴 OFF")
-
-if st.button("Run Analysis"):
-
-    signal = generate_signal()
-    save_signal(signal)
-
-    msg = f"""
-🔥 NG {signal['type']} SIGNAL
-Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
-
-Timeframe: 1 Hour
-Trend: {signal['trend']}
-
-Price: {signal['price']}
-
-EMA20: {signal['ema20']}
-EMA50: {signal['ema50']}
-
-ATR: {signal['atr']}
-
-Stop Loss: {signal['sl']}
-Target 1: {signal['t1']}
-Target 2: {signal['t2']}
-"""
-
-    st.success(msg)
-
-    telegram_response = send_telegram(msg)
-
-    st.write("Telegram Response:")
-    st.json(telegram_response)
 
 if st.button("Find NATGAS Contracts"):
 
