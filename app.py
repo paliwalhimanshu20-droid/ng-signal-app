@@ -200,6 +200,18 @@ def get_trend(ema20, ema50):
 
     else:
         return "Sideways"
+def get_trend_strength(ema20, ema50):
+
+    gap = abs(ema20 - ema50)
+
+    if gap < 1.5:
+        return "Weak"
+
+    elif gap < 3:
+        return "Medium"
+
+    else:
+        return "Strong"
 def get_reversal_watch(price, ema20, ema50, trend):
 
     if trend == "Bearish" and price > ema20 and price > ema50:
