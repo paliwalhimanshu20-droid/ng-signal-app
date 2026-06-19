@@ -700,7 +700,7 @@ message = f"""
 
 Instrument: Natural Gas
 
-Trend: {trend.upper()}
+Trend: {signal['trend'].upper()}
 
 Decision: {signal_type}
 
