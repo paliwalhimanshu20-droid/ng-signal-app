@@ -782,7 +782,7 @@ if signal_type != st.session_state.last_signal:
 
 else:
 
-        st.info("ℹ️ Same signal already sent")
+    st.info("ℹ️ Same signal already sent")
 
     st.success(f"{signal_type} SIGNAL")
 
@@ -790,7 +790,7 @@ else:
     st.write("Trend Strength:", trend_strength)
 
 if reversal_watch != "None":
-        st.warning(reversal_watch)
+    st.warning(reversal_watch)
 
     st.write("Price:", current_price)
 
