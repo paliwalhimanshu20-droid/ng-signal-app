@@ -722,11 +722,11 @@ recommendation = get_recommendation(score)
 
 atr = calculate_atr(candles)
 
-    sl, t1, t2 = calculate_trade_levels(
-        signal_type,
-        current_price,
-        atr
-    )
+sl, t1, t2 = calculate_trade_levels(
+signal_type,
+current_price,
+atr
+)
 
     signal = {
         "type": signal_type,
