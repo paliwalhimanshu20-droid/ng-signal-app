@@ -701,6 +701,7 @@ message = f"""
 Instrument: Natural Gas
 
 Trend: {trend.upper()}
+
 Decision: {signal_type}
 
 Confidence: {confidence}
