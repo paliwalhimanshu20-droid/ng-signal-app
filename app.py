@@ -15,12 +15,33 @@ IST = ZoneInfo("Asia/Kolkata")
 @st.cache_data(ttl=86400)
 def load_instrument_master():
     url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json"
-    return requests.get(url).json()
+
+    try:
+        r = requests.get(url, timeout=10)
+
+        if r.status_code != 200:
+            st.error(f"Instrument API failed: {r.status_code}")
+            return []
+
+        if "application/json" not in r.headers.get("Content-Type", ""):
+            st.error("Invalid response (not JSON)")
+            return []
+
+        return r.json()
+
+    except Exception as e:
+        st.error(f"Instrument load error: {e}")
+        return []
 
 # ================= STEP 2: SYMBOL → KEY MAPPING =================
 
 def build_symbol_map():
     data = load_instrument_master()
+
+    # ✅ FIX: handle API failure safely
+    if not data:
+        return {}
+
     symbol_map = {}
 
     for item in data:
