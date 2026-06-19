@@ -675,6 +675,7 @@ if st.button("🚀 Run Analysis"):
     ema50 = calculate_ema(closes, 50)
 
     trend = get_trend(ema20, ema50)
+    
     trend_strength = get_trend_strength(ema20, ema50)
 
     reversal_watch = get_reversal_watch(
@@ -683,6 +684,7 @@ if st.button("🚀 Run Analysis"):
     ema50,
     trend
     )
+    st.write("DEBUG:", reversal_watch)
 
     score = calculate_score(current_price, ema20, ema50)
 
