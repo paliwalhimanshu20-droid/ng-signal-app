@@ -200,6 +200,16 @@ def get_trend(ema20, ema50):
 
     else:
         return "Sideways"
+def get_reversal_watch(price, ema20, ema50, trend):
+
+    if trend == "Bearish" and price > ema20 and price > ema50:
+        return "⚠️ Bullish Reversal Watch"
+
+    elif trend == "Bullish" and price < ema20 and price < ema50:
+        return "⚠️ Bearish Reversal Watch"
+
+    else:
+        return "None"
 def calculate_score(price, ema20, ema50):
 
     score = 0
@@ -665,6 +675,14 @@ if st.button("🚀 Run Analysis"):
     ema50 = calculate_ema(closes, 50)
 
     trend = get_trend(ema20, ema50)
+    trend_strength = get_trend_strength(ema20, ema50)
+
+reversal_watch = get_reversal_watch(
+    current_price,
+    ema20,
+    ema50,
+    trend
+)
 
     score = calculate_score(current_price, ema20, ema50)
 
@@ -702,6 +720,8 @@ if st.button("🚀 Run Analysis"):
 Instrument: Natural Gas
 
 Trend: {trend.upper()}
+Strength: {trend_strength}
+Reversal Watch: {reversal_watch}
 
 Decision: {signal_type}
 
@@ -739,6 +759,10 @@ Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
     st.success(f"{signal_type} SIGNAL")
 
     st.write("Trend:", trend)
+    st.write("Trend Strength:", trend_strength)
+
+if reversal_watch != "None":
+    st.warning(reversal_watch)
     st.write("Price:", current_price)
 
     st.write("EMA20:", round(ema20, 2))
