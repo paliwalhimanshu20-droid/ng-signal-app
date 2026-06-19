@@ -720,15 +720,15 @@ if st.button("🚀 Run Analysis"):
 
     recommendation = get_recommendation(score)
 
-atr = calculate_atr(candles)
+    atr = calculate_atr(candles)
 
-sl, t1, t2 = calculate_trade_levels(
-signal_type,
-current_price,
-atr
-)
+    sl, t1, t2 = calculate_trade_levels(
+    signal_type,
+    current_price,
+    atr
+    )
 
-signal = {
+    signal = {
         "type": signal_type,
         "trend": trend,
         "price": round(current_price, 2),
@@ -738,9 +738,9 @@ signal = {
         "sl": round(sl, 2),
         "t1": round(t1, 2),
         "t2": round(t2, 2)
-}
+    }
 
-save_signal(signal)
+    save_signal(signal)
 
 message = f"""
 📊 NG SIGNAL PRO
