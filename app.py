@@ -700,11 +700,25 @@ if st.button("🚀 Run Analysis"):
 
     score = calculate_score(current_price, ema20, ema50)
 
-    confidence = get_confidence(score)
+# Trend Strength Adjustment
+if trend_strength == "Weak":
+    score -= 2
 
-    signal_type = get_signal_type(ema20, ema50)
+elif trend_strength == "Medium":
+    score -= 1
 
-    recommendation = get_recommendation(score)
+# Reversal Watch Adjustment
+if reversal_watch != "None":
+    score -= 2
+
+# Keep score between 1 and 10
+score = max(1, min(score, 10))
+
+confidence = get_confidence(score)
+
+signal_type = get_signal_type(ema20, ema50)
+
+recommendation = get_recommendation(score)
 
     atr = calculate_atr(candles)
 
