@@ -769,7 +769,7 @@ ATR: {atr}
 Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
 """
 
-    if signal_type != st.session_state.last_signal:
+if signal_type != st.session_state.last_signal:
 
         telegram_response = send_telegram(message)
 
@@ -780,7 +780,7 @@ Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
 
         st.success("📨 New Signal Sent To Telegram")
 
-    else:
+else:
 
         st.info("ℹ️ Same signal already sent")
 
@@ -789,7 +789,7 @@ Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
     st.write("Trend:", trend)
     st.write("Trend Strength:", trend_strength)
 
-    if reversal_watch != "None":
+if reversal_watch != "None":
         st.warning(reversal_watch)
 
     st.write("Price:", current_price)
