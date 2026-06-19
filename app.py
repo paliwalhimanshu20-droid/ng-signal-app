@@ -702,14 +702,14 @@ if st.button("🚀 Run Analysis"):
 
 # Trend Strength Adjustment
     if trend_strength == "Weak":
-    score -= 2
+     score -= 2
 
     elif trend_strength == "Medium":
-    score -= 1
+     score -= 1
 
     # Reversal Watch Adjustment
     if reversal_watch != "None":
-    score -= 2
+     score -= 2
 
     # Keep score between 1 and 10
     score = max(1, min(score, 10))
