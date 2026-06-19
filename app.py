@@ -1,9 +1,8 @@
 import streamlit as st
 import requests
 import pandas as pd
-import csv
-import os
 import json
+import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -14,7 +13,7 @@ IST = ZoneInfo("Asia/Kolkata")
 
 CACHE_FILE = "instrument_cache.json"
 
-# ================= STEP 1: SAFE REQUEST WRAPPER =================
+# ================= SAFE REQUEST =================
 
 def safe_get(url, headers=None, timeout=10):
     try:
@@ -31,7 +30,7 @@ def safe_get(url, headers=None, timeout=10):
     except:
         return None
 
-# ================= STEP 2 + 3: OFFLINE CACHE SYSTEM =================
+# ================= CACHE SYSTEM =================
 
 def save_cache(data):
     try:
@@ -48,14 +47,12 @@ def load_cache():
                 return json.load(f)
     except:
         pass
-
     return []
 
-# ================= STEP 4: INSTRUMENT MASTER (BULLETPROOF) =================
+# ================= INSTRUMENT MASTER =================
 
 @st.cache_data(ttl=86400)
 def load_instrument_master():
-
     url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json"
 
     data = safe_get(url)
@@ -66,12 +63,9 @@ def load_instrument_master():
 
     cached = load_cache()
 
-    if cached:
-        return cached
+    return cached if cached else []
 
-    return []
-
-# ================= STEP 5: SYMBOL MAP =================
+# ================= SYMBOL MAP =================
 
 def build_symbol_map():
     data = load_instrument_master()
@@ -94,86 +88,9 @@ def build_symbol_map():
 
     return symbol_map
 
-# ================= STEP 6: SAFE API FUNCTIONS =================
-
-def get_live_price(key):
-
-    url = f"https://api.upstox.com/v2/market-quote/ltp?instrument_key={key}"
-
-    data = safe_get(url, headers={"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
-
-    if not data:
-        return None
-
-    try:
-        k = list(data["data"].keys())[0]
-        return data["data"][k]["last_price"]
-    except:
-        return None
-
-
-def get_candles(key):
-
-    url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
-
-    data = safe_get(url, headers={"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
-
-    if not data:
-        return None
-
-    return data.get("data", {}).get("candles", None)
-
-# ================= INDICATORS =================
-
-def ema(prices, period):
-    m = 2 / (period + 1)
-    e = prices[0]
-    for p in prices[1:]:
-        e = (p - e) * m + e
-    return e
-
-
-def atr(candles):
-    trs = []
-
-    for i in range(1, len(candles)):
-        h, l, pc = candles[i][1], candles[i][2], candles[i-1][4]
-        trs.append(max(h-l, abs(h-pc), abs(l-pc)))
-
-    return sum(trs[:14]) / 14
-
-# ================= SIGNAL ENGINE =================
-
-def analyze(price, ema20, ema50, atr_val):
-
-    score = 0
-
-    if ema20 > ema50:
-        score += 3
-    else:
-        score += 3
-
-    if (ema20 > ema50 and price > ema20) or (ema20 < ema50 and price < ema20):
-        score += 2
-
-    if price and atr_val and abs(price - ema20) < atr_val * 2:
-        score += 2
-
-    score = min(score, 10)
-
-    if score >= 8:
-        signal = "BUY" if ema20 > ema50 else "SELL"
-    elif score >= 5:
-        signal = "WATCH"
-    else:
-        signal = "NO TRADE"
-
-    return signal, score
-
-# ================= PORTFOLIO =================
+# ================= INSTRUMENTS =================
 
 def get_instruments():
-
     symbol_map = build_symbol_map()
 
     return {
@@ -202,6 +119,102 @@ def get_instruments():
         "Wipro": symbol_map.get("WIPRO"),
     }
 
+# ================= SAFE API =================
+
+def get_live_price(key):
+    url = f"https://api.upstox.com/v2/market-quote/ltp?instrument_key={key}"
+    data = safe_get(url, headers={"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+
+    if not data:
+        return None
+
+    try:
+        k = list(data["data"].keys())[0]
+        return data["data"][k]["last_price"]
+    except:
+        return None
+
+
+def get_candles(key):
+    url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
+    data = safe_get(url, headers={"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+
+    if not data:
+        return None
+
+    return data.get("data", {}).get("candles", None)
+
+# ================= INDICATORS =================
+
+def ema(prices, period):
+    m = 2 / (period + 1)
+    e = prices[0]
+    for p in prices[1:]:
+        e = (p - e) * m + e
+    return e
+
+
+def atr(candles):
+    trs = []
+
+    for i in range(1, len(candles)):
+        h, l, pc = candles[i][1], candles[i][2], candles[i-1][4]
+        trs.append(max(h-l, abs(h-pc), abs(l-pc)))
+
+    return sum(trs[:14]) / 14
+
+# ================= SIGNAL ENGINE v2 =================
+
+def analyze(price, ema20, ema50, atr_val):
+
+    score = 0
+    reasons = []
+
+    # TREND
+    if ema20 > ema50:
+        trend = "Bullish"
+        score += 3
+    else:
+        trend = "Bearish"
+        score += 3
+
+    # PRICE CONFIRMATION
+    if ema20 > ema50 and price > ema20:
+        score += 2
+        reasons.append("Price above EMA20")
+    elif ema20 < ema50 and price < ema20:
+        score += 2
+        reasons.append("Price below EMA20")
+
+    # ATR ZONE
+    if atr_val and abs(price - ema20) < atr_val * 1.5:
+        score += 2
+        reasons.append("Healthy zone")
+
+    # BREAKOUT CHECK
+    if ema20 > ema50 and price > ema50 * 1.002:
+        score += 2
+        reasons.append("Bullish breakout")
+
+    if ema20 < ema50 and price < ema50 * 0.998:
+        score += 2
+        reasons.append("Bearish breakdown")
+
+    score = min(score, 10)
+
+    probability = int((score / 10) * 100)
+
+    if score >= 8:
+        signal = "BUY" if trend == "Bullish" else "SELL"
+    elif score >= 6:
+        signal = "WATCH"
+    else:
+        signal = "NO TRADE"
+
+    structure = f"{trend} | Score {score}/10 | Prob {probability}%"
+
+    return signal, score, probability, structure, reasons
+
 # ================= SCANNER =================
 
 def scan_portfolio():
@@ -221,6 +234,9 @@ def scan_portfolio():
         try:
             closes = [c[4] for c in reversed(candles)]
 
+            if len(closes) < 50:
+                continue
+
             price = get_live_price(key)
             if not price:
                 continue
@@ -229,14 +245,18 @@ def scan_portfolio():
             ema50 = ema(closes[:50], 50)
             atr_val = atr(candles)
 
-            signal, score = analyze(price, ema20, ema50, atr_val)
+            signal, score, prob, structure, reasons = analyze(price, ema20, ema50, atr_val)
 
-            if signal != "NO TRADE":
+            # 🔥 IMPORTANT FIX: DO NOT FILTER WATCH OUT
+            if signal in ["BUY", "SELL", "WATCH"]:
+
                 results.append({
                     "Instrument": name,
                     "Signal": signal,
                     "Score": score,
-                    "Price": round(price, 2)
+                    "Prob%": prob,
+                    "Price": round(price, 2),
+                    "Structure": structure
                 })
 
         except:
@@ -251,16 +271,16 @@ def scan_portfolio():
 
 # ================= UI =================
 
-st.title("📊 Bulletproof Portfolio Scanner v1")
+st.title("📊 Signal Engine v2 (Probability System)")
 
 if st.button("🚀 Run Scan"):
 
     df = scan_portfolio()
 
     if df.empty:
-        st.warning("No signals found")
+        st.warning("No signals found (market may be sideways or data missing)")
     else:
         st.dataframe(df)
 
-        st.write("🔥 Top Trade:")
+        st.write("🔥 Top Signal:")
         st.json(df.iloc[0].to_dict())
