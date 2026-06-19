@@ -720,7 +720,7 @@ signal_type = get_signal_type(ema20, ema50)
 
 recommendation = get_recommendation(score)
 
-    atr = calculate_atr(candles)
+atr = calculate_atr(candles)
 
     sl, t1, t2 = calculate_trade_levels(
         signal_type,
