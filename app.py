@@ -20,7 +20,7 @@ IST = ZoneInfo("Asia/Kolkata")
 if "last_signal" not in st.session_state:
     st.session_state.last_signal = None
 
-# ---------------- INSTRUMENT REGISTRY ----------------
+# ---------------- INSTRUMENT ----------------
 
 INSTRUMENTS = {
     "Natural Gas": {
@@ -35,10 +35,10 @@ def send_telegram(message):
     payload = {"chat_id": CHAT_ID, "text": message}
     return requests.post(url, data=payload).json()
 
-# ---------------- DATA STORAGE ----------------
+# ---------------- SAVE SIGNAL ----------------
 
 def save_signal(signal):
-    file_name = "signal_history_v2.csv"
+    file_name = "signal_history_v3.csv"
     file_exists = os.path.isfile(file_name)
 
     with open(file_name, "a", newline="") as file:
@@ -46,15 +46,16 @@ def save_signal(signal):
 
         if not file_exists:
             writer.writerow([
-                "Signal_ID", "Time", "Signal", "Price",
-                "EMA20", "EMA50", "ATR", "SL", "T1", "T2",
-                "Status", "Result", "Duration_Hours"
+                "Signal_ID", "Time", "Signal", "Trend",
+                "Price", "EMA20", "EMA50", "ATR",
+                "SL", "T1", "T2", "Score", "Confidence"
             ])
 
         writer.writerow([
             int(time.time()),
             datetime.now(IST).strftime("%d-%m-%Y %H:%M"),
-            signal["type"],
+            signal["signal"],
+            signal["trend"],
             signal["price"],
             signal["ema20"],
             signal["ema50"],
@@ -62,15 +63,14 @@ def save_signal(signal):
             signal["sl"],
             signal["t1"],
             signal["t2"],
-            "OPEN",
-            "PENDING",
-            0
+            signal["score"],
+            signal["confidence"]
         ])
 
 # ---------------- MARKET DATA ----------------
 
 def get_historical_candles():
-    url = f"https://api.upstox.com/v2/historical-candle/MCX_FO|504266/30minute/2026-06-09"
+    url = "https://api.upstox.com/v2/historical-candle/MCX_FO|504266/30minute/2026-06-09"
     headers = {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}
     data = requests.get(url, headers=headers).json()
     return data["data"]["candles"]
@@ -91,79 +91,89 @@ def ema(prices, period):
         ema_val = (p - ema_val) * multiplier + ema_val
     return ema_val
 
-def atr(candles, period=14):
+def atr(candles):
     trs = []
     for i in range(1, len(candles)):
         high, low, prev = candles[i][1], candles[i][2], candles[i-1][4]
-        tr = max(high-low, abs(high-prev), abs(low-prev))
+        tr = max(high - low, abs(high - prev), abs(low - prev))
         trs.append(tr)
-    return sum(trs[:period]) / period
+    return sum(trs[:14]) / 14
 
-# ---------------- LOGIC ENGINE ----------------
+# ---------------- V3 ENGINE ----------------
 
-def get_trend(ema20, ema50):
-    if ema20 > ema50:
-        return "Bullish"
-    elif ema20 < ema50:
-        return "Bearish"
-    return "Sideways"
+def analyze_market(price, ema20, ema50, atr_val):
 
-def get_signal_type(ema20, ema50):
-    if ema20 > ema50:
-        return "BUY"
-    elif ema20 < ema50:
-        return "SELL"
-    return "NO TRADE"
+    trend = "Bullish" if ema20 > ema50 else "Bearish"
 
-def get_score(price, ema20, ema50):
     score = 0
+
+    # EMA structure
     if ema20 > ema50:
         score += 3
     else:
         score += 3
 
-    if (ema20 > ema50 and price > ema20) or (ema20 < ema50 and price < ema20):
+    # Price confirmation
+    if ema20 > ema50 and price > ema20:
+        score += 2
+    elif ema20 < ema50 and price < ema20:
         score += 2
 
-    if abs(ema20 - ema50) > 1:
+    # Trend strength
+    ema_gap = abs(ema20 - ema50)
+    if ema_gap > atr_val * 0.5:
         score += 2
 
-    if abs(price - ema20) > 0.5:
-        score += 3
+    # Volatility filter
+    score += 1
 
-    return min(score, 10)
+    # Avoid chasing extended moves
+    if abs(price - ema20) < atr_val * 2:
+        score += 2
 
-def get_confidence(score):
+    score = min(score, 10)
+
+    signal = "NO TRADE"
+
     if score >= 8:
-        return "High"
+        if ema20 > ema50 and price > ema20:
+            signal = "BUY"
+        elif ema20 < ema50 and price < ema20:
+            signal = "SELL"
+
     elif score >= 5:
-        return "Medium"
-    return "Low"
+        signal = "WATCH"
 
-def get_reversal(price, ema20, ema50, trend):
-    if trend == "Bearish" and price > ema20:
-        return "Bullish Reversal Watch"
-    if trend == "Bullish" and price < ema20:
-        return "Bearish Reversal Watch"
-    return "None"
+    if score >= 8:
+        confidence = "High"
+    elif score >= 5:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
 
-def trade_levels(signal_type, price, atr_val):
+    return signal, trend, score, confidence
+
+# ---------------- TRADE LEVELS ----------------
+
+def trade_levels(signal, price, atr_val):
     risk = atr_val * 1.5
-    if signal_type == "BUY":
+
+    if signal == "BUY":
         sl = price - risk
         t1 = price + risk * 2
         t2 = price + risk * 3
-    elif signal_type == "SELL":
+    elif signal == "SELL":
         sl = price + risk
         t1 = price - risk * 2
         t2 = price - risk * 3
     else:
         sl = t1 = t2 = price
+
     return sl, t1, t2
 
 # ---------------- UI ----------------
 
-st.title("📊 NG Signal Pro — Phase 2")
+st.title("📊 NG Signal Pro v3")
 
 if st.button("🚀 Run Analysis"):
 
@@ -171,27 +181,23 @@ if st.button("🚀 Run Analysis"):
     closes = [c[4] for c in reversed(candles)]
 
     price = get_live_price()
+    atr_val = atr(candles)
 
     ema20 = ema(closes[:20], 20)
     ema50 = ema(closes[:50], 50)
 
-    trend = get_trend(ema20, ema50)
-    signal_type = get_signal_type(ema20, ema50)
+    signal, trend, score, confidence = analyze_market(
+        price, ema20, ema50, atr_val
+    )
 
-    score = get_score(price, ema20, ema50)
-    confidence = get_confidence(score)
-    reversal = get_reversal(price, ema20, ema50, trend)
+    if signal == "NO TRADE":
+        st.warning("No valid trade setup (v3 filter blocked)")
+        st.stop()
 
-    if reversal != "None":
-        score -= 2
+    sl, t1, t2 = trade_levels(signal, price, atr_val)
 
-    score = max(1, min(score, 10))
-
-    atr_val = atr(candles)
-    sl, t1, t2 = trade_levels(signal_type, price, atr_val)
-
-    signal = {
-        "type": signal_type,
+    signal_data = {
+        "signal": signal,
         "trend": trend,
         "price": round(price, 2),
         "ema20": round(ema20, 2),
@@ -199,50 +205,35 @@ if st.button("🚀 Run Analysis"):
         "atr": round(atr_val, 2),
         "sl": round(sl, 2),
         "t1": round(t1, 2),
-        "t2": round(t2, 2)
+        "t2": round(t2, 2),
+        "score": score,
+        "confidence": confidence
     }
 
-    save_signal(signal)
+    save_signal(signal_data)
 
     message = f"""
-📊 NG SIGNAL PRO
+📊 NG SIGNAL PRO v3
 
+Signal: {signal}
 Trend: {trend}
-Signal: {signal_type}
 Price: {price}
 
-Confidence: {confidence}
 Score: {score}/10
+Confidence: {confidence}
 
 SL: {sl}
 T1: {t1}
 T2: {t2}
 
-Reversal: {reversal}
-
 Time: {datetime.now(IST).strftime("%d-%m-%Y %H:%M")}
 """
 
-    if signal_type != st.session_state.last_signal:
+    if signal != st.session_state.last_signal:
         send_telegram(message)
-        st.session_state.last_signal = signal_type
+        st.session_state.last_signal = signal
         st.success("Signal sent to Telegram")
     else:
         st.info("Duplicate signal blocked")
 
-    st.write(signal)
-
-# ---------------- PHASE 2 FEATURE ----------------
-
-if st.button("📈 Signal Stats (Basic)"):
-
-    if os.path.exists("signal_history_v2.csv"):
-        df = pd.read_csv("signal_history_v2.csv")
-
-        st.metric("Total Signals", len(df))
-        st.metric("BUY Signals", len(df[df["Signal"] == "BUY"]))
-        st.metric("SELL Signals", len(df[df["Signal"] == "SELL"]))
-
-        st.dataframe(df.tail(10))
-    else:
-        st.warning("No signal history found")
+    st.write(signal_data)
