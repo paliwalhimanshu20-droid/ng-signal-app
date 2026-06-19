@@ -1,10 +1,10 @@
 import streamlit as st
 import requests
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import pandas as pd
 import csv
 import os
-import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ---------------- CONFIG ----------------
 
@@ -14,24 +14,55 @@ UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyN
 
 IST = ZoneInfo("Asia/Kolkata")
 
-# ---------------- SESSION ----------------
+# ---------------- INSTRUMENT REGISTRY ----------------
 
-if "last_signal" not in st.session_state:
-    st.session_state.last_signal = None
+INSTRUMENTS = {
+    "Natural Gas": "MCX_FO|504266",
 
-# ---------------- DATA ----------------
+    "Kotak Mahindra Bank": "NSE_EQ|KOTAKBANK",
+    "Bank of Baroda": "NSE_EQ|BANKBARODA",
+    "Jio Financial Services": "NSE_EQ|JIOFIN",
+    "Federal Bank": "NSE_EQ|FEDERALBNK",
+    "IRFC": "NSE_EQ|IRFC",
 
-def get_historical_candles():
-    url = "https://api.upstox.com/v2/historical-candle/MCX_FO|504266/30minute/2026-06-09"
-    headers = {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}
-    return requests.get(url, headers=headers).json()["data"]["candles"]
+    "Tata Power": "NSE_EQ|TATAPOWER",
+    "NTPC": "NSE_EQ|NTPC",
+    "Power Grid": "NSE_EQ|POWERGRID",
+    "Adani Power": "NSE_EQ|ADANIPOWER",
+    "Suzlon Energy": "NSE_EQ|SUZLON",
 
-def get_live_price():
-    url = "https://api.upstox.com/v2/market-quote/ltp?instrument_key=MCX_FO|504266"
+    "Coal India": "NSE_EQ|COALINDIA",
+    "ONGC": "NSE_EQ|ONGC",
+    "Indian Oil": "NSE_EQ|IOC",
+    "GAIL": "NSE_EQ|GAIL",
+    "BPCL": "NSE_EQ|BPCL",
+
+    "ITC": "NSE_EQ|ITC",
+    "Patanjali Foods": "NSE_EQ|PATANJALI",
+    "ITC Hotels": "NSE_EQ|ITCHOTELS",
+    "Vishal Mega Mart": "NSE_EQ|VISHALMEGA",
+    "Eternal (Zomato)": "NSE_EQ|ETERNAL",
+
+    "Bharat Electronics": "NSE_EQ|BEL",
+    "Tata Motors": "NSE_EQ|TATAMOTORS",
+    "Tata Steel": "NSE_EQ|TATASTEEL",
+    "Wipro": "NSE_EQ|WIPRO",
+    "Motherson": "NSE_EQ|MOTHERSON"
+}
+
+# ---------------- DATA ENGINE ----------------
+
+def get_live_price(key):
+    url = f"https://api.upstox.com/v2/market-quote/ltp?instrument_key={key}"
     headers = {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}
     data = requests.get(url, headers=headers).json()
-    key = list(data["data"].keys())[0]
-    return data["data"][key]["last_price"]
+    k = list(data["data"].keys())[0]
+    return data["data"][k]["last_price"]
+
+def get_candles(key):
+    url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
+    headers = {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}
+    return requests.get(url, headers=headers).json()["data"]["candles"]
 
 # ---------------- INDICATORS ----------------
 
@@ -49,211 +80,174 @@ def atr(candles):
         trs.append(max(h-l, abs(h-pc), abs(l-pc)))
     return sum(trs[:14]) / 14
 
-# ---------------- STRUCTURE (v3 CORE FIX) ----------------
+# ---------------- MARKET STRUCTURE ----------------
 
-def get_structure(price, ema20, ema50):
-
+def structure(price, ema20, ema50):
     if price > ema20 > ema50:
-        return "Strong Bullish"
-
+        return "STRONG_BULL"
     if price < ema20 < ema50:
-        return "Strong Bearish"
-
+        return "STRONG_BEAR"
     if ema20 > ema50:
-        return "Weak Bullish"
-
+        return "WEAK_BULL"
     if ema20 < ema50:
-        return "Weak Bearish"
+        return "WEAK_BEAR"
+    return "SIDEWAYS"
 
-    return "Sideways"
+# ---------------- PROBABILITY ENGINE ----------------
 
-# ---------------- v4 PROBABILITY ENGINE ----------------
+def probability(score, structure):
+    base = 50 + score * 3
 
-def probability_engine(score, structure, price, ema20, ema50, atr_val):
+    if structure.startswith("STRONG"):
+        base += 20
+    if structure.startswith("WEAK"):
+        base -= 10
 
-    base_prob = 50
+    return max(0, min(100, base))
 
-    # score contribution
-    base_prob += score * 3
+# ---------------- CORE ANALYSIS ----------------
 
-    # structure strength
-    if structure in ["Strong Bullish", "Strong Bearish"]:
-        base_prob += 20
-    elif structure in ["Weak Bullish", "Weak Bearish"]:
-        base_prob -= 10
+def analyze(price, ema20, ema50, atr_val):
 
-    # price alignment bonus
-    if price > ema20 > ema50 or price < ema20 < ema50:
-        base_prob += 15
-    else:
-        base_prob -= 15
-
-    # volatility penalty
-    if atr_val < abs(ema20 - ema50) * 0.5:
-        base_prob += 5
-
-    return max(0, min(100, base_prob))
-
-# ---------------- v3 + v4 ENGINE ----------------
-
-def analyze_market(price, ema20, ema50, atr_val):
-
-    structure = get_structure(price, ema20, ema50)
+    struc = structure(price, ema20, ema50)
 
     score = 0
 
-    # EMA alignment
     if ema20 > ema50:
         score += 3
     else:
         score += 3
 
-    # Price confirmation
-    if ema20 > ema50 and price > ema20:
-        score += 2
-    elif ema20 < ema50 and price < ema20:
+    if (ema20 > ema50 and price > ema20) or (ema20 < ema50 and price < ema20):
         score += 2
 
-    # Strength
-    if abs(ema20 - ema50) > atr_val * 0.5:
-        score += 2
-
-    # volatility quality
-    score += 1
-
-    # avoid overextension
     if abs(price - ema20) < atr_val * 2:
         score += 2
 
-    # structure penalty
-    if structure in ["Weak Bullish", "Weak Bearish"]:
-        score -= 2
+    score = min(10, score)
 
-    score = max(0, min(score, 10))
-
-    # ---------------- v3 DECISION ----------------
+    prob = probability(score, struc)
 
     signal = "NO TRADE"
 
-    if score >= 8:
-        if ema20 > ema50 and price > ema20:
-            signal = "BUY"
-        elif ema20 < ema50 and price < ema20:
-            signal = "SELL"
+    if score >= 8 and prob > 70:
+        signal = "BUY" if ema20 > ema50 else "SELL"
+    elif score >= 5 and prob > 55:
+        signal = "WATCH"
 
-    elif score >= 5:
-        if structure in ["Strong Bullish", "Strong Bearish"]:
-            signal = "WATCH"
-        else:
-            signal = "NO TRADE"
+    confidence = "LOW"
+    if prob > 75:
+        confidence = "HIGH"
+    elif prob > 60:
+        confidence = "MEDIUM"
 
-    # ---------------- CONFIDENCE ----------------
-
-    confidence = "Low"
-    if score >= 8:
-        confidence = "High"
-    elif score >= 5:
-        confidence = "Medium"
-
-    # ---------------- v4 PROBABILITY ----------------
-
-    prob = probability_engine(score, structure, price, ema20, ema50, atr_val)
-
-    return signal, structure, score, confidence, prob
+    return signal, struc, score, prob, confidence
 
 # ---------------- TRADE LEVELS ----------------
 
-def trade_levels(signal, price, atr_val):
-    risk = atr_val * 1.5
-
+def levels(signal, price, atr_val):
+    r = atr_val * 1.5
     if signal == "BUY":
-        return price - risk, price + risk*2, price + risk*3
+        return price - r, price + r*2, price + r*3
     if signal == "SELL":
-        return price + risk, price - risk*2, price - risk*3
-
+        return price + r, price - r*2, price - r*3
     return price, price, price
 
-# ---------------- SAVE ----------------
+# ---------------- PORTFOLIO SCANNER ----------------
 
-def save_signal(data):
+def scan_portfolio():
 
-    file = "signal_history_v4.csv"
-    exists = os.path.isfile(file)
+    results = []
 
-    with open(file, "a", newline="") as f:
-        w = csv.writer(f)
+    for name, key in INSTRUMENTS.items():
 
-        if not exists:
-            w.writerow([
-                "Time","Signal","Structure","Price",
-                "Score","Confidence","Probability",
-                "SL","T1","T2"
-            ])
+        try:
+            candles = get_candles(key)
+            closes = [c[4] for c in reversed(candles)]
 
-        w.writerow([
-            datetime.now(IST).strftime("%d-%m-%Y %H:%M"),
-            data["signal"],
-            data["structure"],
-            data["price"],
-            data["score"],
-            data["confidence"],
-            data["probability"],
-            data["sl"],
-            data["t1"],
-            data["t2"]
-        ])
+            price = get_live_price(key)
+
+            ema20 = ema(closes[:20], 20)
+            ema50 = ema(closes[:50], 50)
+            atr_val = atr(candles)
+
+            signal, struc, score, prob, conf = analyze(
+                price, ema20, ema50, atr_val
+            )
+
+            if signal != "NO TRADE":
+
+                sl, t1, t2 = levels(signal, price, atr_val)
+
+                results.append({
+                    "Instrument": name,
+                    "Signal": signal,
+                    "Structure": struc,
+                    "Score": score,
+                    "Probability": prob,
+                    "Confidence": conf,
+                    "Price": round(price, 2),
+                    "SL": round(sl, 2),
+                    "T1": round(t1, 2),
+                    "T2": round(t2, 2)
+                })
+
+        except:
+            continue
+
+    df = pd.DataFrame(results)
+
+    if not df.empty:
+        df = df.sort_values(by="Probability", ascending=False)
+
+    return df
 
 # ---------------- UI ----------------
 
-st.title("📊 NG Signal Pro v3 + v4 Engine")
+st.title("📊 NG SIGNAL PRO — PORTFOLIO SCANNER v10")
 
-if st.button("🚀 Run Analysis"):
+instrument = st.selectbox("Select Instrument", list(INSTRUMENTS.keys()))
+key = INSTRUMENTS[instrument]
 
-    candles = get_historical_candles()
+if st.button("🚀 Run Single Analysis"):
+
+    candles = get_candles(key)
     closes = [c[4] for c in reversed(candles)]
 
-    price = get_live_price()
-    atr_val = atr(candles)
+    price = get_live_price(key)
 
     ema20 = ema(closes[:20], 20)
     ema50 = ema(closes[:50], 50)
+    atr_val = atr(candles)
 
-    signal, structure, score, confidence, prob = analyze_market(
-        price, ema20, ema50, atr_val
-    )
+    signal, struc, score, prob, conf = analyze(price, ema20, ema50, atr_val)
 
-    if signal == "NO TRADE":
-        st.warning(f"No Trade | Structure: {structure} | Prob: {prob}%")
-        st.stop()
-
-    sl, t1, t2 = trade_levels(signal, price, atr_val)
-
-    data = {
-        "signal": signal,
-        "structure": structure,
-        "price": round(price, 2),
-        "score": score,
-        "confidence": confidence,
-        "probability": prob,
-        "sl": round(sl, 2),
-        "t1": round(t1, 2),
-        "t2": round(t2, 2)
-    }
-
-    save_signal(data)
+    sl, t1, t2 = levels(signal, price, atr_val)
 
     st.success(f"""
-📊 SIGNAL GENERATED
-
 Signal: {signal}
-Structure: {structure}
+Structure: {struc}
 Score: {score}/10
-Confidence: {confidence}
 Probability: {prob}%
+Confidence: {conf}
 
 SL: {sl}
 T1: {t1}
 T2: {t2}
 """)
 
-    st.write(data)
+# ---------------- PORTFOLIO MODE ----------------
+
+if st.button("🚀 Scan Full Portfolio"):
+
+    df = scan_portfolio()
+
+    if df.empty:
+        st.warning("No active setups found")
+    else:
+        st.success("Top Opportunities Ranked")
+
+        st.dataframe(df)
+
+        st.write("🔥 BEST TRADE RIGHT NOW")
+        st.json(df.iloc[0].to_dict())
