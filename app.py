@@ -800,6 +800,52 @@ if st.button("🚀 Run Analysis"):
 Instrument: Natural Gas
 
 Trend: {trend.upper()}
+if st.button("🚀 Run Analysis"):
+
+    candles = get_historical_candles()
+    closes = [candle[4] for candle in reversed(candles)]
+
+    current_price = get_live_price()
+
+    ema20 = calculate_ema(closes, 20)
+    ema50 = calculate_ema(closes, 50)
+
+    trend = get_trend(ema20, ema50)
+
+    score = calculate_score(current_price, ema20, ema50)
+    confidence = get_confidence(score)
+
+    signal_type = get_signal_type(ema20, ema50)
+    recommendation = get_recommendation(score)
+
+    atr = calculate_atr(candles)
+
+    sl, t1, t2 = calculate_trade_levels(
+        signal_type,
+        current_price,
+        atr
+    )
+
+    signal = {
+        "type": signal_type,
+        "trend": trend,
+        "price": round(current_price, 2),
+        "ema20": round(ema20, 2),
+        "ema50": round(ema50, 2),
+        "atr": round(atr, 2),
+        "sl": round(sl, 2),
+        "t1": round(t1, 2),
+        "t2": round(t2, 2)
+    }
+
+    save_signal(signal)
+
+    message = f"""
+📊 NG SIGNAL PRO
+
+Instrument: Natural Gas
+
+Trend: {trend.upper()}
 
 Decision: {signal_type}
 
@@ -851,3 +897,24 @@ Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
     st.write("Stop Loss:", sl)
     st.write("Target 1:", t1)
     st.write("Target 2:", t2)
+
+
+if st.button("Test Live Price"):
+
+    response = test_market_quote()
+
+    data = response.json()
+
+    st.write(data)
+
+
+if st.button("Show Live Price Data"):
+
+    data = get_live_price()
+
+    st.json(data)
+
+
+if st.button("Check Open Signals"):
+
+    update_signal_results()
