@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import pandas as pd
 import json
-import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -11,122 +10,65 @@ from zoneinfo import ZoneInfo
 UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTM0YjU0N2I5NjIwYjc0YmFmYTQzZjciLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSwiaWF0IjoxNzgxODM5MTc1LCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3ODE5MDY0MDB9.qaiOTY6_DPANwtKu2MfsBwVeJoUi3pzHVA8tzYIjTDE"
 IST = ZoneInfo("Asia/Kolkata")
 
-CACHE_FILE = "instrument_cache.json"
-
 # ================= SAFE REQUEST =================
 
-def safe_get(url, headers=None, timeout=10):
+def safe_get(url, headers=None):
     try:
-        r = requests.get(url, headers=headers, timeout=timeout)
-
+        r = requests.get(url, headers=headers, timeout=10)
         if r.status_code != 200:
             return None
-
-        try:
-            return r.json()
-        except:
-            return None
-
+        return r.json()
     except:
         return None
-
-# ================= CACHE SYSTEM =================
-
-def save_cache(data):
-    try:
-        with open(CACHE_FILE, "w") as f:
-            json.dump(data, f)
-    except:
-        pass
-
-
-def load_cache():
-    try:
-        if os.path.exists(CACHE_FILE):
-            with open(CACHE_FILE, "r") as f:
-                return json.load(f)
-    except:
-        pass
-    return []
 
 # ================= INSTRUMENT MASTER =================
 
 @st.cache_data(ttl=86400)
 def load_instrument_master():
     url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json"
-
-    data = safe_get(url)
-
-    if isinstance(data, list):
-        save_cache(data)
-        return data
-
-    cached = load_cache()
-
-    return cached if cached else []
-
-# ================= SYMBOL MAP =================
+    return safe_get(url)
 
 def build_symbol_map():
     data = load_instrument_master()
-
-    if not data:
+    if not isinstance(data, list):
         return {}
 
-    symbol_map = {}
+    mapping = {}
 
-    for item in data:
+    for i in data:
         try:
-            symbol = item.get("trading_symbol")
-            key = item.get("instrument_key")
-
-            if symbol and key:
-                symbol_map[symbol.upper()] = key
-
+            sym = i.get("trading_symbol")
+            key = i.get("instrument_key")
+            if sym and key:
+                mapping[sym.upper()] = key
         except:
             continue
 
-    return symbol_map
+    return mapping
 
-# ================= INSTRUMENTS =================
+# ================= WATCHLIST =================
 
-def get_instruments():
-    symbol_map = build_symbol_map()
+def get_watchlist():
+    symbols = build_symbol_map()
 
     return {
-        "Kotak Bank": symbol_map.get("KOTAKBANK"),
-        "Bank of Baroda": symbol_map.get("BANKBARODA"),
-        "Jio Financial": symbol_map.get("JIOFIN"),
-        "Federal Bank": symbol_map.get("FEDERALBNK"),
-        "IRFC": symbol_map.get("IRFC"),
-
-        "Tata Power": symbol_map.get("TATAPOWER"),
-        "NTPC": symbol_map.get("NTPC"),
-        "Power Grid": symbol_map.get("POWERGRID"),
-        "Adani Power": symbol_map.get("ADANIPOWER"),
-        "Suzlon": symbol_map.get("SUZLON"),
-
-        "Coal India": symbol_map.get("COALINDIA"),
-        "ONGC": symbol_map.get("ONGC"),
-        "IOC": symbol_map.get("IOC"),
-        "GAIL": symbol_map.get("GAIL"),
-        "BPCL": symbol_map.get("BPCL"),
-
-        "ITC": symbol_map.get("ITC"),
-        "BEL": symbol_map.get("BEL"),
-        "Tata Motors": symbol_map.get("TATAMOTORS"),
-        "Tata Steel": symbol_map.get("TATASTEEL"),
-        "Wipro": symbol_map.get("WIPRO"),
+        "Tata Motors": symbols.get("TATAMOTORS"),
+        "ITC": symbols.get("ITC"),
+        "NTPC": symbols.get("NTPC"),
+        "ONGC": symbols.get("ONGC"),
+        "BEL": symbols.get("BEL"),
+        "Power Grid": symbols.get("POWERGRID"),
+        "Coal India": symbols.get("COALINDIA"),
+        "Suzlon": symbols.get("SUZLON"),
+        "Wipro": symbols.get("WIPRO"),
+        "IOC": symbols.get("IOC"),
     }
 
-# ================= SAFE API =================
+# ================= MARKET DATA =================
 
-def get_live_price(key):
+def get_price(key):
     url = f"https://api.upstox.com/v2/market-quote/ltp?instrument_key={key}"
-    data = safe_get(url, headers={"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
-
-    if not data:
-        return None
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
 
     try:
         k = list(data["data"].keys())[0]
@@ -137,11 +79,9 @@ def get_live_price(key):
 
 def get_candles(key):
     url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
-    data = safe_get(url, headers={"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
-
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
     if not data:
         return None
-
     return data.get("data", {}).get("candles", None)
 
 # ================= INDICATORS =================
@@ -156,49 +96,36 @@ def ema(prices, period):
 
 def atr(candles):
     trs = []
-
     for i in range(1, len(candles)):
         h, l, pc = candles[i][1], candles[i][2], candles[i-1][4]
         trs.append(max(h-l, abs(h-pc), abs(l-pc)))
-
     return sum(trs[:14]) / 14
 
-# ================= SIGNAL ENGINE v2 =================
+# ================= PRODUCTION ENGINE =================
 
-def analyze(price, ema20, ema50, atr_val):
+def signal_engine(price, ema20, ema50, atr_val):
 
     score = 0
     reasons = []
 
-    # TREND
-    if ema20 > ema50:
-        trend = "Bullish"
-        score += 3
-    else:
-        trend = "Bearish"
-        score += 3
+    trend = "Bullish" if ema20 > ema50 else "Bearish"
+    score += 3
 
-    # PRICE CONFIRMATION
-    if ema20 > ema50 and price > ema20:
+    if (ema20 > ema50 and price > ema20) or (ema20 < ema50 and price < ema20):
         score += 2
-        reasons.append("Price above EMA20")
-    elif ema20 < ema50 and price < ema20:
-        score += 2
-        reasons.append("Price below EMA20")
+        reasons.append("Trend confirmation")
 
-    # ATR ZONE
     if atr_val and abs(price - ema20) < atr_val * 1.5:
         score += 2
-        reasons.append("Healthy zone")
+        reasons.append("Valid volatility zone")
 
-    # BREAKOUT CHECK
-    if ema20 > ema50 and price > ema50 * 1.002:
+    if ema20 > ema50 and price > ema50:
         score += 2
-        reasons.append("Bullish breakout")
+        reasons.append("Momentum breakout bullish")
 
-    if ema20 < ema50 and price < ema50 * 0.998:
+    if ema20 < ema50 and price < ema50:
         score += 2
-        reasons.append("Bearish breakdown")
+        reasons.append("Momentum breakdown bearish")
 
     score = min(score, 10)
 
@@ -211,18 +138,27 @@ def analyze(price, ema20, ema50, atr_val):
     else:
         signal = "NO TRADE"
 
-    structure = f"{trend} | Score {score}/10 | Prob {probability}%"
+    return signal, score, probability, trend, reasons
 
-    return signal, score, probability, structure, reasons
+# ================= SL / TP =================
+
+def levels(price, atr_val, signal):
+
+    risk = atr_val * 1.5
+
+    if signal == "BUY":
+        return round(price-risk,2), round(price+risk*2,2), round(price+risk*3,2)
+    else:
+        return round(price+risk,2), round(price-risk*2,2), round(price-risk*3,2)
 
 # ================= SCANNER =================
 
-def scan_portfolio():
+def run_scanner():
 
-    instruments = get_instruments()
+    watchlist = get_watchlist()
     results = []
 
-    for name, key in instruments.items():
+    for name, key in watchlist.items():
 
         if not key:
             continue
@@ -237,7 +173,7 @@ def scan_portfolio():
             if len(closes) < 50:
                 continue
 
-            price = get_live_price(key)
+            price = get_price(key)
             if not price:
                 continue
 
@@ -245,18 +181,23 @@ def scan_portfolio():
             ema50 = ema(closes[:50], 50)
             atr_val = atr(candles)
 
-            signal, score, prob, structure, reasons = analyze(price, ema20, ema50, atr_val)
+            signal, score, prob, trend, reasons = signal_engine(price, ema20, ema50, atr_val)
 
-            # 🔥 IMPORTANT FIX: DO NOT FILTER WATCH OUT
             if signal in ["BUY", "SELL", "WATCH"]:
+
+                sl, t1, t2 = levels(price, atr_val, signal)
 
                 results.append({
                     "Instrument": name,
                     "Signal": signal,
+                    "Trend": trend,
                     "Score": score,
                     "Prob%": prob,
                     "Price": round(price, 2),
-                    "Structure": structure
+                    "SL": sl,
+                    "T1": t1,
+                    "T2": t2,
+                    "Reason": " | ".join(reasons)
                 })
 
         except:
@@ -265,22 +206,47 @@ def scan_portfolio():
     df = pd.DataFrame(results)
 
     if not df.empty:
-        df = df.sort_values(by="Score", ascending=False)
+        df = df.sort_values(["Score", "Prob%"], ascending=False)
 
-    return df
+    return df.head(5)
 
 # ================= UI =================
 
-st.title("📊 Signal Engine v2 (Probability System)")
+st.title("📊 Production Trading System v1")
 
-if st.button("🚀 Run Scan"):
+col1, col2, col3 = st.columns(3)
 
-    df = scan_portfolio()
+with col1:
+    run = st.button("🚀 Run Live Scan")
+
+with col2:
+    auto = st.toggle("Auto Refresh")
+
+with col3:
+    st.write("Status: LIVE")
+
+if run:
+
+    df = run_scanner()
 
     if df.empty:
-        st.warning("No signals found (market may be sideways or data missing)")
+        st.warning("No strong setups found")
     else:
+        st.success("🔥 Top 5 Opportunities")
+
         st.dataframe(df)
 
-        st.write("🔥 Top Signal:")
-        st.json(df.iloc[0].to_dict())
+        best = df.iloc[0]
+
+        st.subheader("🥇 Best Trade Setup")
+
+        st.json({
+            "Instrument": best["Instrument"],
+            "Signal": best["Signal"],
+            "Trend": best["Trend"],
+            "Entry": best["Price"],
+            "StopLoss": best["SL"],
+            "Target1": best["T1"],
+            "Target2": best["T2"],
+            "Reason": best["Reason"]
+        })
