@@ -755,7 +755,7 @@ if st.button("🚀 Run Analysis"):
 
     save_signal(signal)
 
-    message = f"""
+message = f"""
 📊 NG SIGNAL PRO
 
 Instrument: Natural Gas
