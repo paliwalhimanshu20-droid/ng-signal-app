@@ -775,8 +775,9 @@ Time: {datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %H:%M")}
     st.write("Trend:", trend)
     st.write("Trend Strength:", trend_strength)
 
-if reversal_watch != "None":
-    st.warning(reversal_watch)
+    if reversal_watch != "None":
+        st.warning(reversal_watch)
+
     st.write("Price:", current_price)
 
     st.write("EMA20:", round(ema20, 2))
