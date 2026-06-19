@@ -707,7 +707,7 @@ if st.button("🚀 Run Analysis"):
     elif trend_strength == "Medium":
      score -= 1
 
-    # Reversal Watch Adjustment
+# Reversal Watch Adjustment
     if reversal_watch != "None":
      score -= 2
 
@@ -740,9 +740,9 @@ if st.button("🚀 Run Analysis"):
         "t2": round(t2, 2)
     }
 
-    save_signal(signal)
+save_signal(signal)
 
-message = f"""
+  message = f"""
 📊 NG SIGNAL PRO
 
 Instrument: Natural Gas
