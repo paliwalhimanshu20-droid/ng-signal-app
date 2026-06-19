@@ -728,7 +728,7 @@ current_price,
 atr
 )
 
-    signal = {
+signal = {
         "type": signal_type,
         "trend": trend,
         "price": round(current_price, 2),
@@ -738,9 +738,9 @@ atr
         "sl": round(sl, 2),
         "t1": round(t1, 2),
         "t2": round(t2, 2)
-    }
+}
 
-    save_signal(signal)
+save_signal(signal)
 
     message = f"""
 📊 NG SIGNAL PRO
