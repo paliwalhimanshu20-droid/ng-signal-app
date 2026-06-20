@@ -98,11 +98,26 @@ def get_price(key):
 
 
 def get_candles(key):
+
     url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
-    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
-    if not data:
-        return None
-    return data.get("data", {}).get("candles", None)
+
+    st.write("Testing URL:", url)
+
+    response = requests.get(
+        url,
+        headers={
+            "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"
+        }
+    )
+
+    st.write("Status Code:", response.status_code)
+
+    try:
+        st.write(response.json())
+    except:
+        st.write(response.text)
+
+    return None
 
 # ================= INDICATORS =================
 
