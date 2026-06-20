@@ -105,48 +105,15 @@ def get_candles(key):
 
     url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
 
-    headers = {
-        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
-        "Accept": "application/json",
-        "Api-Version": "2.0"
-    }
-
-    response = requests.get(
+    data = safe_get(
         url,
-        headers=headers,
-        timeout=10
+        {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}
     )
 
-    st.write(f"{key} Status:", response.status_code)
+    if not data:
+        return None
 
-    try:
-        st.write(response.json())
-    except:
-        st.write(response.text)
-
-    return None
-def search_instrument(symbol):
-
-    url = f"https://api.upstox.com/v2/search/instruments?query={symbol}"
-
-    headers = {
-        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
-        "Accept": "application/json",
-        "Api-Version": "2.0"
-    }
-
-    response = requests.get(
-        url,
-        headers=headers,
-        timeout=10
-    )
-
-    st.write("Search Status:", response.status_code)
-
-    try:
-        st.write(response.json())
-    except:
-        st.write(response.text)
+    return data.get("data", {}).get("candles", None)
 
 # ================= INDICATORS =================
 
@@ -337,7 +304,6 @@ def run_scanner():
 
 
 st.title("📊 Production Trading System v1")
-search_instrument("ITC")
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
