@@ -251,13 +251,14 @@ def run_scanner():
 
             if signal in ["BUY", "SELL", "WATCH"]:
 
-                sl, t1, t2 = levels(price, atr_val, signal)
-                risk = abs(price - sl)
-reward = abs(t1 - price)
+    sl, t1, t2 = levels(price, atr_val, signal)
 
-rr = round(reward / risk, 2) if risk > 0 else 0
+            risk = abs(price - sl)
+            reward = abs(t1 - price)
 
-                results.append({
+            rr = round(reward / risk, 2) if risk > 0 else 0
+
+    results.append({
     "Instrument": name,
     "Signal": signal,
     "Trend": trend,
