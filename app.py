@@ -96,16 +96,16 @@ def get_price(key):
         "Api-Version": "2.0"
     }
 
-    response = requests.get(url, headers=headers)
+    data = safe_get(url, headers)
 
-    st.write("LTP Status:", response.status_code)
+    if not data:
+        return None
 
     try:
-        st.write(response.json())
+        k = list(data["data"].keys())[0]
+        return data["data"][k]["last_price"]
     except:
-        st.write(response.text)
-
-    return None
+        return None
 
 
 def get_candles(key):
@@ -317,14 +317,6 @@ def run_scanner():
 
 
 st.title("📊 Production Trading System v1")
-
-st.write("Token Length:", len(UPSTOX_ACCESS_TOKEN))
-
-st.write("ITC Test Price:", get_price("NSE_EQ|ITC"))
-st.write("RELIANCE Test Price:", get_price("NSE_EQ|RELIANCE"))
-st.write("SBIN Test Price:", get_price("NSE_EQ|SBIN"))
-
-st.write("ITC Test Price:", get_price("NSE_EQ|ITC"))
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
