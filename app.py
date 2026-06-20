@@ -90,12 +90,13 @@ def get_price(key):
 
     url = f"https://api.upstox.com/v2/market-quote/ltp?instrument_key={key}"
 
-    response = requests.get(
-        url,
-        headers={
-            "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"
-        }
-    )
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json",
+        "Api-Version": "2.0"
+    }
+
+    response = requests.get(url, headers=headers)
 
     st.write("LTP Status:", response.status_code)
 
