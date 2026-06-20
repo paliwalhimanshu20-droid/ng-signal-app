@@ -310,10 +310,16 @@ def run_scanner():
 
 # ================= UI =================
 
+
 st.title("📊 Production Trading System v1")
+
+symbol_map = build_symbol_map()
+
+st.write("TATAMOTORS KEY:", symbol_map.get("TATAMOTORS"))
+st.write("ITC KEY:", symbol_map.get("ITC"))
+
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
-
 if "last_scan" not in st.session_state:
     st.session_state.last_scan = "Never"
 
