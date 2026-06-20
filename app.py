@@ -31,17 +31,17 @@ def load_instrument_master():
 
     try:
 
-    response = requests.get(url, timeout=20)
+      response = requests.get(url, timeout=20)
 
-    st.write("Status:", response.status_code)
+      st.write("Status:", response.status_code)
 
-    st.write("Headers:", dict(response.headers))
+      st.write("Headers:", dict(response.headers))
 
-    st.write("First 500 chars:")
+      st.write("First 500 chars:")
 
-    st.text(response.text[:500])
+      st.text(response.text[:500])
 
-    return []
+      return []
 
 except Exception as e:
 
