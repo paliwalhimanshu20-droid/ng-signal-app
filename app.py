@@ -74,22 +74,51 @@ def test_mcx_master():
     except Exception as e:
 
         st.error(f"MCX Master Error: {e}")
+# ================= INSTRUMENT REGISTRY (OFFLINE) =================
 
+@st.cache_data(ttl=86400)
+def load_instrument_file():
+    """
+    Load Upstox instrument master file (manual fallback version).
+    You will place a downloaded file in project folder.
+    """
+
+    file_path = "instruments.csv"
+
+    try:
+        df = pd.read_csv(file_path)
+        return df
+
+    except Exception as e:
+        st.error("Instrument file not found. Please add instruments.csv")
+        return pd.DataFrame()
+def get_instrument_key(symbol):
+    df = load_instrument_file()
+
+    if df.empty:
+        return None
+
+    match = df[df["trading_symbol"] == symbol]
+
+    if match.empty:
+        return None
+
+    return match.iloc[0]["instrument_key"]
 # ================= WATCHLIST =================
 
 def get_watchlist():
 
     return {
-        "Tata Motors": "NSE_EQ|TATAMOTORS",
-        "ITC": "NSE_EQ|ITC",
-        "NTPC": "NSE_EQ|NTPC",
-        "ONGC": "NSE_EQ|ONGC",
-        "BEL": "NSE_EQ|BEL",
-        "Power Grid": "NSE_EQ|POWERGRID",
-        "Coal India": "NSE_EQ|COALINDIA",
-        "Suzlon": "NSE_EQ|SUZLON",
-        "Wipro": "NSE_EQ|WIPRO",
-        "IOC": "NSE_EQ|IOC"
+        "Tata Motors": "TATAMOTORS",
+        "ITC": "ITC",
+        "NTPC": "NTPC",
+        "ONGC": "ONGC",
+        "BEL": "BEL",
+        "Power Grid": "POWERGRID",
+        "Coal India": "COALINDIA",
+        "Suzlon": "SUZLON",
+        "Wipro": "WIPRO",
+        "IOC": "IOC"
     }
 
 # ================= MARKET DATA =================
@@ -250,7 +279,13 @@ def run_scanner():
         if not key:
             continue
 
-        candles = get_candles(key)
+        instrument_key = get_instrument_key(key)
+
+        if not instrument_key:
+        st.warning(f"{name}: Instrument not found")
+        continue
+
+        candles = get_candles(instrument_key)
 
         if not candles:
            st.warning(f"{name}: No candle data")
@@ -261,8 +296,7 @@ def run_scanner():
             if len(closes) < 50:
                 continue
 
-            price = get_price(key)
-
+            price = get_price(instrument_key)
             if not price:
               continue
 
