@@ -43,11 +43,11 @@ def load_instrument_master():
 
       return []
 
-except Exception as e:
+    except Exception as e:
 
-    st.error(f"Instrument Master Error: {e}")
+      st.error(f"Instrument Master Error: {e}")
 
-    return []
+      return []
 
 def build_symbol_map():
     data = load_instrument_master()
