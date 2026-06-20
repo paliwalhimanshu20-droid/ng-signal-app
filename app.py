@@ -70,19 +70,18 @@ def build_symbol_map():
 # ================= WATCHLIST =================
 
 def get_watchlist():
-    symbols = build_symbol_map()
 
     return {
-        "Tata Motors": symbols.get("TATAMOTORS"),
-        "ITC": symbols.get("ITC"),
-        "NTPC": symbols.get("NTPC"),
-        "ONGC": symbols.get("ONGC"),
-        "BEL": symbols.get("BEL"),
-        "Power Grid": symbols.get("POWERGRID"),
-        "Coal India": symbols.get("COALINDIA"),
-        "Suzlon": symbols.get("SUZLON"),
-        "Wipro": symbols.get("WIPRO"),
-        "IOC": symbols.get("IOC"),
+        "Tata Motors": "NSE_EQ|TATAMOTORS",
+        "ITC": "NSE_EQ|ITC",
+        "NTPC": "NSE_EQ|NTPC",
+        "ONGC": "NSE_EQ|ONGC",
+        "BEL": "NSE_EQ|BEL",
+        "Power Grid": "NSE_EQ|POWERGRID",
+        "Coal India": "NSE_EQ|COALINDIA",
+        "Suzlon": "NSE_EQ|SUZLON",
+        "Wipro": "NSE_EQ|WIPRO",
+        "IOC": "NSE_EQ|IOC"
     }
 
 # ================= MARKET DATA =================
