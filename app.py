@@ -25,8 +25,29 @@ def safe_get(url, headers=None):
 
 @st.cache_data(ttl=86400)
 def load_instrument_master():
+
     url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json"
-    return safe_get(url)
+
+    try:
+
+        response = requests.get(url, timeout=20)
+
+        st.write("Instrument Master Status:", response.status_code)
+
+        st.write("Content Type:",
+                 response.headers.get("content-type"))
+
+        data = response.json()
+
+        st.write("Records Loaded:", len(data))
+
+        return data
+
+    except Exception as e:
+
+        st.error(f"Instrument Master Error: {e}")
+
+        return []
 
 def build_symbol_map():
     data = load_instrument_master()
