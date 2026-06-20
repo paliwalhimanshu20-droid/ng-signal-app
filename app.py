@@ -101,17 +101,15 @@ def get_candles(key):
 
     url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
 
-    st.write("Testing URL:", url)
-
-    response = requests.get(
+    data = safe_get(
         url,
-        headers={
-            "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"
-        }
+        {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}
     )
 
-    st.write("Status Code:", response.status_code)
+    if not data:
+        return None
 
+    return data.get("data", {}).get("candles", None)
     try:
         st.write(response.json())
     except:
@@ -308,6 +306,8 @@ def run_scanner():
 
 
 st.title("📊 Production Trading System v1")
+
+st.write("ITC Test Price:", get_price("NSE_EQ|ITC"))
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
