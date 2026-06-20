@@ -32,15 +32,8 @@ def load_instrument_master():
 
         response = requests.get(url, timeout=20)
 
-        st.write("Instrument Master Status:", response.status_code)
-
-        st.write("Content Type:",
-         response.headers.get("content-type"))
-
-        st.write("Response Text:")
-        st.text(response.text[:1000])
-
-        return []
+        data = response.json()
+        return data
 
         st.write("Records Loaded:", len(data))
 
@@ -244,8 +237,6 @@ def run_scanner():
 
         candles = get_candles(key)
 
-        st.write(name, "Candles Found:", candles is not None)
-
         if not candles:
           continue
 
@@ -256,8 +247,6 @@ def run_scanner():
                 continue
 
             price = get_price(key)
-
-            st.write(name, "Live Price:", price)
 
             if not price:
               continue
@@ -315,11 +304,6 @@ def run_scanner():
 
 
 st.title("📊 Production Trading System v1")
-
-symbol_map = build_symbol_map()
-
-st.write("TATAMOTORS KEY:", symbol_map.get("TATAMOTORS"))
-st.write("ITC KEY:", symbol_map.get("ITC"))
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
