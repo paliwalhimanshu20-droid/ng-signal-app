@@ -27,27 +27,20 @@ def safe_get(url, headers=None):
 def load_instrument_master():
 
     url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json"
-    st.write("Instrument Master URL:", url)
 
     try:
 
-      response = requests.get(url, timeout=20)
+        response = requests.get(url, timeout=20)
 
-      st.write("Status:", response.status_code)
+        data = response.json()
 
-      st.write("Headers:", dict(response.headers))
-
-      st.write("First 500 chars:")
-
-      st.text(response.text[:500])
-
-      return []
+        return data
 
     except Exception as e:
 
-      st.error(f"Instrument Master Error: {e}")
+        st.error(f"Instrument Master Error: {e}")
 
-      return []
+        return []
 
 def build_symbol_map():
     data = load_instrument_master()
