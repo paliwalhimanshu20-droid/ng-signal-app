@@ -240,6 +240,7 @@ with col3:
     st.write("Status: LIVE")
 
 if run:
+
     st.session_state.scan_count += 1
 
     st.session_state.last_scan = datetime.now(
@@ -249,23 +250,27 @@ if run:
     df = run_scanner()
 
     if df.empty:
+
         st.warning("No strong setups found")
+
     else:
+
         st.subheader("🧠 System Health")
 
-c1, c2 = st.columns(2)
+        c1, c2 = st.columns(2)
 
-with c1:
-    st.metric(
-        "Total Scans",
-        st.session_state.scan_count
-    )
+        with c1:
+            st.metric(
+                "Total Scans",
+                st.session_state.scan_count
+            )
 
-with c2:
-    st.metric(
-        "Last Scan",
-        st.session_state.last_scan
-    )
+        with c2:
+            st.metric(
+                "Last Scan",
+                st.session_state.last_scan
+            )
+
         st.success("🔥 Top 5 Opportunities")
 
         st.dataframe(df)
