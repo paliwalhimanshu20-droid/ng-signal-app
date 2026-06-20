@@ -35,9 +35,12 @@ def load_instrument_master():
         st.write("Instrument Master Status:", response.status_code)
 
         st.write("Content Type:",
-                 response.headers.get("content-type"))
+         response.headers.get("content-type"))
 
-        data = response.json()
+        st.write("Response Text:")
+        st.text(response.text[:1000])
+
+        return []
 
         st.write("Records Loaded:", len(data))
 
