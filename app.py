@@ -87,14 +87,24 @@ def get_watchlist():
 # ================= MARKET DATA =================
 
 def get_price(key):
+
     url = f"https://api.upstox.com/v2/market-quote/ltp?instrument_key={key}"
-    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+
+    response = requests.get(
+        url,
+        headers={
+            "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"
+        }
+    )
+
+    st.write("LTP Status:", response.status_code)
 
     try:
-        k = list(data["data"].keys())[0]
-        return data["data"][k]["last_price"]
+        st.write(response.json())
     except:
-        return None
+        st.write(response.text)
+
+    return None
 
 
 def get_candles(key):
