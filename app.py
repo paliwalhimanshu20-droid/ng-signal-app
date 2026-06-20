@@ -191,19 +191,23 @@ def run_scanner():
             if signal in ["BUY", "SELL", "WATCH"]:
 
                 sl, t1, t2 = levels(price, atr_val, signal)
+                rr = 2.0  
 
                 results.append({
-                    "Instrument": name,
-                    "Signal": signal,
-                    "Trend": trend,
-                    "Score": score,
-                    "Prob%": prob,
-                    "Price": round(price, 2),
-                    "SL": sl,
-                    "T1": t1,
-                    "T2": t2,
-                    "Reason": " | ".join(reasons)
-                })
+    "Instrument": name,
+    "Signal": signal,
+    "Trend": trend,
+    "Regime": regime,
+    "Score": score,
+    "Prob%": prob,
+    "ExpectedMove%": expected_move,
+    "RR": rr,
+    "Price": round(price, 2),
+    "SL": sl,
+    "T1": t1,
+    "T2": t2,
+    "Reason": " | ".join(reasons)
+})
 
         except:
             continue
@@ -218,6 +222,11 @@ def run_scanner():
 # ================= UI =================
 
 st.title("📊 Production Trading System v1")
+if "scan_count" not in st.session_state:
+    st.session_state.scan_count = 0
+
+if "last_scan" not in st.session_state:
+    st.session_state.last_scan = "Never"
 
 col1, col2, col3 = st.columns(3)
 
@@ -231,12 +240,32 @@ with col3:
     st.write("Status: LIVE")
 
 if run:
+    st.session_state.scan_count += 1
+
+    st.session_state.last_scan = datetime.now(
+        IST
+    ).strftime("%d-%m-%Y %H:%M:%S")
 
     df = run_scanner()
 
     if df.empty:
         st.warning("No strong setups found")
     else:
+        st.subheader("🧠 System Health")
+
+c1, c2 = st.columns(2)
+
+with c1:
+    st.metric(
+        "Total Scans",
+        st.session_state.scan_count
+    )
+
+with c2:
+    st.metric(
+        "Last Scan",
+        st.session_state.last_scan
+    )
         st.success("🔥 Top 5 Opportunities")
 
         st.dataframe(df)
