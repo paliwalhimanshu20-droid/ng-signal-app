@@ -156,6 +156,7 @@ def levels(price, atr_val, signal):
 def run_scanner():
 
     watchlist = get_watchlist()
+    st.write(watchlist)
     results = []
 
     for name, key in watchlist.items():
