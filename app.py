@@ -251,7 +251,7 @@ def run_scanner():
 
             if signal in ["BUY", "SELL", "WATCH"]:
 
-            sl, t1, t2 = levels(price, atr_val, signal)
+               sl, t1, t2 = levels(price, atr_val, signal)
 
             risk = abs(price - sl)
             reward = abs(t1 - price)
