@@ -225,8 +225,11 @@ def run_scanner():
             continue
 
         candles = get_candles(key)
+
+        st.write(name, "Candles Found:", candles is not None)
+
         if not candles:
-            continue
+          continue
 
         try:
             closes = [c[4] for c in reversed(candles)]
@@ -235,8 +238,11 @@ def run_scanner():
                 continue
 
             price = get_price(key)
+
+            st.write(name, "Live Price:", price)
+
             if not price:
-                continue
+              continue
 
             ema20 = ema(closes, 20)
             ema50 = ema(closes, 50)
