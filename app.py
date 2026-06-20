@@ -181,7 +181,12 @@ def run_scanner():
             ema50 = ema(closes[:50], 50)
             atr_val = atr(candles)
 
-            signal, score, prob, trend, reasons = signal_engine(price, ema20, ema50, atr_val)
+            signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
+    price,
+    ema20,
+    ema50,
+    atr_val
+)
 
             if signal in ["BUY", "SELL", "WATCH"]:
 
