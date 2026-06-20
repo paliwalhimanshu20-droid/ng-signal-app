@@ -120,7 +120,20 @@ def atr(candles):
         h, l, pc = candles[i][1], candles[i][2], candles[i-1][4]
         trs.append(max(h-l, abs(h-pc), abs(l-pc)))
     return sum(trs[:14]) / 14
+# ================= REGIME ENGINE =================
 
+def detect_regime(ema20, ema50, price):
+
+    gap = abs(ema20 - ema50)
+
+    if gap > price * 0.01:
+        return "TRENDING"
+
+    elif gap > price * 0.005:
+        return "BREAKOUT"
+
+    else:
+        return "RANGING"
 # ================= PRODUCTION ENGINE =================
 
 def signal_engine(price, ema20, ema50, atr_val):
@@ -129,21 +142,38 @@ def signal_engine(price, ema20, ema50, atr_val):
     reasons = []
 
     trend = "Bullish" if ema20 > ema50 else "Bearish"
+
+    regime = detect_regime(
+        ema20,
+        ema50,
+        price
+    )
+
+    expected_move = round(
+        (atr_val / price) * 100,
+        2
+    )
+
     score += 3
 
-    if (ema20 > ema50 and price > ema20) or (ema20 < ema50 and price < ema20):
+    if (ema20 > ema50 and price > ema20) or \
+       (ema20 < ema50 and price < ema20):
+
         score += 2
         reasons.append("Trend confirmation")
 
     if atr_val and abs(price - ema20) < atr_val * 1.5:
+
         score += 2
         reasons.append("Valid volatility zone")
 
     if ema20 > ema50 and price > ema50:
+
         score += 2
         reasons.append("Momentum breakout bullish")
 
     if ema20 < ema50 and price < ema50:
+
         score += 2
         reasons.append("Momentum breakdown bearish")
 
@@ -153,12 +183,22 @@ def signal_engine(price, ema20, ema50, atr_val):
 
     if score >= 8:
         signal = "BUY" if trend == "Bullish" else "SELL"
+
     elif score >= 6:
         signal = "WATCH"
+
     else:
         signal = "NO TRADE"
 
-    return signal, score, probability, trend, reasons
+    return (
+        signal,
+        score,
+        probability,
+        trend,
+        regime,
+        expected_move,
+        reasons
+    )
 
 # ================= SL / TP =================
 
@@ -198,8 +238,8 @@ def run_scanner():
             if not price:
                 continue
 
-            ema20 = ema(closes[:20], 20)
-            ema50 = ema(closes[:50], 50)
+            ema20 = ema(closes, 20)
+            ema50 = ema(closes, 50)
             atr_val = atr(candles)
 
             signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
@@ -212,7 +252,10 @@ def run_scanner():
             if signal in ["BUY", "SELL", "WATCH"]:
 
                 sl, t1, t2 = levels(price, atr_val, signal)
-                rr = 2.0  
+                risk = abs(price - sl)
+reward = abs(t1 - price)
+
+rr = round(reward / risk, 2) if risk > 0 else 0
 
                 results.append({
     "Instrument": name,
@@ -230,7 +273,10 @@ def run_scanner():
     "Reason": " | ".join(reasons)
 })
 
-        except:
+        except Exception as e:
+
+            st.error(f"{name} Error: {e}")
+
             continue
 
     df = pd.DataFrame(results)
