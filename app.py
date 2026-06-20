@@ -105,15 +105,20 @@ def get_candles(key):
 
     url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
 
-    data = safe_get(
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json",
+        "Api-Version": "2.0"
+    }
+
+    response = requests.get(
         url,
-        {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}
+        headers=headers,
+        timeout=10
     )
 
-    if not data:
-        return None
+    st.write(f"{key} Status:", response.status_code)
 
-    return data.get("data", {}).get("candles", None)
     try:
         st.write(response.json())
     except:
