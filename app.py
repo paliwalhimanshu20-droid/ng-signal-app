@@ -251,28 +251,28 @@ def run_scanner():
 
             if signal in ["BUY", "SELL", "WATCH"]:
 
-               sl, t1, t2 = levels(price, atr_val, signal)
+                sl, t1, t2 = levels(price, atr_val, signal)
 
-            risk = abs(price - sl)
-            reward = abs(t1 - price)
+                risk = abs(price - sl)
+                reward = abs(t1 - price)
 
-            rr = round(reward / risk, 2) if risk > 0 else 0
+                rr = round(reward / risk, 2) if risk > 0 else 0
 
-    results.append({
-    "Instrument": name,
-    "Signal": signal,
-    "Trend": trend,
-    "Regime": regime,
-    "Score": score,
-    "Prob%": prob,
-    "ExpectedMove%": expected_move,
-    "RR": rr,
-    "Price": round(price, 2),
-    "SL": sl,
-    "T1": t1,
-    "T2": t2,
-    "Reason": " | ".join(reasons)
-})
+                results.append({
+                    "Instrument": name,
+                    "Signal": signal,
+                    "Trend": trend,
+                    "Regime": regime,
+                    "Score": score,
+                    "Prob%": prob,
+                    "ExpectedMove%": expected_move,
+                    "RR": rr,
+                    "Price": round(price, 2),
+                    "SL": sl,
+                    "T1": t1,
+                    "T2": t2,
+                    "Reason": " | ".join(reasons)
+                })
 
         except Exception as e:
 
