@@ -59,6 +59,21 @@ def build_symbol_map():
             continue
 
     return mapping
+def test_mcx_master():
+
+    url = "https://api.upstox.com/v2/instruments/scrip/details.MCX.json.gz"
+
+    try:
+
+        df = pd.read_json(url)
+
+        st.write("Rows:", len(df))
+
+        st.write(df.head())
+
+    except Exception as e:
+
+        st.error(f"MCX Master Error: {e}")
 
 # ================= WATCHLIST =================
 
@@ -304,6 +319,7 @@ def run_scanner():
 
 
 st.title("📊 Production Trading System v1")
+test_mcx_master()
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
