@@ -2,16 +2,16 @@ import pandas as pd
 import gzip
 import json
 
-# 🔹 Load extracted NSE.json file (after unzip)
-FILE_PATH = "NSE.json"
+FILE_PATH = "NSE.json.gz"
 
-def load_json():
-    with open(FILE_PATH, "r", encoding="utf-8") as f:
+def load_data():
+
+    with gzip.open(FILE_PATH, "rt", encoding="utf-8") as f:
         return json.load(f)
 
 def build_csv():
-    data = load_json()
 
+    data = load_data()
     rows = []
 
     for item in data:
@@ -30,7 +30,7 @@ def build_csv():
     df.to_csv("instruments.csv", index=False)
 
     print("DONE: instruments.csv created")
-    print(df.head())
+    print("Rows:", len(df))
 
 if __name__ == "__main__":
     build_csv()
