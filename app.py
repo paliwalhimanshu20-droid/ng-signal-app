@@ -244,8 +244,8 @@ def run_scanner():
         candles = get_candles(key)
 
         if not candles:
-          continue
-
+           st.warning(f"{name}: No candle data")
+           continue
         try:
             closes = [c[4] for c in reversed(candles)]
 
