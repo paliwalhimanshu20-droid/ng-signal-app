@@ -189,16 +189,24 @@ def run_scanner():
 
     for name, key in watchlist.items():
 
+        if not key:
+            continue
+
+        instrument_key = key
+
         try:
-            candles = get_candles(key)
+            candles = get_candles(instrument_key)
+
             if not candles:
                 continue
 
             closes = [c[4] for c in reversed(candles)]
+
             if len(closes) < 50:
                 continue
 
-            price = get_price(key)
+            price = get_price(instrument_key)
+
             if not price:
                 continue
 
@@ -207,12 +215,20 @@ def run_scanner():
             atr_val = atr(candles)
 
             signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
-                price, ema20, ema50, atr_val
+                price,
+                ema20,
+                ema50,
+                atr_val
             )
 
             if signal in ["BUY", "SELL", "WATCH"]:
 
-                sl, t1, t2 = levels(price, atr_val, signal, trend)
+                sl, t1, t2 = levels(
+                    price,
+                    atr_val,
+                    signal,
+                    trend
+                )
 
                 risk = abs(price - sl)
                 reward = abs(t1 - price)
@@ -237,14 +253,14 @@ def run_scanner():
 
         except Exception as e:
             st.error(f"{name} Error: {e}")
+            continue
 
     df = pd.DataFrame(results)
 
-    if df.empty:
-        return df
+    if not df.empty:
+        df = df.sort_values(["Score", "Prob%"], ascending=False)
 
-    return df.sort_values(["Score", "Prob%"], ascending=False).head(10)
-
+    return df.head(10)
 # ================= UI =================
 
 st.title("📊 Production Trading System v1")
