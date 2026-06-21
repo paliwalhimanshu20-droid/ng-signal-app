@@ -28,89 +28,33 @@ def safe_get(url, headers=None):
 
 @st.cache_data(ttl=86400)
 def load_instrument_master():
-
     url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json"
-
     try:
-
-        response = requests.get(url, timeout=20)
-
-        data = response.json()
-
-        return data
-
+        return requests.get(url, timeout=20).json()
     except Exception as e:
-
         st.error(f"Instrument Master Error: {e}")
-
         return []
 
-def build_symbol_map():
-    data = load_instrument_master()
-    if not isinstance(data, list):
-        return {}
-
-    mapping = {}
-
-    for i in data:
-        try:
-            sym = i.get("trading_symbol")
-            key = i.get("instrument_key")
-            if sym and key:
-                mapping[sym.upper()] = key
-        except:
-            continue
-
-    return mapping
-def test_mcx_master():
-
-    url = "https://api.upstox.com/v2/instruments/scrip/details.MCX.json.gz"
-
-    try:
-
-        df = pd.read_json(url)
-
-        st.write("Rows:", len(df))
-
-        st.write(df.head())
-
-    except Exception as e:
-
-        st.error(f"MCX Master Error: {e}")
-# ================= INSTRUMENT REGISTRY (OFFLINE) =================
-
-@st.cache_data(ttl=86400)
 def load_instrument_file():
-    """
-    Load Upstox instrument master file (manual fallback version).
-    You will place a downloaded file in project folder.
-    """
-
-    file_path = "instruments.csv"
-
     try:
-        df = pd.read_csv(file_path)
-        return df
-
-    except Exception as e:
-        st.error("Instrument file not found. Please add instruments.csv")
+        return pd.read_csv("instruments.csv")
+    except:
         return pd.DataFrame()
+
 def get_instrument_key(symbol):
     df = load_instrument_file()
-
     if df.empty:
         return None
 
     match = df[df["trading_symbol"] == symbol]
-
     if match.empty:
         return None
 
     return match.iloc[0]["instrument_key"]
+
 # ================= WATCHLIST =================
 
 def get_watchlist():
-
     return {
         "ITC": "NSE_EQ|INE154A01025",
         "RELIANCE": "NSE_EQ|INE002A01018",
@@ -129,7 +73,6 @@ def get_watchlist():
 # ================= MARKET DATA =================
 
 def get_price(key):
-
     url = f"https://api.upstox.com/v2/market-quote/ltp?instrument_key={key}"
 
     headers = {
@@ -146,26 +89,17 @@ def get_price(key):
     try:
         k = list(data["data"].keys())[0]
         return data["data"][k]["last_price"]
-
     except:
         return None
 
 
 def get_candles(key):
-
     today = datetime.now(IST).strftime("%Y-%m-%d")
 
     url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/{today}"
 
-    data = safe_get(
-        url,
-        {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}
-    )
-
-    if not data:
-        return None
-
-    return data.get("data", {}).get("candles", None)
+    return safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}) \
+        .get("data", {}).get("candles", None)
 
 # ================= INDICATORS =================
 
@@ -183,264 +117,135 @@ def atr(candles):
         h, l, pc = candles[i][1], candles[i][2], candles[i-1][4]
         trs.append(max(h-l, abs(h-pc), abs(l-pc)))
     return sum(trs[:14]) / 14
-# ================= REGIME ENGINE =================
+
+# ================= REGIME =================
 
 def detect_regime(ema20, ema50, price):
-
     gap = abs(ema20 - ema50)
 
     if gap > price * 0.01:
         return "TRENDING"
-
     elif gap > price * 0.005:
         return "BREAKOUT"
-
     else:
         return "RANGING"
-# ================= PRODUCTION ENGINE =================
+
+# ================= SIGNAL ENGINE =================
 
 def signal_engine(price, ema20, ema50, atr_val):
 
-    score = 0
-    reasons = []
+    score = 4
+    reasons = ["Base Score"]
 
     trend = "Bullish" if ema20 > ema50 else "Bearish"
+    regime = detect_regime(ema20, ema50, price)
 
-    regime = detect_regime(
-        ema20,
-        ema50,
-        price
-    )
+    expected_move = round((atr_val / price) * 100, 2)
 
-    expected_move = round(
-        (atr_val / price) * 100,
-        2
-    )
-
-    score += 4
-    reasons.append("Base Score")
-
-    if (ema20 > ema50 and price > ema20) or \
-       (ema20 < ema50 and price < ema20):
-
+    if (ema20 > ema50 and price > ema20) or (ema20 < ema50 and price < ema20):
         score += 2
         reasons.append("Trend confirmation")
 
     if atr_val and abs(price - ema20) < atr_val * 1.5:
-
         score += 2
         reasons.append("Valid volatility zone")
 
     if ema20 > ema50 and price > ema50:
-
         score += 2
-        reasons.append("Momentum breakout bullish")
+        reasons.append("Momentum bullish")
 
     if ema20 < ema50 and price < ema50:
-
         score += 2
-        reasons.append("Momentum breakdown bearish")
+        reasons.append("Momentum bearish")
 
     score = min(score, 10)
-
     probability = int((score / 10) * 100)
 
     if score >= 8:
         signal = "BUY" if trend == "Bullish" else "SELL"
-
     elif score >= 6:
         signal = "WATCH"
-
     else:
         signal = "NO TRADE"
 
-    return (
-        signal,
-        score,
-        probability,
-        trend,
-        regime,
-        expected_move,
-        reasons
-    )
+    return signal, score, probability, trend, regime, expected_move, reasons
 
-# ================= SL / TP =================
+# ================= LEVELS =================
 
 def levels(price, atr_val, signal, trend):
-
     risk = atr_val * 1.5
 
     if trend == "Bullish":
-
-        sl = round(price - risk, 2)
-        t1 = round(price + risk * 2, 2)
-        t2 = round(price + risk * 3, 2)
-
+        return round(price - risk,2), round(price + risk*2,2), round(price + risk*3,2)
     else:
+        return round(price + risk,2), round(price - risk*2,2), round(price - risk*3,2)
 
-        sl = round(price + risk, 2)
-        t1 = round(price - risk * 2, 2)
-        t2 = round(price - risk * 3, 2)
-
-    return sl, t1, t2
-# ================= SCANNER =================
+# ================= SCANNER (FIXED) =================
 
 def run_scanner():
 
-  watchlist = get_watchlist()
-  results = []
+    watchlist = get_watchlist()
+    results = []
 
-  for name, key in watchlist.items():
+    for name, key in watchlist.items():
 
-    if not key:
-        continue
+        try:
+            candles = get_candles(key)
+            if not candles:
+                continue
 
-    instrument_key = key
+            closes = [c[4] for c in reversed(candles)]
+            if len(closes) < 50:
+                continue
 
-    try:
+            price = get_price(key)
+            if not price:
+                continue
 
-        candles = get_candles(instrument_key)
+            ema20 = ema(closes, 20)
+            ema50 = ema(closes, 50)
+            atr_val = atr(candles)
 
-        if not candles:
-            continue
-
-        closes = [c[4] for c in reversed(candles)]
-
-        if len(closes) < 50:
-            continue
-
-        price = get_price(instrument_key)
-
-        if not price:
-            continue
-
-        ema20 = ema(closes, 20)
-        ema50 = ema(closes, 50)
-        atr_val = atr(candles)
-
-        signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
-            price,
-            ema20,
-            ema50,
-            atr_val
-        )
-
-        if signal in ["BUY", "SELL", "WATCH"]:
-
-            sl, t1, t2 = levels(
-                price,
-                atr_val,
-                signal,
-                trend
+            signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
+                price, ema20, ema50, atr_val
             )
 
-            risk = abs(price - sl)
-            reward = abs(t1 - price)
+            if signal in ["BUY", "SELL", "WATCH"]:
 
-            rr = round(reward / risk, 2) if risk > 0 else 0
+                sl, t1, t2 = levels(price, atr_val, signal, trend)
 
-            results.append({
-                "Instrument": name,
-                "Signal": signal,
-                "Trend": trend,
-                "Regime": regime,
-                "Score": score,
-                "Prob%": prob,
-                "ExpectedMove%": expected_move,
-                "RR": rr,
-                "Price": round(price, 2),
-                "SL": sl,
-                "T1": t1,
-                "T2": t2,
-                "Reason": " | ".join(reasons)
-def run_scanner():
+                risk = abs(price - sl)
+                reward = abs(t1 - price)
 
-watchlist = get_watchlist()
-results = []
+                rr = round(reward / risk, 2) if risk > 0 else 0
 
-for name, key in watchlist.items():
+                results.append({
+                    "Instrument": name,
+                    "Signal": signal,
+                    "Trend": trend,
+                    "Regime": regime,
+                    "Score": score,
+                    "Prob%": prob,
+                    "ExpectedMove%": expected_move,
+                    "RR": rr,
+                    "Price": round(price, 2),
+                    "SL": sl,
+                    "T1": t1,
+                    "T2": t2,
+                    "Reason": " | ".join(reasons)
+                })
 
-    if not key:
-        continue
+        except Exception as e:
+            st.error(f"{name} Error: {e}")
 
-    instrument_key = key
+    df = pd.DataFrame(results)
 
-    try:
+    if df.empty:
+        return df
 
-        candles = get_candles(instrument_key)
-
-        if not candles:
-            continue
-
-        closes = [c[4] for c in reversed(candles)]
-
-        if len(closes) < 50:
-            continue
-
-        price = get_price(instrument_key)
-
-        if not price:
-            continue
-
-        ema20 = ema(closes, 20)
-        ema50 = ema(closes, 50)
-        atr_val = atr(candles)
-
-        signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
-            price,
-            ema20,
-            ema50,
-            atr_val
-        )
-
-        if signal in ["BUY", "SELL", "WATCH"]:
-
-            sl, t1, t2 = levels(
-                price,
-                atr_val,
-                signal,
-                trend
-            )
-
-            risk = abs(price - sl)
-            reward = abs(t1 - price)
-
-            rr = round(reward / risk, 2) if risk > 0 else 0
-
-            results.append({
-                "Instrument": name,
-                "Signal": signal,
-                "Trend": trend,
-                "Regime": regime,
-                "Score": score,
-                "Prob%": prob,
-                "ExpectedMove%": expected_move,
-                "RR": rr,
-                "Price": round(price, 2),
-                "SL": sl,
-                "T1": t1,
-                "T2": t2,
-                "Reason": " | ".join(reasons)
-            })
-
-    except Exception as e:
-
-        st.error(f"{name} Error: {e}")
-        continue
-
-df = pd.DataFrame(results)
-
-if not df.empty:
-
-    df = df.sort_values(
-        ["Score", "Prob%"],
-        ascending=False
-    )
-
-return df.head(10)
+    return df.sort_values(["Score", "Prob%"], ascending=False).head(10)
 
 # ================= UI =================
-
 
 st.title("📊 Production Trading System v1")
 
@@ -449,66 +254,23 @@ if "scan_count" not in st.session_state:
 if "last_scan" not in st.session_state:
     st.session_state.last_scan = "Never"
 
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    run = st.button("🚀 Run Live Scan")
-
-with col2:
-    auto = st.toggle("Auto Refresh")
-
-with col3:
-    st.write("Status: LIVE")
+run = st.button("🚀 Run Live Scan")
 
 if run:
 
     st.session_state.scan_count += 1
-
-    st.session_state.last_scan = datetime.now(
-        IST
-    ).strftime("%d-%m-%Y %H:%M:%S")
+    st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
 
     df = run_scanner()
+
     st.write("DF TYPE:", type(df))
     st.write("DF VALUE:", df)
 
     if df.empty:
-
         st.warning("No strong setups found")
-
     else:
-
-        st.subheader("🧠 System Health")
-
-        c1, c2 = st.columns(2)
-
-        with c1:
-            st.metric(
-                "Total Scans",
-                st.session_state.scan_count
-            )
-
-        with c2:
-            st.metric(
-                "Last Scan",
-                st.session_state.last_scan
-            )
-
-        st.success("🔥 Top 5 Opportunities")
-
         st.dataframe(df)
 
         best = df.iloc[0]
 
-        st.subheader("🥇 Best Trade Setup")
-
-        st.json({
-            "Instrument": best["Instrument"],
-            "Signal": best["Signal"],
-            "Trend": best["Trend"],
-            "Entry": best["Price"],
-            "StopLoss": best["SL"],
-            "Target1": best["T1"],
-            "Target2": best["T2"],
-            "Reason": best["Reason"]
-        })
+        st.json(best.to_dict())
