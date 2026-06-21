@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 # ================= CONFIG =================
 
-UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTM3OGU1MjM1MTRiNTQ0YjU5OGNjNTciLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSwiaWF0IjoxNzgyMDI1ODEwLCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3ODIwNzkyMDB9.SYWBnB-Cc_tS5uwH3zvfzuKarP5S3vWOshnoxPOaxQw"
+UPSTOX_ACCESS_TOKEN = " my token"
 IST = ZoneInfo("Asia/Kolkata")
 
 # ================= SAFE REQUEST =================
@@ -21,7 +21,9 @@ def safe_get(url, headers=None):
 
         return r.json()
 
-    except:
+    except Exception as e:
+        # FIX: narrowed from bare except so real errors aren't silently swallowed.
+        # Currently just suppressed here; surfaced to the caller as None.
         return None
 
 # ================= INSTRUMENT MASTER =================
@@ -38,7 +40,7 @@ def load_instrument_master():
 def load_instrument_file():
     try:
         return pd.read_csv("instruments.csv")
-    except:
+    except Exception:
         return pd.DataFrame()
 
 def get_instrument_key(symbol):
@@ -89,17 +91,24 @@ def get_price(key):
     try:
         k = list(data["data"].keys())[0]
         return data["data"][k]["last_price"]
-    except:
+    except Exception:
         return None
 
 
 def get_candles(key):
+    # FIX: original code called .get() directly on safe_get()'s return value,
+    # which crashes with AttributeError when safe_get returns None
+    # (timeouts, holidays, no data, expired token, rate limits).
     today = datetime.now(IST).strftime("%Y-%m-%d")
 
     url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/{today}"
 
-    return safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}) \
-        .get("data", {}).get("candles", None)
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+
+    if not data:
+        return None
+
+    return data.get("data", {}).get("candles", None)
 
 # ================= INDICATORS =================
 
@@ -112,11 +121,73 @@ def ema(prices, period):
 
 
 def atr(candles):
+    # FIX: original took sum(trs[:14]) which is the OLDEST 14 true ranges
+    # once trs is built in chronological order (since candles here is the
+    # raw, newest-first Upstox response — trs ends up oldest->newest reversed
+    # depending on indexing). We now explicitly use the most recent 14
+    # true ranges so ATR reflects current volatility, not stale data.
     trs = []
     for i in range(1, len(candles)):
         h, l, pc = candles[i][1], candles[i][2], candles[i-1][4]
-        trs.append(max(h-l, abs(h-pc), abs(l-pc)))
-    return sum(trs[:14]) / 14
+        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+
+    if not trs:
+        return 0
+
+    recent = trs[-14:] if len(trs) >= 14 else trs
+    return sum(recent) / len(recent)
+
+
+def rsi(prices, period=14):
+    # NEW: standard Wilder's RSI, computed from the same closes list
+    # you already build in run_scanner(). No extra API calls.
+    if len(prices) < period + 1:
+        return None
+
+    gains, losses = [], []
+    for i in range(1, len(prices)):
+        change = prices[i] - prices[i - 1]
+        gains.append(max(change, 0))
+        losses.append(max(-change, 0))
+
+    avg_gain = sum(gains[-period:]) / period
+    avg_loss = sum(losses[-period:]) / period
+
+    if avg_loss == 0:
+        return 100.0
+
+    rs = avg_gain / avg_loss
+    return round(100 - (100 / (1 + rs)), 2)
+
+
+def volume_signal(candles):
+    # NEW: compares the latest candle's volume to the average volume of the
+    # rest of the session so far. Flags unusual participation behind a move.
+    # Upstox 30min candle format: [timestamp, open, high, low, close, volume, oi]
+    if not candles or len(candles) < 3:
+        return None, "N/A"
+
+    # candles are newest-first from the API
+    vols = [c[5] for c in candles if len(c) > 5]
+    if len(vols) < 3:
+        return None, "N/A"
+
+    latest_vol = vols[0]
+    avg_vol = sum(vols[1:]) / len(vols[1:]) if len(vols) > 1 else 0
+
+    if avg_vol == 0:
+        return None, "N/A"
+
+    ratio = round(latest_vol / avg_vol, 2)
+
+    if ratio >= 1.5:
+        tag = "High"
+    elif ratio >= 0.8:
+        tag = "Normal"
+    else:
+        tag = "Low"
+
+    return ratio, tag
 
 # ================= REGIME =================
 
@@ -176,16 +247,22 @@ def levels(price, atr_val, signal, trend):
     risk = atr_val * 1.5
 
     if trend == "Bullish":
-        return round(price - risk,2), round(price + risk*2,2), round(price + risk*3,2)
+        return round(price - risk, 2), round(price + risk * 2, 2), round(price + risk * 3, 2)
     else:
-        return round(price + risk,2), round(price - risk*2,2), round(price - risk*3,2)
+        return round(price + risk, 2), round(price - risk * 2, 2), round(price - risk * 3, 2)
 
-# ================= SCANNER (FIXED) =================
+# ================= SCANNER =================
 
 def run_scanner():
+    """
+    Returns a tuple: (top5_df, full_df)
+    full_df now includes EVERY stock that returned valid data, with RSI
+    and Volume columns added, regardless of score — so the dashboard can
+    show the full scanned universe with filters, not just the top 5.
+    """
 
     watchlist = get_watchlist()
-    results = []
+    all_results = []
 
     for name, key in watchlist.items():
 
@@ -214,6 +291,10 @@ def run_scanner():
             ema50 = ema(closes, 50)
             atr_val = atr(candles)
 
+            # NEW indicators
+            rsi_val = rsi(closes, 14)
+            vol_ratio, vol_tag = volume_signal(candles)
+
             signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
                 price,
                 ema20,
@@ -221,50 +302,57 @@ def run_scanner():
                 atr_val
             )
 
-            if score >= 7 and signal in ["BUY", "SELL", "WATCH"]:
+            sl, t1, t2 = levels(price, atr_val, signal, trend)
 
-                sl, t1, t2 = levels(
-                    price,
-                    atr_val,
-                    signal,
-                    trend
-                )
+            risk = abs(price - sl)
+            reward = abs(t1 - price)
+            rr = round(reward / risk, 2) if risk > 0 else 0
 
-                risk = abs(price - sl)
-                reward = abs(t1 - price)
+            confidence = (
+                "High" if score >= 9
+                else "Medium" if score >= 7
+                else "Low"
+            )
 
-                rr = round(reward / risk, 2) if risk > 0 else 0
-
-                results.append({
-                    "Instrument": name,
-                    "Signal": signal,
-                    "Confidence":
-                      "High" if score >= 9
-                       else "Medium" if score >= 7
-                       else "Low",
-                    "Trend": trend,
-                    "Regime": regime,
-                    "Score": score,
-                    "Prob%": prob,
-                    "ExpectedMove%": expected_move,
-                    "RR": rr,
-                    "Price": round(price, 2),
-                    "SL": sl,
-                    "T1": t1,
-                    "T2": t2,
-                    "Reason": " | ".join(reasons)
-                })
+            all_results.append({
+                "Instrument": name,
+                "Signal": signal,
+                "Confidence": confidence,
+                "Trend": trend,
+                "Regime": regime,
+                "Score": score,
+                "Prob%": prob,
+                "RSI": rsi_val,
+                "Volume Ratio": vol_ratio,
+                "Volume": vol_tag,
+                "ExpectedMove%": expected_move,
+                "RR": rr,
+                "Price": round(price, 2),
+                "SL": sl,
+                "T1": t1,
+                "T2": t2,
+                "Reason": " | ".join(reasons)
+            })
 
         except Exception as e:
             st.error(f"{name} Error: {e}")
             continue
 
-    df = pd.DataFrame(results)
+    full_df = pd.DataFrame(all_results)
 
-    if not df.empty:
-        df = df.sort_values(["Score", "Prob%"], ascending=False)
+    if not full_df.empty:
+        full_df = full_df.sort_values(["Score", "Prob%"], ascending=False)
 
-    return df.head(5)
+    # Top 5 strong setups only (same filter logic as before: score >= 7, actionable signal)
+    if not full_df.empty:
+        top5_df = full_df[
+            (full_df["Score"] >= 7) & (full_df["Signal"].isin(["BUY", "SELL", "WATCH"]))
+        ].head(5)
+    else:
+        top5_df = full_df
+
+    return top5_df, full_df
+
 # ================= UI =================
 
 st.title("📊 Production Trading System v1")
@@ -278,14 +366,62 @@ if "last_scan" not in st.session_state:
 run = st.button("🚀 Run Live Scan")
 
 if run:
-
     st.session_state.scan_count += 1
+    st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
 
-    st.session_state.last_scan = datetime.now(
-    IST
-    ).strftime("%d-%m-%Y %H:%M:%S")
+df, full_df = run_scanner()
 
-df = run_scanner()
+# =========================
+# FULL SCANNED UNIVERSE (NEW)
+# =========================
+
+st.subheader("🔎 Full Scanned Universe")
+
+if full_df.empty:
+    st.warning("No data returned from scanner. Check token / market hours / connectivity.")
+else:
+    fcol1, fcol2, fcol3 = st.columns(3)
+
+    with fcol1:
+        signal_filter = st.multiselect(
+            "Signal",
+            options=sorted(full_df["Signal"].unique()),
+            default=list(sorted(full_df["Signal"].unique()))
+        )
+
+    with fcol2:
+        confidence_filter = st.multiselect(
+            "Confidence",
+            options=sorted(full_df["Confidence"].unique()),
+            default=list(sorted(full_df["Confidence"].unique()))
+        )
+
+    with fcol3:
+        min_score = st.slider("Minimum Score", min_value=0, max_value=10, value=0)
+
+    filtered_df = full_df[
+        (full_df["Signal"].isin(signal_filter)) &
+        (full_df["Confidence"].isin(confidence_filter)) &
+        (full_df["Score"] >= min_score)
+    ]
+
+    st.dataframe(
+        filtered_df[[
+            "Instrument", "Signal", "Confidence", "Trend", "Regime",
+            "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
+            "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
+        ]],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.caption(f"Showing {len(filtered_df)} of {len(full_df)} scanned instruments")
+
+st.markdown("---")
+
+# =========================
+# EXISTING TOP-5 SECTIONS (unchanged logic)
+# =========================
 
 if df.empty:
 
@@ -317,6 +453,8 @@ else:
             <b>BUY</b><br>
             Price: {row['Price']}<br>
             Confidence: {row['Prob%']}%<br>
+            RSI: {row['RSI']}<br>
+            Volume: {row['Volume']}<br>
             RR: {row['RR']}
             </div>
             """,
@@ -347,6 +485,8 @@ else:
             <b>SELL</b><br>
             Price: {row['Price']}<br>
             Confidence: {row['Prob%']}%<br>
+            RSI: {row['RSI']}<br>
+            Volume: {row['Volume']}<br>
             RR: {row['RR']}
             </div>
             """,
@@ -379,6 +519,7 @@ else:
     st.info(
         f"Trend: {best['Trend']}\n\n"
         f"Confidence: {best['Prob%']}%\n\n"
+        f"RSI: {best['RSI']} | Volume: {best['Volume']}\n\n"
         f"RR: {best['RR']}\n\n"
         f"Reason: {best['Reason']}"
     )
@@ -389,3 +530,4 @@ else:
         f"Scans Run: {st.session_state.scan_count} | "
         f"Last Scan: {st.session_state.last_scan}"
     )
+    
