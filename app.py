@@ -186,7 +186,6 @@ def run_scanner():
 
     watchlist = get_watchlist()
     results = []
-    st.write("Watchlist Count:", len(watchlist))
 
     for name, key in watchlist.items():
 
@@ -255,7 +254,6 @@ def run_scanner():
         except Exception as e:
             st.error(f"{name} Error: {e}")
             continue
-    st.write("Results Count:", len(results))
 
     df = pd.DataFrame(results)
 
