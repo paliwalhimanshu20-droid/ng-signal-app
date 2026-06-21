@@ -287,8 +287,12 @@ def run_scanner():
                 continue
 
             price = get_price(instrument_key)
+
+            st.write("Price:", price)
+
             if not price:
-              continue
+               st.warning(f"{name}: Price not found")
+               continue
 
             ema20 = ema(closes, 20)
             ema50 = ema(closes, 50)
@@ -300,7 +304,12 @@ def run_scanner():
     ema50,
     atr_val
 )
-
+st.write(
+    "Signal:", signal,
+    "Score:", score,
+    "Trend:", trend,
+    "Price:", price
+)
             if signal in ["BUY", "SELL", "WATCH"]:
 
                 sl, t1, t2 = levels(price, atr_val, signal)
