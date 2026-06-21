@@ -15,10 +15,22 @@ IST = ZoneInfo("Asia/Kolkata")
 def safe_get(url, headers=None):
     try:
         r = requests.get(url, headers=headers, timeout=10)
+
+        st.write("Request URL:", url)
+        st.write("Status Code:", r.status_code)
+
+        try:
+            st.write("Response:", r.json())
+        except:
+            st.write("Response Text:", r.text)
+
         if r.status_code != 200:
             return None
+
         return r.json()
-    except:
+
+    except Exception as e:
+        st.write("Request Error:", e)
         return None
 
 # ================= INSTRUMENT MASTER =================
