@@ -38,38 +38,61 @@ def load_instrument_master():
         return []
 
 
-@st.cache_data(ttl=86400)
-def load_mcx_master():
-    # Same pattern as load_instrument_master(), but for MCX (commodities).
-    # Used to resolve REAL, currently-tradeable contract keys + expiries
-    # instead of a hardcoded/guessed key that goes stale monthly.
-    url = "https://assets.upstox.com/market-quote/instruments/exchange/MCX.json"
-    try:
-        return requests.get(url, timeout=20).json()
-    except Exception as e:
-        st.error(f"MCX Instrument Master Error: {e}")
-        return []
-
-
 def get_commodity_contracts(name_filter, max_contracts=4):
     """
     Generic resolver for any MCX commodity (Natural Gas, Crude Oil, Gold, etc).
 
-    name_filter: substring to match against the instrument's trading symbol /
-                 name in the MCX master, e.g. "NATURALGAS", "CRUDEOIL".
-    Returns a list of dicts: [{"label": "NATURALGAS 27-JUN-2026", "key": "...",
-                               "expiry": datetime}, ...] sorted by nearest expiry first,
-    limited to max_contracts. Only FUT (futures) instruments are included —
-    options chains are filtered out since this app trades direction, not options.
-    """
-    master = load_mcx_master()
+    Uses Upstox's Instruments Search API (v2/instruments/search) instead of
+    downloading a static master file. The static MCX.json approach was
+    dropped because:
+      1. Upstox's MCX file is only reliably available gzipped (MCX.json.gz),
+         not as plain .json — requesting the plain URL returns a non-JSON
+         body (404/HTML), which is what caused the
+         "Expecting value: line 1 column 1" error.
+      2. Even when downloaded, MCX naming is inconsistent (duplicate/odd
+         entries per Upstox community reports), making local filtering fragile.
 
-    if not master:
-        return []
+    The search API instead lets Upstox do the filtering server-side and
+    returns clean, current contracts only.
+
+    name_filter: symbol text to search for, e.g. "NATURALGAS", "CRUDEOIL".
+    Returns {"error": str|None, "contracts": [...]}. On success, "contracts"
+    is a list of dicts: [{"label": "...", "key": "...", "expiry": datetime}, ...]
+    sorted by nearest expiry first, limited to max_contracts. If "error" is
+    set, something went wrong with the API call itself (auth/network) —
+    distinct from a successful call that simply found no matching contracts.
+    """
+    url = "https://api.upstox.com/v2/instruments/search"
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+
+    params = {
+        "query": name_filter,
+        "exchanges": "MCX",
+        "segments": "COMM",   # MCX commodity segment
+        "page_number": 1,
+        "records": 50
+    }
+
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        if r.status_code != 200:
+            # Distinguish auth/API failures from "no contracts found" —
+            # 401/403 usually means token issue, not absence of data.
+            return {"error": f"Search API returned status {r.status_code}", "contracts": []}
+        payload = r.json()
+    except Exception as e:
+        return {"error": f"Search API request failed: {e}", "contracts": []}
+
+    rows = payload.get("data", []) if isinstance(payload, dict) else []
 
     matches = []
 
-    for row in master:
+    for row in rows:
         try:
             symbol = (row.get("trading_symbol") or row.get("name") or "").upper()
             instrument_type = (row.get("instrument_type") or "").upper()
@@ -77,7 +100,7 @@ def get_commodity_contracts(name_filter, max_contracts=4):
             if name_filter.upper() not in symbol:
                 continue
 
-            # Only futures — skip options (CE/PE) chains
+            # Only futures — skip options (CE/PE) chains, this app trades direction not options
             if instrument_type and instrument_type not in ("FUT",):
                 continue
 
@@ -85,14 +108,11 @@ def get_commodity_contracts(name_filter, max_contracts=4):
             if not expiry_raw:
                 continue
 
-            # Upstox expiry is typically epoch millis or an ISO date string
-            # depending on the master file version — handle both.
             if isinstance(expiry_raw, (int, float)):
                 expiry_dt = datetime.fromtimestamp(expiry_raw / 1000, tz=IST)
             else:
                 expiry_dt = datetime.fromisoformat(str(expiry_raw)).replace(tzinfo=IST)
 
-            # Only future-dated contracts — skip expired ones still in the master
             if expiry_dt.date() < datetime.now(IST).date():
                 continue
 
@@ -107,11 +127,10 @@ def get_commodity_contracts(name_filter, max_contracts=4):
             })
 
         except Exception:
-            # Skip malformed rows rather than crashing the whole resolver
             continue
 
     matches.sort(key=lambda x: x["expiry"])
-    return matches[:max_contracts]
+    return {"error": None, "contracts": matches[:max_contracts]}
 
 def load_instrument_file():
     try:
@@ -525,10 +544,15 @@ else:
 
     for idx, (display_name, symbol_filter) in enumerate(COMMODITY_DEFINITIONS):
         with cols[idx]:
-            contracts = get_commodity_contracts(symbol_filter, max_contracts=4)
+            result = get_commodity_contracts(symbol_filter, max_contracts=4)
+            contracts = result["contracts"]
+
+            if result["error"]:
+                st.error(f"{display_name}: {result['error']}")
+                continue
 
             if not contracts:
-                st.warning(f"No live {display_name} contracts found in MCX master.")
+                st.warning(f"No live {display_name} futures contracts found.")
                 continue
 
             chosen_label = st.selectbox(
@@ -655,7 +679,8 @@ else:
 
     # =========================
     # SELL SETUPS
-    # ================
+    # =========================
+
     sell_df = df[df["Signal"] == "SELL"]
 
     if not sell_df.empty:
