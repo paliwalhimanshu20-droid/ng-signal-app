@@ -297,30 +297,21 @@ if run:
 
         for _, row in df.iterrows():
 
-            signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
+    signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
 
-            st.markdown(
-                f"""
-### {signal_icon} {row['Instrument']}
+    st.markdown(
+        f"### {signal_icon} {row['Instrument']}"
+    )
 
-**Signal:** {row['Signal']}
+    st.write(
+        f"Signal: {row['Signal']} | "
+        f"Trend: {row['Trend']} | "
+        f"Confidence: {row['Prob%']}% | "
+        f"Price: {row['Price']} | "
+        f"RR: {row['RR']}"
+    )
 
-**Trend:** {row['Trend']}
-
-**Confidence:** {row['Prob%']}%
-
-**Price:** ₹{row['Price']}
-
-**SL:** ₹{row['SL']}
-
-**T1:** ₹{row['T1']}
-
-**T2:** ₹{row['T2']}
-
-**RR:** {row['RR']}
-            )
-
-            st.divider()
+    st.divider()
 
         best = df.iloc[0]
 
