@@ -577,7 +577,7 @@ def build_instrument_chart(instrument_name, candles):
         if len(prices) < period + 1:
             return out
         for i in range(period, len(prices)):
-            window = prices[i - period
+            window = prices[i - period:i + 1]
             gains = [max(window[j] - window[j - 1], 0) for j in range(1, len(window))]
             losses = [max(window[j - 1] - window[j], 0) for j in range(1, len(window))]
             avg_gain = sum(gains) / period
