@@ -299,7 +299,6 @@ def run_scanner():
             atr_val = atr(candles)
 
             signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
-    price,signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
                 price,
                 ema20,
                 ema50,
