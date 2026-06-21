@@ -295,17 +295,27 @@ if run:
 
         st.subheader("📈 Market Opportunities")
 
-        st.dataframe(
-            df[[
-                "Instrument",
-                "Signal",
-                "Trend",
-                "Score",
-                "Prob%",
-                "RR",
-                "Price"
-            ]]
-        )
+        for _, row in df.iterrows():
+
+          signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
+
+          st.markdown(
+           f"""
+        ### {signal_icon} {row['Instrument']}
+
+        Signal: **{row['Signal']}**
+
+        Trend: **{row['Trend']}**
+
+        Confidence: **{row['Prob%']}%**
+
+        Price: ₹{row['Price']}
+
+        RR: {row['RR']}
+        """
+         )
+
+         st.divider()
 
         best = df.iloc[0]
 
