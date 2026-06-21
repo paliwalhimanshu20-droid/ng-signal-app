@@ -270,72 +270,70 @@ def run_scanner():
 st.title("📊 Production Trading System v1")
 
 if "scan_count" not in st.session_state:
-    st.session_state.scan_count = 0
+st.session_state.scan_count = 0
 
 if "last_scan" not in st.session_state:
-    st.session_state.last_scan = "Never"
+st.session_state.last_scan = "Never"
 
 run = st.button("🚀 Run Live Scan")
 
 if run:
 
-    st.session_state.scan_count += 1
+st.session_state.scan_count += 1
 
-    st.session_state.last_scan = datetime.now(
-        IST
-    ).strftime("%d-%m-%Y %H:%M:%S")
+st.session_state.last_scan = datetime.now(
+    IST
+).strftime("%d-%m-%Y %H:%M:%S")
 
-    df = run_scanner()
+df = run_scanner()
 
-    if df.empty:
+if df.empty:
 
-        st.warning("No strong setups found")
+    st.warning("No strong setups found")
 
-    else:
+else:
 
-      st.subheader("📈 Market Opportunities")
+    # =========================
+    # BUY SETUPS
+    # =========================
 
-      for _, row in df.iterrows():
-buy_df = df[df["Signal"] == "BUY"]
-sell_df = df[df["Signal"] == "SELL"]
+    buy_df = df[df["Signal"] == "BUY"]
 
-col1, col2 = st.columns(2)
+    if not buy_df.empty:
 
-with col1:
+        st.subheader("🟢 BUY Opportunities")
 
-    st.subheader("🟢 BUY Signals")
+        for _, row in buy_df.iterrows():
 
-    for _, row in buy_df.head(3).iterrows():
+            st.success(
+                f"{row['Instrument']} | "
+                f"Price: {row['Price']} | "
+                f"Confidence: {row['Prob%']}% | "
+                f"RR: {row['RR']}"
+            )
 
-        st.success(
-            f"""
-{row['Instrument']}
+    # =========================
+    # SELL SETUPS
+    # =========================
 
-Price: {row['Price']}
+    sell_df = df[df["Signal"] == "SELL"]
 
-Confidence: {row['Prob%']}%
+    if not sell_df.empty:
 
-RR: {row['RR']}
-"""
-        )
+        st.subheader("🔴 SELL Opportunities")
 
-with col2:
+        for _, row in sell_df.iterrows():
 
-    st.subheader("🔴 SELL Signals")
+            st.error(
+                f"{row['Instrument']} | "
+                f"Price: {row['Price']} | "
+                f"Confidence: {row['Prob%']}% | "
+                f"RR: {row['RR']}"
+            )
 
-    for _, row in sell_df.head(3).iterrows():
-
-        st.error(
-            f"""
-{row['Instrument']}
-
-Price: {row['Price']}
-
-Confidence: {row['Prob%']}%
-
-RR: {row['RR']}
-"""
-        )
+    # =========================
+    # BEST SETUP
+    # =========================
 
     best = df.iloc[0]
 
@@ -360,15 +358,12 @@ RR: {row['RR']}
         f"Trend: {best['Trend']}\n\n"
         f"Confidence: {best['Prob%']}%\n\n"
         f"RR: {best['RR']}\n\n"
-        f"Entry: {best['Price']}\n\n"
-        f"SL: {best['SL']}\n\n"
-        f"T1: {best['T1']}\n\n"
-        f"T2: {best['T2']}\n\n"
         f"Reason: {best['Reason']}"
     )
 
     st.markdown("---")
 
     st.caption(
-        f"Scans Run: {st.session_state.scan_count} | Last Scan: {st.session_state.last_scan}"
-    )
+        f"Scans Run: {st.session_state.scan_count} | "
+        f"Last Scan: {st.session_state.last_scan}"
+            )
