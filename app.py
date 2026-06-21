@@ -293,9 +293,9 @@ if run:
 
     else:
 
-    st.subheader("📈 Market Opportunities")
+      st.subheader("📈 Market Opportunities")
 
-    for _, row in df.iterrows():
+      for _, row in df.iterrows():
 
         signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
 
