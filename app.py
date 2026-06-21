@@ -311,8 +311,13 @@ if run:
 
 **Price:** ₹{row['Price']}
 
+**SL:** ₹{row['SL']}
+
+**T1:** ₹{row['T1']}
+
+**T2:** ₹{row['T2']}
+
 **RR:** {row['RR']}
-"""
             )
 
             st.divider()
