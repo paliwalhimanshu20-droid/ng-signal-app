@@ -37,6 +37,82 @@ def load_instrument_master():
         st.error(f"Instrument Master Error: {e}")
         return []
 
+
+@st.cache_data(ttl=86400)
+def load_mcx_master():
+    # Same pattern as load_instrument_master(), but for MCX (commodities).
+    # Used to resolve REAL, currently-tradeable contract keys + expiries
+    # instead of a hardcoded/guessed key that goes stale monthly.
+    url = "https://assets.upstox.com/market-quote/instruments/exchange/MCX.json"
+    try:
+        return requests.get(url, timeout=20).json()
+    except Exception as e:
+        st.error(f"MCX Instrument Master Error: {e}")
+        return []
+
+
+def get_commodity_contracts(name_filter, max_contracts=4):
+    """
+    Generic resolver for any MCX commodity (Natural Gas, Crude Oil, Gold, etc).
+
+    name_filter: substring to match against the instrument's trading symbol /
+                 name in the MCX master, e.g. "NATURALGAS", "CRUDEOIL".
+    Returns a list of dicts: [{"label": "NATURALGAS 27-JUN-2026", "key": "...",
+                               "expiry": datetime}, ...] sorted by nearest expiry first,
+    limited to max_contracts. Only FUT (futures) instruments are included —
+    options chains are filtered out since this app trades direction, not options.
+    """
+    master = load_mcx_master()
+
+    if not master:
+        return []
+
+    matches = []
+
+    for row in master:
+        try:
+            symbol = (row.get("trading_symbol") or row.get("name") or "").upper()
+            instrument_type = (row.get("instrument_type") or "").upper()
+
+            if name_filter.upper() not in symbol:
+                continue
+
+            # Only futures — skip options (CE/PE) chains
+            if instrument_type and instrument_type not in ("FUT",):
+                continue
+
+            expiry_raw = row.get("expiry")
+            if not expiry_raw:
+                continue
+
+            # Upstox expiry is typically epoch millis or an ISO date string
+            # depending on the master file version — handle both.
+            if isinstance(expiry_raw, (int, float)):
+                expiry_dt = datetime.fromtimestamp(expiry_raw / 1000, tz=IST)
+            else:
+                expiry_dt = datetime.fromisoformat(str(expiry_raw)).replace(tzinfo=IST)
+
+            # Only future-dated contracts — skip expired ones still in the master
+            if expiry_dt.date() < datetime.now(IST).date():
+                continue
+
+            key = row.get("instrument_key")
+            if not key:
+                continue
+
+            matches.append({
+                "label": f"{symbol} (exp {expiry_dt.strftime('%d-%b-%Y')})",
+                "key": key,
+                "expiry": expiry_dt
+            })
+
+        except Exception:
+            # Skip malformed rows rather than crashing the whole resolver
+            continue
+
+    matches.sort(key=lambda x: x["expiry"])
+    return matches[:max_contracts]
+
 def load_instrument_file():
     try:
         return pd.read_csv("instruments.csv")
@@ -56,8 +132,22 @@ def get_instrument_key(symbol):
 
 # ================= WATCHLIST =================
 
-def get_watchlist():
-    return {
+# List of (display_name, MCX symbol filter) for commodities you want
+# expiry-selectable in the dashboard. Add more tuples here later
+# (e.g. ("Crude Oil", "CRUDEOIL")) — the dropdown logic is generic.
+COMMODITY_DEFINITIONS = [
+    ("Natural Gas", "NATURALGAS"),
+]
+
+def get_watchlist(commodity_contracts=None):
+    """
+    commodity_contracts: dict mapping display_name -> selected instrument_key,
+    e.g. {"Natural Gas": "MCX_FO|NATURALGAS26JUNFUT"}. Built from the
+    dashboard dropdown. If None or empty, commodities are simply excluded
+    from this scan (rather than guessing a key).
+    """
+    watchlist = {
+        # ---- Existing core watchlist ----
         "ITC": "NSE_EQ|INE154A01025",
         "RELIANCE": "NSE_EQ|INE002A01018",
         "SBIN": "NSE_EQ|INE062A01020",
@@ -69,8 +159,56 @@ def get_watchlist():
         "ONGC": "NSE_EQ|INE213A01029",
         "NTPC": "NSE_EQ|INE733E01010",
         "POWERGRID": "NSE_EQ|INE752E01010",
-        "TATAMOTORS": "NSE_EQ|INE155A01022"
+        "TATAMOTORS": "NSE_EQ|INE155A01022",
+
+        # ---- Banking (top 5) ----
+        "AXISBANK": "NSE_EQ|INE238A01034",
+        "KOTAKBANK": "NSE_EQ|INE237A01028",
+        "INDUSINDBK": "NSE_EQ|INE095A01012",
+        "BANKBARODA": "NSE_EQ|INE028A01039",
+
+        # ---- IT (top 5, TCS/INFY/WIPRO already above) ----
+        "HCLTECH": "NSE_EQ|INE860A01027",
+        "TECHM": "NSE_EQ|INE669C01036",
+
+        # ---- Auto (top 5, TATAMOTORS already above) ----
+        "MARUTI": "NSE_EQ|INE585B01010",
+        "M&M": "NSE_EQ|INE101A01026",
+        "BAJAJ-AUTO": "NSE_EQ|INE917I01010",
+        "HEROMOTOCO": "NSE_EQ|INE158A01026",
+
+        # ---- Pharma (top 5) ----
+        "SUNPHARMA": "NSE_EQ|INE044A01036",
+        "DRREDDY": "NSE_EQ|INE089A01023",
+        "CIPLA": "NSE_EQ|INE059A01026",
+        "DIVISLAB": "NSE_EQ|INE361B01024",
+        "APOLLOHOSP": "NSE_EQ|INE437A01024",
+
+        # ---- FMCG (top 5, ITC already above) ----
+        "HINDUNILVR": "NSE_EQ|INE030A01027",
+        "NESTLEIND": "NSE_EQ|INE239A01016",
+        "BRITANNIA": "NSE_EQ|INE216A01030",
+        "TATACONSUM": "NSE_EQ|INE192A01025",
+
+        # ---- Energy (top 5, ONGC/NTPC/POWERGRID already above) ----
+        "COALINDIA": "NSE_EQ|INE522F01014",
+        "BPCL": "NSE_EQ|INE029A01011",
+
+        # ---- Metals (top 5) ----
+        "TATASTEEL": "NSE_EQ|INE081A01012",
+        "JSWSTEEL": "NSE_EQ|INE019A01038",
+        "HINDALCO": "NSE_EQ|INE038A01020",
+        "VEDL": "NSE_EQ|INE205A01025",
+        "JINDALSTEL": "NSE_EQ|INE749A01030",
     }
+
+    # ---- Commodities (MCX F&O), expiry chosen via dashboard dropdown ----
+    if commodity_contracts:
+        for display_name, key in commodity_contracts.items():
+            if key:
+                watchlist[f"{display_name} (MCX)"] = key
+
+    return watchlist
 
 # ================= MARKET DATA =================
 
@@ -244,6 +382,14 @@ def signal_engine(price, ema20, ema50, atr_val):
 # ================= LEVELS =================
 
 def levels(price, atr_val, signal, trend):
+    # FIX: previously, when atr_val was 0 (or None) — which happens for
+    # instruments with too few/flat candles — risk became 0, so SL/T1/T2
+    # all collapsed to exactly `price`. That looked like "missing" data in
+    # the table. Now we explicitly return None so the UI can show
+    # "N/A" instead of a misleading repeated price.
+    if not atr_val or atr_val <= 0:
+        return None, None, None
+
     risk = atr_val * 1.5
 
     if trend == "Bullish":
@@ -253,15 +399,18 @@ def levels(price, atr_val, signal, trend):
 
 # ================= SCANNER =================
 
-def run_scanner():
+def run_scanner(commodity_contracts=None):
     """
     Returns a tuple: (top5_df, full_df)
     full_df now includes EVERY stock that returned valid data, with RSI
     and Volume columns added, regardless of score — so the dashboard can
     show the full scanned universe with filters, not just the top 5.
+
+    commodity_contracts: dict of display_name -> instrument_key, built from
+    the dashboard's expiry dropdowns. Passed straight through to get_watchlist().
     """
 
-    watchlist = get_watchlist()
+    watchlist = get_watchlist(commodity_contracts)
     all_results = []
 
     for name, key in watchlist.items():
@@ -304,9 +453,13 @@ def run_scanner():
 
             sl, t1, t2 = levels(price, atr_val, signal, trend)
 
-            risk = abs(price - sl)
-            reward = abs(t1 - price)
-            rr = round(reward / risk, 2) if risk > 0 else 0
+            # FIX: SL/T1/T2 can now be None (invalid ATR) — guard RR calc
+            if sl is None:
+                rr = None
+            else:
+                risk = abs(price - sl)
+                reward = abs(t1 - price)
+                rr = round(reward / risk, 2) if risk > 0 else 0
 
             confidence = (
                 "High" if score >= 9
@@ -326,11 +479,11 @@ def run_scanner():
                 "Volume Ratio": vol_ratio,
                 "Volume": vol_tag,
                 "ExpectedMove%": expected_move,
-                "RR": rr,
+                "RR": rr if rr is not None else "N/A",
                 "Price": round(price, 2),
-                "SL": sl,
-                "T1": t1,
-                "T2": t2,
+                "SL": sl if sl is not None else "N/A",
+                "T1": t1 if t1 is not None else "N/A",
+                "T2": t2 if t2 is not None else "N/A",
                 "Reason": " | ".join(reasons)
             })
 
@@ -357,6 +510,45 @@ def run_scanner():
 
 st.title("📊 Production Trading System v1")
 
+# =========================
+# COMMODITY EXPIRY SELECTION (NEW)
+# =========================
+
+st.subheader("⚙️ Commodity Contract Selection")
+
+commodity_contracts = {}
+
+if not COMMODITY_DEFINITIONS:
+    st.caption("No commodities configured.")
+else:
+    cols = st.columns(len(COMMODITY_DEFINITIONS))
+
+    for idx, (display_name, symbol_filter) in enumerate(COMMODITY_DEFINITIONS):
+        with cols[idx]:
+            contracts = get_commodity_contracts(symbol_filter, max_contracts=4)
+
+            if not contracts:
+                st.warning(f"No live {display_name} contracts found in MCX master.")
+                continue
+
+            chosen_label = st.selectbox(
+                f"{display_name} expiry",
+                options=[c["label"] for c in contracts],
+                key=f"expiry_{symbol_filter}"
+            )
+
+            # Map the chosen label back to its instrument key
+            chosen = next(c for c in contracts if c["label"] == chosen_label)
+            commodity_contracts[display_name] = chosen["key"]
+
+st.markdown("---")
+
+_watchlist_size = len(get_watchlist(commodity_contracts))
+st.caption(
+    f"Scanning {_watchlist_size} instruments (NSE equities across 7 sectors"
+    f"{' + selected MCX commodity contract(s)' if commodity_contracts else ''})."
+)
+
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
 
@@ -369,7 +561,7 @@ if run:
     st.session_state.scan_count += 1
     st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
 
-df, full_df = run_scanner()
+df, full_df = run_scanner(commodity_contracts)
 
 # =========================
 # FULL SCANNED UNIVERSE (NEW)
@@ -463,8 +655,7 @@ else:
 
     # =========================
     # SELL SETUPS
-    # =========================
-
+    # ================
     sell_df = df[df["Signal"] == "SELL"]
 
     if not sell_df.empty:
@@ -530,4 +721,3 @@ else:
         f"Scans Run: {st.session_state.scan_count} | "
         f"Last Scan: {st.session_state.last_scan}"
     )
-    
