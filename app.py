@@ -342,19 +342,21 @@ if run:
             st.metric("T2", best["T2"])
 
         st.info(
-            f"""
+    f"""
 Trend: {best['Trend']}
 
 Confidence: {best['Prob%']}%
 
 RR: {best['RR']}
 
+Entry: ₹{best['Price']}
+
+SL: ₹{best['SL']}
+
+T1: ₹{best['T1']}
+
+T2: ₹{best['T2']}
+
 Reason: {best['Reason']}
 """
-        )
-
-        st.markdown("---")
-
-        st.caption(
-            f"Scans Run: {st.session_state.scan_count} | Last Scan: {st.session_state.last_scan}"
-        )
+)
