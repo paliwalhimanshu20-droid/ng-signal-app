@@ -3,6 +3,8 @@ import requests
 import pandas as pd
 import json
 import os
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -419,6 +421,33 @@ def get_candles(key):
 
     return data.get("data", {}).get("candles", None)
 
+
+def get_candles_range(key, days_back=5):
+    """
+    Fetches multiple days of 30-minute candles for the chart view, using
+    Upstox's historical-candle range endpoint (from_date/to_date variant)
+    rather than the single-day endpoint used by the scanner above.
+
+    This is intentionally a SEPARATE function from get_candles() — the
+    scanner's signal generation continues to use today-only data so this
+    chart feature can't accidentally change scan/signal behavior.
+
+    days_back: calendar days to look back (weekends/holidays included in
+    the count, so 5 calendar days back generally covers ~3-4 trading days,
+    not 5 full trading days. Increase if you want strictly more sessions.)
+    """
+    to_date = datetime.now(IST).strftime("%Y-%m-%d")
+    from_date = (datetime.now(IST) - pd.Timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+    url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/{to_date}/{from_date}"
+
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+
+    if not data:
+        return None
+
+    return data.get("data", {}).get("candles", None)
+
 # ================= INDICATORS =================
 
 def ema(prices, period):
@@ -498,6 +527,162 @@ def volume_signal(candles):
 
     return ratio, tag
 
+# ================= CHART =================
+
+def build_instrument_chart(instrument_name, candles):
+    """
+    Builds a 3-panel Plotly chart for a single instrument:
+      1. Candlestick price with EMA20/EMA50 overlay
+      2. RSI(14) with 30/70 reference lines
+      3. Volume bars
+
+    candles: raw Upstox candle list (newest-first), same format used
+    elsewhere in this app: [timestamp, open, high, low, close, volume, oi]
+
+    Returns a Plotly Figure, or None if there isn't enough data to chart.
+    """
+    if not candles or len(candles) < 15:
+        return None
+
+    # Candles arrive newest-first from Upstox — reverse to chronological
+    # order for charting (oldest on the left, newest on the right).
+    ordered = list(reversed(candles))
+
+    timestamps = [pd.to_datetime(c[0]) for c in ordered]
+    opens = [c[1] for c in ordered]
+    highs = [c[2] for c in ordered]
+    lows = [c[3] for c in ordered]
+    closes = [c[4] for c in ordered]
+    volumes = [c[5] if len(c) > 5 else 0 for c in ordered]
+
+    # EMA series across the full chronological close history (for the overlay line)
+    def ema_series(prices, period):
+        if len(prices) < period:
+            return [None] * len(prices)
+        m = 2 / (period + 1)
+        out = [None] * (period - 1)
+        e = sum(prices[:period]) / period
+        out.append(e)
+        for p in prices[period:]:
+            e = (p - e) * m + e
+            out.append(e)
+        return out
+
+    ema20_series = ema_series(closes, 20)
+    ema50_series = ema_series(closes, 50)
+
+    # RSI series (rolling, point-by-point) for the RSI subplot
+    def rsi_series(prices, period=14):
+        out = [None] * len(prices)
+        if len(prices) < period + 1:
+            return out
+        for i in range(period, len(prices)):
+            window = prices[i - period
+            gains = [max(window[j] - window[j - 1], 0) for j in range(1, len(window))]
+            losses = [max(window[j - 1] - window[j], 0) for j in range(1, len(window))]
+            avg_gain = sum(gains) / period
+            avg_loss = sum(losses) / period
+            if avg_loss == 0:
+                out[i] = 100.0
+            else:
+                rs = avg_gain / avg_loss
+                out[i] = round(100 - (100 / (1 + rs)), 2)
+        return out
+
+    rsi_vals = rsi_series(closes, 14)
+
+    fig = make_subplots(
+        rows=3, cols=1,
+        shared_xaxes=True,
+        row_heights=[0.55, 0.2, 0.25],
+        vertical_spacing=0.04,
+        subplot_titles=(f"{instrument_name} — Price & EMA", "RSI (14)", "Volume")
+    )
+
+    # --- Panel 1: Candlestick + EMA overlay ---
+    fig.add_trace(go.Candlestick(
+        x=timestamps, open=opens, high=highs, low=lows, close=closes,
+        name="Price", showlegend=False
+    ), row=1, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=timestamps, y=ema20_series, mode="lines", name="EMA20",
+        line=dict(color="#3498db", width=1.5)
+    ), row=1, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=timestamps, y=ema50_series, mode="lines", name="EMA50",
+        line=dict(color="#e67e22", width=1.5)
+    ), row=1, col=1)
+
+    # --- Panel 2: RSI ---
+    fig.add_trace(go.Scatter(
+        x=timestamps, y=rsi_vals, mode="lines", name="RSI",
+        line=dict(color="#9b59b6", width=1.5), showlegend=False
+    ), row=2, col=1)
+
+    fig.add_hline(y=70, line_dash="dot", line_color="red", row=2, col=1)
+    fig.add_hline(y=30, line_dash="dot", line_color="green", row=2, col=1)
+
+    # --- Panel 3: Volume ---
+    bar_colors = [
+        "#2ecc71" if closes[i] >= opens[i] else "#e74c3c"
+        for i in range(len(closes))
+    ]
+    fig.add_trace(go.Bar(
+        x=timestamps, y=volumes, name="Volume", marker_color=bar_colors,
+        showlegend=False
+    ), row=3, col=1)
+
+    fig.update_layout(
+        height=650,
+        margin=dict(l=10, r=10, t=40, b=10),
+        xaxis_rangeslider_visible=False,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+
+    return fig
+
+
+
+@st.cache_data(ttl=3600)  # cached for 1 hour — daily trend doesn't change intraday,
+# this avoids re-fetching daily candles on every single scan click, which
+# would otherwise roughly double the API calls per scan (38 instruments x
+# 1 extra call each). Cache key includes the date implicitly via ttl reset.
+def get_daily_trend(key):
+    """
+    Fetches recent DAILY candles (not 30-min) and computes EMA20/EMA50 on
+    that higher timeframe, to check whether the broader trend agrees with
+    the 30-min signal. This is the "higher-timeframe filter" — trading
+    WITH the bigger trend reduces (does not eliminate) false counter-trend
+    signals, a well-established practice, not a guarantee.
+
+    Returns "Bullish", "Bearish", or None if not enough daily data exists
+    (e.g. a newly-listed instrument, or fewer than 50 trading days available).
+    """
+    to_date = datetime.now(IST).strftime("%Y-%m-%d")
+    from_date = (datetime.now(IST) - pd.Timedelta(days=120)).strftime("%Y-%m-%d")
+
+    url = f"https://api.upstox.com/v2/historical-candle/{key}/day/{to_date}/{from_date}"
+
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+
+    if not data:
+        return None
+
+    candles = data.get("data", {}).get("candles", None)
+
+    if not candles or len(candles) < 50:
+        return None
+
+    closes = [c[4] for c in reversed(candles)]  # chronological order
+
+    daily_ema20 = ema(closes, 20)
+    daily_ema50 = ema(closes, 50)
+
+    return "Bullish" if daily_ema20 > daily_ema50 else "Bearish"
+
+
 # ================= REGIME =================
 
 def detect_regime(ema20, ema50, price):
@@ -512,7 +697,14 @@ def detect_regime(ema20, ema50, price):
 
 # ================= SIGNAL ENGINE =================
 
-def signal_engine(price, ema20, ema50, atr_val):
+def signal_engine(price, ema20, ema50, atr_val, daily_trend=None):
+    """
+    daily_trend: "Bullish", "Bearish", or None (unavailable). When provided
+    and it DISAGREES with the 30-min trend, the signal is downgraded —
+    BUY/SELL becomes WATCH at most, since we're now fighting the bigger
+    trend. This does not block WATCH/NO TRADE signals, only caps how
+    confident an actionable (BUY/SELL) call can be.
+    """
 
     score = 4
     reasons = ["Base Score"]
@@ -538,10 +730,21 @@ def signal_engine(price, ema20, ema50, atr_val):
         score += 2
         reasons.append("Momentum bearish")
 
-    score = min(score, 10)
+    # NEW: higher-timeframe agreement check
+    daily_agrees = (daily_trend is None) or (daily_trend == trend)
+
+    if daily_trend is not None:
+        if daily_agrees:
+            score += 1
+            reasons.append(f"Daily trend agrees ({daily_trend})")
+        else:
+            score -= 2
+            reasons.append(f"⚠ Daily trend disagrees ({daily_trend}) — downgraded")
+
+    score = max(0, min(score, 10))
     probability = int((score / 10) * 100)
 
-    if score >= 8:
+    if score >= 8 and daily_agrees:
         signal = "BUY" if trend == "Bullish" else "SELL"
     elif score >= 6:
         signal = "WATCH"
@@ -552,7 +755,17 @@ def signal_engine(price, ema20, ema50, atr_val):
 
 # ================= LEVELS =================
 
-def levels(price, atr_val, signal, trend):
+def levels(price, atr_val, signal, trend, regime="TRENDING"):
+    """
+    regime: "TRENDING", "BREAKOUT", or "RANGING" — from detect_regime().
+    Position sizing now adapts to regime instead of using one fixed
+    multiplier for every market condition:
+      - TRENDING: wider targets (price has room to run)
+      - BREAKOUT: standard sizing
+      - RANGING: tighter targets/stops (price isn't trending far, so
+        wide targets in a RANGING market are unrealistic and wide stops
+        risk more than the setup justifies)
+    """
     # FIX: previously, when atr_val was 0 (or None) — which happens for
     # instruments with too few/flat candles — risk became 0, so SL/T1/T2
     # all collapsed to exactly `price`. That looked like "missing" data in
@@ -561,12 +774,31 @@ def levels(price, atr_val, signal, trend):
     if not atr_val or atr_val <= 0:
         return None, None, None
 
-    risk = atr_val * 1.5
+    # Regime-based risk multiplier and target stretch
+    if regime == "RANGING":
+        risk_mult = 1.0
+        t1_mult, t2_mult = 1.5, 2.0
+    elif regime == "BREAKOUT":
+        risk_mult = 1.5
+        t1_mult, t2_mult = 2.0, 3.0
+    else:  # TRENDING
+        risk_mult = 1.5
+        t1_mult, t2_mult = 2.5, 4.0
+
+    risk = atr_val * risk_mult
 
     if trend == "Bullish":
-        return round(price - risk, 2), round(price + risk * 2, 2), round(price + risk * 3, 2)
+        return (
+            round(price - risk, 2),
+            round(price + risk * t1_mult, 2),
+            round(price + risk * t2_mult, 2)
+        )
     else:
-        return round(price + risk, 2), round(price - risk * 2, 2), round(price - risk * 3, 2)
+        return (
+            round(price + risk, 2),
+            round(price - risk * t1_mult, 2),
+            round(price - risk * t2_mult, 2)
+        )
 
 # ================= SCANNER =================
 
@@ -615,14 +847,19 @@ def run_scanner(commodity_contracts=None):
             rsi_val = rsi(closes, 14)
             vol_ratio, vol_tag = volume_signal(candles)
 
+            # NEW: higher-timeframe (daily) trend filter — cached, so this
+            # doesn't multiply API calls on every scan within the same day.
+            daily_trend = get_daily_trend(instrument_key)
+
             signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
                 price,
                 ema20,
                 ema50,
-                atr_val
+                atr_val,
+                daily_trend
             )
 
-            sl, t1, t2 = levels(price, atr_val, signal, trend)
+            sl, t1, t2 = levels(price, atr_val, signal, trend, regime)
 
             # FIX: SL/T1/T2 can now be None (invalid ATR) — guard RR calc
             if sl is None:
@@ -641,6 +878,7 @@ def run_scanner(commodity_contracts=None):
             all_results.append({
                 "Instrument": name,
                 "InstrumentKey": instrument_key,
+                "DailyTrend": daily_trend if daily_trend else "N/A",
                 "Signal": signal,
                 "Confidence": confidence,
                 "Trend": trend,
@@ -779,19 +1017,61 @@ else:
         (full_df["Signal"].isin(signal_filter)) &
         (full_df["Confidence"].isin(confidence_filter)) &
         (full_df["Score"] >= min_score)
+    ].reset_index(drop=True)
+
+    display_cols = [
+        "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Regime",
+        "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
+        "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
     ]
 
-    st.dataframe(
-        filtered_df[[
-            "Instrument", "Signal", "Confidence", "Trend", "Regime",
-            "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
-            "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
-        ]],
+    st.caption("👆 Click a row to view its price chart, EMA, RSI, and volume below.")
+
+    selection_event = st.dataframe(
+        filtered_df[display_cols],
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="universe_table"
     )
 
     st.caption(f"Showing {len(filtered_df)} of {len(full_df)} scanned instruments")
+
+    # =========================
+    # INSTRUMENT CHART (NEW) — shown when a row is clicked above
+    # =========================
+
+    selected_rows = selection_event.selection.get("rows", []) if selection_event else []
+
+    if selected_rows:
+        selected_idx = selected_rows[0]
+        selected_row = filtered_df.iloc[selected_idx]
+        selected_name = selected_row["Instrument"]
+        selected_key = selected_row.get("InstrumentKey", "")
+
+        st.markdown("---")
+        st.subheader(f"📊 {selected_name} — Chart & Indicators")
+
+        if not selected_key:
+            st.warning("No instrument key available for this row — can't fetch chart data.")
+        else:
+            with st.spinner(f"Loading {selected_name} chart..."):
+                chart_candles = get_candles_range(selected_key, days_back=7)
+
+            if not chart_candles:
+                st.warning(
+                    f"Could not load chart data for {selected_name}. "
+                    f"This can happen outside market hours, on holidays, or if the "
+                    f"range endpoint isn't available for this instrument type."
+                )
+            else:
+                fig = build_instrument_chart(selected_name, chart_candles)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info(f"Not enough candle history yet to chart {selected_name}.")
+
 
 st.markdown("---")
 
