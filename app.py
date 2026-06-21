@@ -401,6 +401,8 @@ if run:
     ).strftime("%d-%m-%Y %H:%M:%S")
 
     df = run_scanner()
+    st.write("DF TYPE:", type(df))
+    st.write("DF VALUE:", df)
 
     if df.empty:
 
