@@ -279,11 +279,11 @@ run = st.button("🚀 Run Live Scan")
 
 if run:
 
-st.session_state.scan_count += 1
+    st.session_state.scan_count += 1
 
-st.session_state.last_scan = datetime.now(
+    st.session_state.last_scan = datetime.now(
     IST
-).strftime("%d-%m-%Y %H:%M:%S")
+    ).strftime("%d-%m-%Y %H:%M:%S")
 
 df = run_scanner()
 
