@@ -202,10 +202,12 @@ def get_commodity_contracts(name_filter, max_contracts=4):
     set, something went wrong with the API call itself (auth/network) —
     distinct from a successful call that simply found no matching contracts.
     """
-    # NOTE: Upstox's Instrument Search API is at /v1/ (not /v2/), and is in
-    # Beta as of March 2026 — parameters may still change on their end.
-    # Documented segment values are EQ / FO / CUR / COM (not "COMM").
-    url = "https://api.upstox.com/v1/instruments/search"
+    # CONFIRMED against official Upstox docs (upstox.com/developer/api-documentation/instrument-search):
+    # - Endpoint is /v2/instruments/search (NOT /v1/ - that was an earlier
+    #   incorrect fix that caused a 404 "Resource not Found" error).
+    # - segments value for commodities is "COMM" (NOT "COM").
+    # - instrument_types value for futures is "FUT" (confirmed correct).
+    url = "https://api.upstox.com/v2/instruments/search"
 
     headers = {
         "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
@@ -216,7 +218,7 @@ def get_commodity_contracts(name_filter, max_contracts=4):
     params = {
         "query": name_filter,
         "exchanges": "MCX",
-        "segments": "COM",    # MCX commodity segment (confirmed value: COM)
+        "segments": "COMM",   # MCX commodity segment (confirmed value: COMM)
         "instrument_types": "FUT",
         "page_number": 1,
         "records": 30          # API max per docs is 30
