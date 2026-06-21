@@ -2,15 +2,155 @@ import streamlit as st
 import requests
 import pandas as pd
 import json
+import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 # ================= CONFIG =================
 
-UPSTOX_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiIxNzA3OTkiLCJqdGkiOiI2YTM3OGU1MjM1MTRiNTQ0YjU5OGNjNTciLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSwiaWF0IjoxNzgyMDI1ODEwLCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3ODIwNzkyMDB9.SYWBnB-Cc_tS5uwH3zvfzuKarP5S3vWOshnoxPOaxQw"
+# Token is read from Streamlit's Secrets manager (Settings -> Secrets on
+# share.streamlit.io), NOT hardcoded — this repo is public, so a hardcoded
+# token here would be visible to anyone who opens the file on GitHub.
+#
+# To set it up: app dashboard -> Settings -> Secrets -> paste:
+#   UPSTOX_ACCESS_TOKEN = "your_actual_token_here"
+try:
+    UPSTOX_ACCESS_TOKEN = st.secrets["UPSTOX_ACCESS_TOKEN"]
+except (KeyError, FileNotFoundError):
+    UPSTOX_ACCESS_TOKEN = ""
+    st.error(
+        "⚠️ UPSTOX_ACCESS_TOKEN not found in Streamlit secrets. "
+        "Go to your app's Settings → Secrets and add it. "
+        "The app cannot fetch live data until this is set."
+    )
 IST = ZoneInfo("Asia/Kolkata")
 
-# ================= SAFE REQUEST =================
+# Signal history log — lives in the repo, read by both this dashboard and
+# the separate GitHub Actions outcome-checker script (check_signals.py).
+SIGNAL_LOG_PATH = "signal_log.csv"
+SIGNAL_LOG_COLUMNS = [
+    "signal_id", "timestamp", "instrument", "instrument_key", "signal",
+    "trend", "confidence", "score", "entry_price", "sl", "t1", "t2",
+    "status", "closed_price", "closed_at", "pnl_pct"
+]
+
+# ================= SIGNAL LOG =================
+
+def load_signal_log():
+    """Read the signal history CSV. Returns an empty, correctly-shaped
+    DataFrame if the file doesn't exist yet (first run)."""
+    if not os.path.exists(SIGNAL_LOG_PATH):
+        return pd.DataFrame(columns=SIGNAL_LOG_COLUMNS)
+
+    try:
+        df = pd.read_csv(SIGNAL_LOG_PATH)
+        # Guard against a manually-edited/corrupted CSV missing columns
+        for col in SIGNAL_LOG_COLUMNS:
+            if col not in df.columns:
+                df[col] = None
+        return df
+    except Exception:
+        return pd.DataFrame(columns=SIGNAL_LOG_COLUMNS)
+
+
+def save_signal_log(df):
+    df.to_csv(SIGNAL_LOG_PATH, index=False)
+
+
+def append_new_signals(scan_results_df):
+    """
+    Appends newly-generated BUY/SELL signals from this scan to the log
+    as new OPEN rows. Avoids duplicate logging of the same setup by
+    checking: same instrument + same signal direction + still OPEN
+    already exists -> skip (don't re-log an unchanged open position).
+
+    Only logs actionable signals (BUY/SELL), not WATCH/NO TRADE — those
+    aren't real trade calls with a measurable outcome.
+    """
+    if scan_results_df.empty:
+        return
+
+    log_df = load_signal_log()
+
+    actionable = scan_results_df[scan_results_df["Signal"].isin(["BUY", "SELL"])]
+
+    new_rows = []
+
+    for _, row in actionable.iterrows():
+        # Skip if there's already an OPEN signal for this instrument + direction
+        existing_open = log_df[
+            (log_df["instrument"] == row["Instrument"]) &
+            (log_df["signal"] == row["Signal"]) &
+            (log_df["status"] == "OPEN")
+        ]
+        if not existing_open.empty:
+            continue
+
+        # Skip if SL/T1/T2 are N/A (invalid ATR) — can't measure an outcome
+        if row["SL"] == "N/A" or row["T1"] == "N/A":
+            continue
+
+        new_rows.append({
+            "signal_id": f"{row['Instrument']}_{datetime.now(IST).strftime('%Y%m%d%H%M%S')}",
+            "timestamp": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
+            "instrument": row["Instrument"],
+            "instrument_key": row.get("InstrumentKey", ""),
+            "signal": row["Signal"],
+            "trend": row["Trend"],
+            "confidence": row["Confidence"],
+            "score": row["Score"],
+            "entry_price": row["Price"],
+            "sl": row["SL"],
+            "t1": row["T1"],
+            "t2": row["T2"],
+            "status": "OPEN",
+            "closed_price": None,
+            "closed_at": None,
+            "pnl_pct": None
+        })
+
+    if new_rows:
+        log_df = pd.concat([log_df, pd.DataFrame(new_rows)], ignore_index=True)
+        save_signal_log(log_df)
+
+
+def compute_performance_summary(log_df):
+    """
+    Returns a per-instrument and overall summary of closed signal outcomes:
+    win rate and average P&L %. Only considers CLOSED (TARGET_HIT/SL_HIT)
+    rows — OPEN signals have no outcome yet and are excluded from these stats.
+    """
+    if log_df.empty:
+        return pd.DataFrame(), None
+
+    closed = log_df[log_df["status"].isin(["TARGET_HIT", "SL_HIT"])].copy()
+
+    if closed.empty:
+        return pd.DataFrame(), None
+
+    closed["pnl_pct"] = pd.to_numeric(closed["pnl_pct"], errors="coerce")
+
+    per_instrument = closed.groupby("instrument").agg(
+        Trades=("signal_id", "count"),
+        Wins=("status", lambda s: (s == "TARGET_HIT").sum()),
+        AvgPnL_Pct=("pnl_pct", "mean")
+    ).reset_index()
+
+    per_instrument["WinRate_Pct"] = round(
+        (per_instrument["Wins"] / per_instrument["Trades"]) * 100, 1
+    )
+    per_instrument["AvgPnL_Pct"] = per_instrument["AvgPnL_Pct"].round(2)
+
+    overall = {
+        "total_trades": len(closed),
+        "wins": int((closed["status"] == "TARGET_HIT").sum()),
+        "win_rate_pct": round((closed["status"] == "TARGET_HIT").sum() / len(closed) * 100, 1),
+        "avg_pnl_pct": round(closed["pnl_pct"].mean(), 2)
+    }
+
+    return per_instrument, overall
+
+
 
 def safe_get(url, headers=None):
     try:
@@ -62,7 +202,10 @@ def get_commodity_contracts(name_filter, max_contracts=4):
     set, something went wrong with the API call itself (auth/network) —
     distinct from a successful call that simply found no matching contracts.
     """
-    url = "https://api.upstox.com/v2/instruments/search"
+    # NOTE: Upstox's Instrument Search API is at /v1/ (not /v2/), and is in
+    # Beta as of March 2026 — parameters may still change on their end.
+    # Documented segment values are EQ / FO / CUR / COM (not "COMM").
+    url = "https://api.upstox.com/v1/instruments/search"
 
     headers = {
         "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
@@ -73,17 +216,24 @@ def get_commodity_contracts(name_filter, max_contracts=4):
     params = {
         "query": name_filter,
         "exchanges": "MCX",
-        "segments": "COMM",   # MCX commodity segment
+        "segments": "COM",    # MCX commodity segment (confirmed value: COM)
+        "instrument_types": "FUT",
         "page_number": 1,
-        "records": 50
+        "records": 30          # API max per docs is 30
     }
 
     try:
         r = requests.get(url, headers=headers, params=params, timeout=15)
         if r.status_code != 200:
-            # Distinguish auth/API failures from "no contracts found" —
-            # 401/403 usually means token issue, not absence of data.
-            return {"error": f"Search API returned status {r.status_code}", "contracts": []}
+            # Upstox typically returns a JSON error body with details —
+            # surface it so issues are diagnosable from the dashboard
+            # instead of just seeing a bare status code.
+            try:
+                err_body = r.json()
+                err_detail = err_body.get("errors", err_body)
+            except Exception:
+                err_detail = r.text[:200]
+            return {"error": f"Search API returned status {r.status_code}: {err_detail}", "contracts": []}
         payload = r.json()
     except Exception as e:
         return {"error": f"Search API request failed: {e}", "contracts": []}
@@ -488,6 +638,7 @@ def run_scanner(commodity_contracts=None):
 
             all_results.append({
                 "Instrument": name,
+                "InstrumentKey": instrument_key,
                 "Signal": signal,
                 "Confidence": confidence,
                 "Trend": trend,
@@ -587,6 +738,13 @@ if run:
 
 df, full_df = run_scanner(commodity_contracts)
 
+# Log any new actionable (BUY/SELL) signals from this scan to signal_log.csv.
+# Note: on Streamlit Community Cloud this file resets on every redeploy —
+# the GitHub Actions job (check_signals.py) is what makes this durable,
+# by committing updates back to the repo independently of the app.
+if not full_df.empty:
+    append_new_signals(full_df)
+
 # =========================
 # FULL SCANNED UNIVERSE (NEW)
 # =========================
@@ -632,6 +790,58 @@ else:
     )
 
     st.caption(f"Showing {len(filtered_df)} of {len(full_df)} scanned instruments")
+
+st.markdown("---")
+
+# =========================
+# SIGNAL PERFORMANCE TRACKING (NEW)
+# =========================
+
+st.subheader("📈 Signal Performance (Historical)")
+
+signal_log_df = load_signal_log()
+
+if signal_log_df.empty:
+    st.info(
+        "No signal history yet. As BUY/SELL signals are generated, they're logged "
+        "automatically. Win rate and P&L% will appear here once signals have been "
+        "checked against price (handled by the scheduled outcome-checker — see setup notes)."
+    )
+else:
+    open_count = (signal_log_df["status"] == "OPEN").sum()
+    per_instrument, overall = compute_performance_summary(signal_log_df)
+
+    if overall is None:
+        st.info(
+            f"{open_count} signal(s) currently OPEN, none closed yet. "
+            f"Performance stats appear once signals hit their target or stop loss."
+        )
+    else:
+        pc1, pc2, pc3, pc4 = st.columns(4)
+        with pc1:
+            st.metric("Closed Trades", overall["total_trades"])
+        with pc2:
+            st.metric("Win Rate", f"{overall['win_rate_pct']}%")
+        with pc3:
+            st.metric("Avg P&L per Trade", f"{overall['avg_pnl_pct']}%")
+        with pc4:
+            st.metric("Currently Open", int(open_count))
+
+        st.markdown("**Per-Instrument Breakdown**")
+        st.dataframe(
+            per_instrument.rename(columns={
+                "instrument": "Instrument",
+                "Trades": "Trades",
+                "Wins": "Wins",
+                "WinRate_Pct": "Win Rate %",
+                "AvgPnL_Pct": "Avg P&L %"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    with st.expander("View raw signal log"):
+        st.dataframe(signal_log_df, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
