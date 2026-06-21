@@ -360,16 +360,16 @@ def run_scanner():
         st.error(f"{name} Error: {e}")
         continue
 
-df = pd.DataFrame(results)
+        df = pd.DataFrame(results)
 
-if not df.empty:
+        if not df.empty:
 
-    df = df.sort_values(
-        ["Score", "Prob%"],
-        ascending=False
-    )
+          df = df.sort_values(
+            ["Score", "Prob%"],
+            ascending=False
+          )
 
-return df.head(10)
+        return df.head(10)
 
 # ================= UI =================
 
