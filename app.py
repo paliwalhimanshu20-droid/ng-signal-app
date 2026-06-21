@@ -301,11 +301,11 @@ else:
 
     if not buy_df.empty:
 
-    st.subheader("🟢 BUY Opportunities")
+        st.subheader("🟢 BUY Opportunities")
 
-    for _, row in buy_df.iterrows():
+        for _, row in buy_df.iterrows():
 
-        st.markdown(
+          st.markdown(
             f"""
             <div style="
             padding:15px;
@@ -321,7 +321,7 @@ else:
             </div>
             """,
             unsafe_allow_html=True
-        )
+          )
 
     # =========================
     # SELL SETUPS
@@ -331,11 +331,11 @@ else:
 
     if not sell_df.empty:
 
-    st.subheader("🔴 SELL Opportunities")
+        st.subheader("🔴 SELL Opportunities")
 
-    for _, row in sell_df.iterrows():
+        for _, row in sell_df.iterrows():
 
-        st.markdown(
+          st.markdown(
             f"""
             <div style="
             padding:15px;
@@ -351,7 +351,7 @@ else:
             </div>
             """,
             unsafe_allow_html=True
-        )
+          )
 
     # =========================
     # BEST SETUP
