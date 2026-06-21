@@ -223,6 +223,7 @@ def signal_engine(price, ema20, ema50, atr_val):
     )
 
     score += 3
+    reasons.append("Base Score")
 
     if (ema20 > ema50 and price > ema20) or \
        (ema20 < ema50 and price < ema20):
@@ -328,8 +329,13 @@ def run_scanner():
             )
 
             st.write(
-                f"Signal={signal}, Score={score}, Trend={trend}, Price={price}"
+            f"Signal={signal}, Score={score}, Trend={trend}, Price={price}"
             )
+
+            st.write("Reasons:", reasons)
+            st.write("EMA20:", ema20)
+            st.write("EMA50:", ema50)
+            st.write("ATR:", atr_val)
 
             if signal in ["BUY", "SELL", "WATCH"]:
 
