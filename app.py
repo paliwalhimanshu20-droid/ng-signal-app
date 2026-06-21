@@ -186,6 +186,7 @@ def run_scanner():
 
     watchlist = get_watchlist()
     results = []
+    st.write("Watchlist Count:", len(watchlist))
 
     for name, key in watchlist.items():
 
@@ -254,6 +255,7 @@ def run_scanner():
         except Exception as e:
             st.error(f"{name} Error: {e}")
             continue
+st.write("Results Count:", len(results))
 
     df = pd.DataFrame(results)
 
@@ -278,9 +280,6 @@ if run:
     st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
 
     df = run_scanner()
-
-    st.write("DF TYPE:", type(df))
-    st.write("DF VALUE:", df)
 
     if df.empty:
         st.warning("No strong setups found")
