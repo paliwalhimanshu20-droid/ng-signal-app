@@ -349,13 +349,13 @@ Confidence: {best['Prob%']}%
 
 RR: {best['RR']}
 
-Entry: ₹{best['Price']}
+Entry: {best['Price']}
 
-SL: ₹{best['SL']}
+SL: {best['SL']}
 
-T1: ₹{best['T1']}
+T1: {best['T1']}
 
-T2: ₹{best['T2']}
+T2: {best['T2']}
 
 Reason: {best['Reason']}
 """
