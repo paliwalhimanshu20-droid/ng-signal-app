@@ -271,6 +271,7 @@ st.title("📊 Production Trading System v1")
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
+
 if "last_scan" not in st.session_state:
     st.session_state.last_scan = "Never"
 
@@ -279,49 +280,54 @@ run = st.button("🚀 Run Live Scan")
 if run:
 
     st.session_state.scan_count += 1
-    st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
+
+    st.session_state.last_scan = datetime.now(
+        IST
+    ).strftime("%d-%m-%Y %H:%M:%S")
 
     df = run_scanner()
 
     if df.empty:
+
         st.warning("No strong setups found")
+
     else:
 
-    st.subheader("📈 Market Opportunities")
+        st.subheader("📈 Market Opportunities")
 
-    st.dataframe(
-        df[[
-            "Instrument",
-            "Signal",
-            "Trend",
-            "Score",
-            "Prob%",
-            "RR",
-            "Price"
-        ]]
-    )
+        st.dataframe(
+            df[[
+                "Instrument",
+                "Signal",
+                "Trend",
+                "Score",
+                "Prob%",
+                "RR",
+                "Price"
+            ]]
+        )
 
-    best = df.iloc[0]
+        best = df.iloc[0]
 
-    st.markdown("---")
-    st.subheader("🥇 Best Trade Setup")
+        st.markdown("---")
+        st.subheader("🥇 Best Trade Setup")
 
-    c1, c2, c3 = st.columns(3)
+        c1, c2, c3 = st.columns(3)
 
-    with c1:
-        st.metric("Instrument", best["Instrument"])
-        st.metric("Signal", best["Signal"])
+        with c1:
+            st.metric("Instrument", best["Instrument"])
+            st.metric("Signal", best["Signal"])
 
-    with c2:
-        st.metric("Entry", best["Price"])
-        st.metric("SL", best["SL"])
+        with c2:
+            st.metric("Entry", best["Price"])
+            st.metric("SL", best["SL"])
 
-    with c3:
-        st.metric("T1", best["T1"])
-        st.metric("T2", best["T2"])
+        with c3:
+            st.metric("T1", best["T1"])
+            st.metric("T2", best["T2"])
 
-    st.info(
-        f"""
+        st.info(
+            f"""
 Trend: {best['Trend']}
 
 Confidence: {best['Prob%']}%
@@ -330,4 +336,10 @@ RR: {best['RR']}
 
 Reason: {best['Reason']}
 """
-    )
+        )
+
+        st.markdown("---")
+
+        st.caption(
+            f"Scans Run: {st.session_state.scan_count} | Last Scan: {st.session_state.last_scan}"
+        )
