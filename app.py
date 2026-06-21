@@ -293,52 +293,58 @@ if run:
 
     else:
 
-        st.subheader("📈 Market Opportunities")
+    st.subheader("📈 Market Opportunities")
 
-        for _, row in df.iterrows():
+    for _, row in df.iterrows():
 
-          signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
+        signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
 
-          st.markdown(
+        st.markdown(
             f"### {signal_icon} {row['Instrument']}"
-          )
+        )
 
-    st.write(
-        f"Signal: {row['Signal']} | "
-        f"Trend: {row['Trend']} | "
-        f"Confidence: {row['Prob%']}% | "
-        f"Price: {row['Price']} | "
-        f"RR: {row['RR']}"
+        st.write(
+            f"Signal: {row['Signal']} | "
+            f"Trend: {row['Trend']} | "
+            f"Confidence: {row['Prob%']}% | "
+            f"Price: {row['Price']} | "
+            f"RR: {row['RR']}"
+        )
+
+        st.divider()
+
+    best = df.iloc[0]
+
+    st.markdown("---")
+    st.subheader("🥇 Best Trade Setup")
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        st.metric("Instrument", best["Instrument"])
+        st.metric("Signal", best["Signal"])
+
+    with c2:
+        st.metric("Entry", best["Price"])
+        st.metric("SL", best["SL"])
+
+    with c3:
+        st.metric("T1", best["T1"])
+        st.metric("T2", best["T2"])
+
+    st.info(
+        f"Trend: {best['Trend']}\n\n"
+        f"Confidence: {best['Prob%']}%\n\n"
+        f"RR: {best['RR']}\n\n"
+        f"Entry: {best['Price']}\n\n"
+        f"SL: {best['SL']}\n\n"
+        f"T1: {best['T1']}\n\n"
+        f"T2: {best['T2']}\n\n"
+        f"Reason: {best['Reason']}"
     )
 
-    st.divider()
+    st.markdown("---")
 
-best = df.iloc[0]
-
-        st.markdown("---")
-        st.subheader("🥇 Best Trade Setup")
-
-        c1, c2, c3 = st.columns(3)
-
-        with c1:
-            st.metric("Instrument", best["Instrument"])
-            st.metric("Signal", best["Signal"])
-
-        with c2:
-            st.metric("Entry", best["Price"])
-            st.metric("SL", best["SL"])
-
-        with c3:
-            st.metric("T1", best["T1"])
-            st.metric("T2", best["T2"])
-
-        st.info(
-    f"Trend: {best['Trend']}\n\n"
-    f"Confidence: {best['Prob%']}%\n\n"
-    f"RR: {best['RR']}\n\n"
-    f"Entry: {best['Price']}\n\n"
-    f"SL: {best['SL']}\n\n"
-    f"T1: {best['T1']}\n\n"
-    f"T2: {best['T2']}\n\n"
-    f"Reason: {best['Reason']}"
-)
+    st.caption(
+        f"Scans Run: {st.session_state.scan_count} | Last Scan: {st.session_state.last_scan}"
+    )
