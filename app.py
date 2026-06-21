@@ -296,22 +296,46 @@ if run:
       st.subheader("📈 Market Opportunities")
 
       for _, row in df.iterrows():
+buy_df = df[df["Signal"] == "BUY"]
+sell_df = df[df["Signal"] == "SELL"]
 
-        signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
+col1, col2 = st.columns(2)
 
-        st.markdown(
-            f"### {signal_icon} {row['Instrument']}"
+with col1:
+
+    st.subheader("🟢 BUY Signals")
+
+    for _, row in buy_df.head(3).iterrows():
+
+        st.success(
+            f"""
+{row['Instrument']}
+
+Price: {row['Price']}
+
+Confidence: {row['Prob%']}%
+
+RR: {row['RR']}
+"""
         )
 
-        st.write(
-            f"Signal: {row['Signal']} | "
-            f"Trend: {row['Trend']} | "
-            f"Confidence: {row['Prob%']}% | "
-            f"Price: {row['Price']} | "
-            f"RR: {row['RR']}"
-        )
+with col2:
 
-        st.divider()
+    st.subheader("🔴 SELL Signals")
+
+    for _, row in sell_df.head(3).iterrows():
+
+        st.error(
+            f"""
+{row['Instrument']}
+
+Price: {row['Price']}
+
+Confidence: {row['Prob%']}%
+
+RR: {row['RR']}
+"""
+        )
 
     best = df.iloc[0]
 
