@@ -353,6 +353,74 @@ def run_scanner():
                 "T1": t1,
                 "T2": t2,
                 "Reason": " | ".join(reasons)
+def run_scanner():
+
+watchlist = get_watchlist()
+results = []
+
+for name, key in watchlist.items():
+
+    if not key:
+        continue
+
+    instrument_key = key
+
+    try:
+
+        candles = get_candles(instrument_key)
+
+        if not candles:
+            continue
+
+        closes = [c[4] for c in reversed(candles)]
+
+        if len(closes) < 50:
+            continue
+
+        price = get_price(instrument_key)
+
+        if not price:
+            continue
+
+        ema20 = ema(closes, 20)
+        ema50 = ema(closes, 50)
+        atr_val = atr(candles)
+
+        signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
+            price,
+            ema20,
+            ema50,
+            atr_val
+        )
+
+        if signal in ["BUY", "SELL", "WATCH"]:
+
+            sl, t1, t2 = levels(
+                price,
+                atr_val,
+                signal,
+                trend
+            )
+
+            risk = abs(price - sl)
+            reward = abs(t1 - price)
+
+            rr = round(reward / risk, 2) if risk > 0 else 0
+
+            results.append({
+                "Instrument": name,
+                "Signal": signal,
+                "Trend": trend,
+                "Regime": regime,
+                "Score": score,
+                "Prob%": prob,
+                "ExpectedMove%": expected_move,
+                "RR": rr,
+                "Price": round(price, 2),
+                "SL": sl,
+                "T1": t1,
+                "T2": t2,
+                "Reason": " | ".join(reasons)
             })
 
     except Exception as e:
@@ -360,23 +428,16 @@ def run_scanner():
         st.error(f"{name} Error: {e}")
         continue
 
-        df = pd.DataFrame(results)
-
-        if not df.empty:
-
-           df = df.sort_values(
-              ["Score", "Prob%"],
-              ascending=False
-           )
-
-        return df.head(10)
-        st.write("RUN_SCANNER REACHED END")
-
 df = pd.DataFrame(results)
 
-st.write("ROWS FOUND:", len(df))
+if not df.empty:
 
-return df
+    df = df.sort_values(
+        ["Score", "Prob%"],
+        ascending=False
+    )
+
+return df.head(10)
 
 # ================= UI =================
 
