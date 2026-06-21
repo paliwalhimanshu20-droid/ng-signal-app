@@ -296,6 +296,7 @@ def run_scanner():
         instrument_key = key
 
         candles = get_candles(instrument_key)
+        st.write("Latest Candle:", candles[0])
 
         st.write("Testing Key:", instrument_key)
         st.write("Candles Found:", candles is not None)
