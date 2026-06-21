@@ -304,12 +304,15 @@ def run_scanner():
     ema50,
     atr_val
 )
+
 st.write(
     "Signal:", signal,
     "Score:", score,
     "Trend:", trend,
     "Price:", price
 )
+
+if signal in ["BUY", "SELL", "WATCH"]:
             if signal in ["BUY", "SELL", "WATCH"]:
 
                 sl, t1, t2 = levels(price, atr_val, signal)
