@@ -160,7 +160,9 @@ def get_price(key):
 
 def get_candles(key):
 
-    url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/2026-06-09"
+    today = datetime.now(IST).strftime("%Y-%m-%d")
+
+    url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/{today}"
 
     data = safe_get(
         url,
