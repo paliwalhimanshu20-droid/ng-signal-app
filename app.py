@@ -301,16 +301,27 @@ else:
 
     if not buy_df.empty:
 
-        st.subheader("🟢 BUY Opportunities")
+    st.subheader("🟢 BUY Opportunities")
 
-        for _, row in buy_df.iterrows():
+    for _, row in buy_df.iterrows():
 
-            st.success(
-                f"{row['Instrument']} | "
-                f"Price: {row['Price']} | "
-                f"Confidence: {row['Prob%']}% | "
-                f"RR: {row['RR']}"
-            )
+        st.markdown(
+            f"""
+            <div style="
+            padding:15px;
+            border-radius:10px;
+            border:1px solid #2ecc71;
+            margin-bottom:10px;
+            ">
+            <h4>🟢 {row['Instrument']}</h4>
+            <b>BUY</b><br>
+            Price: {row['Price']}<br>
+            Confidence: {row['Prob%']}%<br>
+            RR: {row['RR']}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     # =========================
     # SELL SETUPS
@@ -320,16 +331,27 @@ else:
 
     if not sell_df.empty:
 
-        st.subheader("🔴 SELL Opportunities")
+    st.subheader("🔴 SELL Opportunities")
 
-        for _, row in sell_df.iterrows():
+    for _, row in sell_df.iterrows():
 
-            st.error(
-                f"{row['Instrument']} | "
-                f"Price: {row['Price']} | "
-                f"Confidence: {row['Prob%']}% | "
-                f"RR: {row['RR']}"
-            )
+        st.markdown(
+            f"""
+            <div style="
+            padding:15px;
+            border-radius:10px;
+            border:1px solid #e74c3c;
+            margin-bottom:10px;
+            ">
+            <h4>🔴 {row['Instrument']}</h4>
+            <b>SELL</b><br>
+            Price: {row['Price']}<br>
+            Confidence: {row['Prob%']}%<br>
+            RR: {row['RR']}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     # =========================
     # BEST SETUP
