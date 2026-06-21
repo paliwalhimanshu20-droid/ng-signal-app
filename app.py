@@ -132,18 +132,18 @@ def get_price(key):
       return None
 
     try:
-    st.write("LTP Data Keys:", data.get("data", {}).keys())
+        st.write("LTP Data Keys:", data.get("data", {}).keys())
 
-    k = list(data["data"].keys())[0]
+        k = list(data["data"].keys())[0]
 
-    st.write("Selected Key:", k)
-    st.write("Selected Data:", data["data"][k])
+        st.write("Selected Key:", k)
+        st.write("Selected Data:", data["data"][k])
 
-    return data["data"][k]["last_price"]
+        return data["data"][k]["last_price"]
 
-except Exception as e:
-    st.write("LTP Error:", e)
-    return None
+    except Exception as e:
+        st.write("LTP Error:", e)
+        return None
 
 
 def get_candles(key):
