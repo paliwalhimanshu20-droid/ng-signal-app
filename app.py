@@ -364,10 +364,10 @@ def run_scanner():
 
         if not df.empty:
 
-          df = df.sort_values(
-            ["Score", "Prob%"],
-            ascending=False
-          )
+           df = df.sort_values(
+              ["Score", "Prob%"],
+              ascending=False
+           )
 
         return df.head(10)
 
