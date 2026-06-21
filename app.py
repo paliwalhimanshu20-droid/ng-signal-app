@@ -297,11 +297,11 @@ if run:
 
         for _, row in df.iterrows():
 
-    signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
+          signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
 
-    st.markdown(
-        f"### {signal_icon} {row['Instrument']}"
-    )
+          st.markdown(
+            f"### {signal_icon} {row['Instrument']}"
+          )
 
     st.write(
         f"Signal: {row['Signal']} | "
