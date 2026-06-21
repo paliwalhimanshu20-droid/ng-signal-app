@@ -270,10 +270,10 @@ def run_scanner():
 st.title("📊 Production Trading System v1")
 
 if "scan_count" not in st.session_state:
-st.session_state.scan_count = 0
+    st.session_state.scan_count = 0
 
 if "last_scan" not in st.session_state:
-st.session_state.last_scan = "Never"
+    st.session_state.last_scan = "Never"
 
 run = st.button("🚀 Run Live Scan")
 
