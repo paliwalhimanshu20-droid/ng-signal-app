@@ -273,15 +273,23 @@ def signal_engine(price, ema20, ema50, atr_val):
 
 # ================= SL / TP =================
 
-def levels(price, atr_val, signal):
+def levels(price, atr_val, signal, trend):
 
     risk = atr_val * 1.5
 
-    if signal == "BUY":
-        return round(price-risk,2), round(price+risk*2,2), round(price+risk*3,2)
-    else:
-        return round(price+risk,2), round(price-risk*2,2), round(price-risk*3,2)
+    if trend == "Bullish":
 
+        sl = round(price - risk, 2)
+        t1 = round(price + risk * 2, 2)
+        t2 = round(price + risk * 3, 2)
+
+    else:
+
+        sl = round(price + risk, 2)
+        t1 = round(price - risk * 2, 2)
+        t2 = round(price - risk * 3, 2)
+
+    return sl, t1, t2
 # ================= SCANNER =================
 
 def run_scanner():
@@ -347,7 +355,7 @@ def run_scanner():
 
             if signal in ["BUY", "SELL", "WATCH"]:
 
-                sl, t1, t2 = levels(price, atr_val, signal)
+                sl, t1, t2 = levels(price, atr_val, signal, trend)
 
                 risk = abs(price - sl)
                 reward = abs(t1 - price)
