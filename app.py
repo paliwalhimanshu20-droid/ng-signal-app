@@ -287,65 +287,6 @@ def levels(price, atr_val, signal, trend):
 
 def run_scanner():
 
-    watchlist = get_watchlist()
-    st.write(watchlist)
-    results = []
-
-    for name, key in watchlist.items():
-
-        if not key:
-            continue
-
-        instrument_key = key
-
-        candles = get_candles(instrument_key)
-        st.write("Latest Candle:", candles[0])
-
-        st.write("Testing Key:", instrument_key)
-        st.write("Candles Found:", candles is not None)
-
-        if not candles:
-         st.warning(f"{name}: No candle data")
-         continue
-        try:
-            closes = [c[4] for c in reversed(candles)]
-            st.write("Candles Count:", len(closes))
-            st.write("Last 5 Closes:", closes[-5:])
-
-            if len(closes) < 50:
-                continue
-
-            price = get_price(instrument_key)
-
-            st.write("Price:", price)
-
-            if not price:
-               st.warning(f"{name}: Price not found")
-               continue
-
-            ema20 = ema(closes, 20)
-            ema50 = ema(closes, 50)
-            atr_val = atr(candles)
-            st.write("EMA20:", ema20)
-            st.write("EMA50:", ema50)
-            st.write("Latest Close:", closes[-1])
-
-            signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
-                price,
-                ema20,
-                ema50,
-                atr_val
-            )
-
-            st.write(
-            f"Signal={signal}, Score={score}, Trend={trend}, Price={price}"
-            )
-
-            st.write("Reasons:", reasons)
-            st.write("EMA20:", ema20)
-            st.write("EMA50:", ema50)
-def run_scanner():
-
 watchlist = get_watchlist()
 results = []
 
@@ -356,12 +297,12 @@ for name, key in watchlist.items():
 
     instrument_key = key
 
-    candles = get_candles(instrument_key)
-
-    if not candles:
-        continue
-
     try:
+
+        candles = get_candles(instrument_key)
+
+        if not candles:
+            continue
 
         closes = [c[4] for c in reversed(candles)]
 
@@ -396,10 +337,7 @@ for name, key in watchlist.items():
             risk = abs(price - sl)
             reward = abs(t1 - price)
 
-            rr = round(
-                reward / risk,
-                2
-            ) if risk > 0 else 0
+            rr = round(reward / risk, 2) if risk > 0 else 0
 
             results.append({
                 "Instrument": name,
@@ -425,6 +363,7 @@ for name, key in watchlist.items():
 df = pd.DataFrame(results)
 
 if not df.empty:
+
     df = df.sort_values(
         ["Score", "Prob%"],
         ascending=False
