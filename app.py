@@ -270,11 +270,7 @@ def run_scanner():
         if not key:
             continue
 
-        instrument_key = get_instrument_key(key)
-
-        if not instrument_key:
-           st.warning(f"{name}: Instrument not found")
-           continue
+        instrument_key = key
 
         candles = get_candles(instrument_key)
 
@@ -347,7 +343,6 @@ def run_scanner():
 
 
 st.title("📊 Production Trading System v1")
-test_mcx_master()
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
