@@ -313,7 +313,7 @@ if run:
 
     st.divider()
 
-        best = df.iloc[0]
+best = df.iloc[0]
 
         st.markdown("---")
         st.subheader("🥇 Best Trade Setup")
