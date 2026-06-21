@@ -305,6 +305,8 @@ def run_scanner():
          continue
         try:
             closes = [c[4] for c in reversed(candles)]
+            st.write("Candles Count:", len(closes))
+            st.write("Last 5 Closes:", closes[-5:])
 
             if len(closes) < 50:
                 continue
@@ -320,6 +322,9 @@ def run_scanner():
             ema20 = ema(closes, 20)
             ema50 = ema(closes, 50)
             atr_val = atr(candles)
+            st.write("EMA20:", ema20)
+            st.write("EMA50:", ema50)
+            st.write("Latest Close:", closes[-1])
 
             signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
                 price,
