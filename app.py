@@ -273,8 +273,8 @@ def run_scanner():
         instrument_key = get_instrument_key(key)
 
         if not instrument_key:
-        st.warning(f"{name}: Instrument not found")
-        continue
+           st.warning(f"{name}: Instrument not found")
+           continue
 
         candles = get_candles(instrument_key)
 
