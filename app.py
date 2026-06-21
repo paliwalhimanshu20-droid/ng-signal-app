@@ -221,7 +221,7 @@ def run_scanner():
                 atr_val
             )
 
-            if signal in ["BUY", "SELL", "WATCH"]:
+            if score >= 7 and signal in ["BUY", "SELL", "WATCH"]:
 
                 sl, t1, t2 = levels(
                     price,
@@ -238,6 +238,10 @@ def run_scanner():
                 results.append({
                     "Instrument": name,
                     "Signal": signal,
+                    "Confidence":
+                      "High" if score >= 9
+                       else "Medium" if score >= 7
+                       else "Low",
                     "Trend": trend,
                     "Regime": regime,
                     "Score": score,
@@ -260,7 +264,7 @@ def run_scanner():
     if not df.empty:
         df = df.sort_values(["Score", "Prob%"], ascending=False)
 
-    return df.head(10)
+    return df.head(5)
 # ================= UI =================
 
 st.title("📊 Production Trading System v1")
