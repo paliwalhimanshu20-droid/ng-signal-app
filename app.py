@@ -287,10 +287,10 @@ def levels(price, atr_val, signal, trend):
 
 def run_scanner():
 
-watchlist = get_watchlist()
-results = []
+  watchlist = get_watchlist()
+  results = []
 
-for name, key in watchlist.items():
+  for name, key in watchlist.items():
 
     if not key:
         continue
