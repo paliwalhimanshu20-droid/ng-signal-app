@@ -362,14 +362,14 @@ for name, key in watchlist.items():
 
 df = pd.DataFrame(results)
 
-if not df.empty:
+ if not df.empty:
 
     df = df.sort_values(
         ["Score", "Prob%"],
         ascending=False
     )
 
-return df.head(10)
+ return df.head(10)
 
 # ================= UI =================
 
