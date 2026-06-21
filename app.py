@@ -300,7 +300,7 @@ if run:
           signal_icon = "🟢" if row["Signal"] == "BUY" else "🔴"
 
           st.markdown(
-           f"""
+            f"""
         ### {signal_icon} {row['Instrument']}
 
         Signal: **{row['Signal']}**
