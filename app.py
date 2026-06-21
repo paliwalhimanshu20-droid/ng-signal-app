@@ -109,16 +109,7 @@ def get_instrument_key(symbol):
 def get_watchlist():
 
     return {
-        "Tata Motors": "TATAMOTORS",
-        "ITC": "ITC",
-        "NTPC": "NTPC",
-        "ONGC": "ONGC",
-        "BEL": "BEL",
-        "Power Grid": "POWERGRID",
-        "Coal India": "COALINDIA",
-        "Suzlon": "SUZLON",
-        "Wipro": "WIPRO",
-        "IOC": "IOC"
+        "ITC": "NSE_EQ|INE154A01025"
     }
 
 # ================= MARKET DATA =================
@@ -287,9 +278,12 @@ def run_scanner():
 
         candles = get_candles(instrument_key)
 
+        st.write("Testing Key:", instrument_key)
+        st.write("Candles Found:", candles is not None)
+
         if not candles:
-           st.warning(f"{name}: No candle data")
-           continue
+         st.warning(f"{name}: No candle data")
+         continue
         try:
             closes = [c[4] for c in reversed(candles)]
 
