@@ -1,14 +1,9 @@
 name: Weekly Signal Performance Report
 
-# Runs once a week and sends a Telegram report summarizing the past 7
-# days of closed trades (win rate, avg P&L, full trade list).
-# Read-only — does not modify signal_log.csv.
-
 on:
   schedule:
-    # Every Saturday at 8:00 AM IST = 2:30 AM UTC Saturday
     - cron: "30 2 * * 6"
-  workflow_dispatch: {}   # lets you trigger it manually anytime to test
+  workflow_dispatch: {}
 
 jobs:
   weekly-report:
