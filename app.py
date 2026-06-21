@@ -126,14 +126,24 @@ def get_price(key):
 
     data = safe_get(url, headers)
 
+    st.write("LTP Raw Response:", data)
+
     if not data:
-        return None
+      return None
 
     try:
-        k = list(data["data"].keys())[0]
-        return data["data"][k]["last_price"]
-    except:
-        return None
+    st.write("LTP Data Keys:", data.get("data", {}).keys())
+
+    k = list(data["data"].keys())[0]
+
+    st.write("Selected Key:", k)
+    st.write("Selected Data:", data["data"][k])
+
+    return data["data"][k]["last_price"]
+
+except Exception as e:
+    st.write("LTP Error:", e)
+    return None
 
 
 def get_candles(key):
