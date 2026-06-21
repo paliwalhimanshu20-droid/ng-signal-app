@@ -305,12 +305,12 @@ def run_scanner():
     atr_val
 )
 
-st.write(
-    "Signal:", signal,
-    "Score:", score,
-    "Trend:", trend,
-    "Price:", price
-)
+    st.write(
+      "Signal:", signal,
+      "Score:", score,
+      "Trend:", trend,
+      "Price:", price
+    )
 
 if signal in ["BUY", "SELL", "WATCH"]:
             if signal in ["BUY", "SELL", "WATCH"]:
