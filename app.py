@@ -370,6 +370,13 @@ def run_scanner():
            )
 
         return df.head(10)
+        st.write("RUN_SCANNER REACHED END")
+
+df = pd.DataFrame(results)
+
+st.write("ROWS FOUND:", len(df))
+
+return df
 
 # ================= UI =================
 
