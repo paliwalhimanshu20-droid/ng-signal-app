@@ -16,21 +16,12 @@ def safe_get(url, headers=None):
     try:
         r = requests.get(url, headers=headers, timeout=10)
 
-        st.write("Request URL:", url)
-        st.write("Status Code:", r.status_code)
-
-        try:
-            st.write("Response:", r.json())
-        except:
-            st.write("Response Text:", r.text)
-
         if r.status_code != 200:
             return None
 
         return r.json()
 
-    except Exception as e:
-        st.write("Request Error:", e)
+    except:
         return None
 
 # ================= INSTRUMENT MASTER =================
@@ -121,7 +112,18 @@ def get_instrument_key(symbol):
 def get_watchlist():
 
     return {
-        "ITC": "NSE_EQ|INE154A01025"
+        "ITC": "NSE_EQ|INE154A01025",
+        "RELIANCE": "NSE_EQ|INE002A01018",
+        "SBIN": "NSE_EQ|INE062A01020",
+        "HDFCBANK": "NSE_EQ|INE040A01034",
+        "ICICIBANK": "NSE_EQ|INE090A01021",
+        "TCS": "NSE_EQ|INE467B01029",
+        "INFY": "NSE_EQ|INE009A01021",
+        "WIPRO": "NSE_EQ|INE075A01022",
+        "ONGC": "NSE_EQ|INE213A01029",
+        "NTPC": "NSE_EQ|INE733E01010",
+        "POWERGRID": "NSE_EQ|INE752E01010",
+        "TATAMOTORS": "NSE_EQ|INE155A01022"
     }
 
 # ================= MARKET DATA =================
@@ -138,23 +140,14 @@ def get_price(key):
 
     data = safe_get(url, headers)
 
-    st.write("LTP Raw Response:", data)
-
     if not data:
-      return None
+        return None
 
     try:
-        st.write("LTP Data Keys:", data.get("data", {}).keys())
-
         k = list(data["data"].keys())[0]
-
-        st.write("Selected Key:", k)
-        st.write("Selected Data:", data["data"][k])
-
         return data["data"][k]["last_price"]
 
-    except Exception as e:
-        st.write("LTP Error:", e)
+    except:
         return None
 
 
@@ -224,7 +217,7 @@ def signal_engine(price, ema20, ema50, atr_val):
         2
     )
 
-    score += 3
+    score += 4
     reasons.append("Base Score")
 
     if (ema20 > ema50 and price > ema20) or \
@@ -351,45 +344,93 @@ def run_scanner():
             st.write("Reasons:", reasons)
             st.write("EMA20:", ema20)
             st.write("EMA50:", ema50)
-            st.write("ATR:", atr_val)
+def run_scanner():
 
-            if signal in ["BUY", "SELL", "WATCH"]:
+watchlist = get_watchlist()
+results = []
 
-                sl, t1, t2 = levels(price, atr_val, signal, trend)
+for name, key in watchlist.items():
 
-                risk = abs(price - sl)
-                reward = abs(t1 - price)
+    if not key:
+        continue
 
-                rr = round(reward / risk, 2) if risk > 0 else 0
+    instrument_key = key
 
-                results.append({
-                    "Instrument": name,
-                    "Signal": signal,
-                    "Trend": trend,
-                    "Regime": regime,
-                    "Score": score,
-                    "Prob%": prob,
-                    "ExpectedMove%": expected_move,
-                    "RR": rr,
-                    "Price": round(price, 2),
-                    "SL": sl,
-                    "T1": t1,
-                    "T2": t2,
-                    "Reason": " | ".join(reasons)
-                })
+    candles = get_candles(instrument_key)
 
-        except Exception as e:
+    if not candles:
+        continue
 
-            st.error(f"{name} Error: {e}")
+    try:
 
+        closes = [c[4] for c in reversed(candles)]
+
+        if len(closes) < 50:
             continue
 
-    df = pd.DataFrame(results)
+        price = get_price(instrument_key)
 
-    if not df.empty:
-        df = df.sort_values(["Score", "Prob%"], ascending=False)
+        if not price:
+            continue
 
-    return df.head(5)
+        ema20 = ema(closes, 20)
+        ema50 = ema(closes, 50)
+        atr_val = atr(candles)
+
+        signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
+            price,
+            ema20,
+            ema50,
+            atr_val
+        )
+
+        if signal in ["BUY", "SELL", "WATCH"]:
+
+            sl, t1, t2 = levels(
+                price,
+                atr_val,
+                signal,
+                trend
+            )
+
+            risk = abs(price - sl)
+            reward = abs(t1 - price)
+
+            rr = round(
+                reward / risk,
+                2
+            ) if risk > 0 else 0
+
+            results.append({
+                "Instrument": name,
+                "Signal": signal,
+                "Trend": trend,
+                "Regime": regime,
+                "Score": score,
+                "Prob%": prob,
+                "ExpectedMove%": expected_move,
+                "RR": rr,
+                "Price": round(price, 2),
+                "SL": sl,
+                "T1": t1,
+                "T2": t2,
+                "Reason": " | ".join(reasons)
+            })
+
+    except Exception as e:
+
+        st.error(f"{name} Error: {e}")
+        continue
+
+df = pd.DataFrame(results)
+
+if not df.empty:
+    df = df.sort_values(
+        ["Score", "Prob%"],
+        ascending=False
+    )
+
+return df.head(10)
 
 # ================= UI =================
 
