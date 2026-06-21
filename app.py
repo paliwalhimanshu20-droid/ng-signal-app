@@ -255,7 +255,7 @@ def run_scanner():
         except Exception as e:
             st.error(f"{name} Error: {e}")
             continue
-st.write("Results Count:", len(results))
+    st.write("Results Count:", len(results))
 
     df = pd.DataFrame(results)
 
