@@ -342,21 +342,12 @@ if run:
             st.metric("T2", best["T2"])
 
         st.info(
-    f"""
-Trend: {best['Trend']}
-
-Confidence: {best['Prob%']}%
-
-RR: {best['RR']}
-
-Entry: {best['Price']}
-
-SL: {best['SL']}
-
-T1: {best['T1']}
-
-T2: {best['T2']}
-
-Reason: {best['Reason']}
-"""
+    f"Trend: {best['Trend']}\n\n"
+    f"Confidence: {best['Prob%']}%\n\n"
+    f"RR: {best['RR']}\n\n"
+    f"Entry: {best['Price']}\n\n"
+    f"SL: {best['SL']}\n\n"
+    f"T1: {best['T1']}\n\n"
+    f"T2: {best['T2']}\n\n"
+    f"Reason: {best['Reason']}"
 )
