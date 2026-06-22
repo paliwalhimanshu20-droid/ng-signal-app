@@ -77,11 +77,14 @@ def push_signal_log_to_github(df, commit_message="Update signal_log.csv [app]"):
     persist (and become visible to the check_signals.py GitHub Action)
     instead of only existing on Streamlit's ephemeral local filesystem.
 
-    Silently no-ops if GITHUB_TOKEN/GITHUB_REPO aren't configured in
-    Streamlit Secrets, and silently swallows push failures (network issues,
-    bad token, etc.) so a GitHub hiccup never crashes the dashboard itself.
+    DEBUG VERSION: shows a visible banner on the dashboard for every
+    outcome (missing secrets, GitHub API errors, success) instead of
+    silently swallowing failures. Once this is confirmed working, the
+    st.warning/st.error/st.success calls below can be removed or reduced
+    to logging if the on-screen noise isn't wanted long-term.
     """
     if not GITHUB_TOKEN or not GITHUB_REPO:
+        st.warning("⚠️ GITHUB_TOKEN or GITHUB_REPO not set in Secrets — push skipped.")
         return
 
     content_b64 = base64.b64encode(df.to_csv(index=False).encode()).decode()
@@ -98,8 +101,10 @@ def push_signal_log_to_github(df, commit_message="Update signal_log.csv [app]"):
         r = requests.get(api_url, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=10)
         if r.status_code == 200:
             sha = r.json().get("sha")
-    except Exception:
-        pass
+        elif r.status_code != 404:
+            st.warning(f"GitHub GET check returned {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        st.warning(f"GitHub GET check failed: {e}")
 
     payload = {
         "message": commit_message,
@@ -110,11 +115,13 @@ def push_signal_log_to_github(df, commit_message="Update signal_log.csv [app]"):
         payload["sha"] = sha
 
     try:
-        requests.put(api_url, headers=headers, json=payload, timeout=10)
-    except Exception:
-        # Don't let a GitHub push failure take down the dashboard —
-        # the local copy still saved fine for this session.
-        pass
+        r = requests.put(api_url, headers=headers, json=payload, timeout=10)
+        if r.status_code in (200, 201):
+            st.success("✅ signal_log.csv pushed to GitHub.")
+        else:
+            st.error(f"❌ GitHub push failed ({r.status_code}): {r.text[:300]}")
+    except Exception as e:
+        st.error(f"❌ GitHub push request failed: {e}")
 
 
 def save_signal_log(df):
