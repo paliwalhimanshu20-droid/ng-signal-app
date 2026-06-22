@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import json
 import os
+import base64
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
@@ -36,6 +37,20 @@ SIGNAL_LOG_COLUMNS = [
     "status", "closed_price", "closed_at", "pnl_pct"
 ]
 
+# ---- GitHub push config (NEW) ----
+# Streamlit Community Cloud's filesystem is ephemeral and is NOT git-connected
+# — writing signal_log.csv locally never reaches the GitHub repo on its own.
+# These settings let the app push the CSV straight to GitHub via the Contents
+# API every time it's updated, so check_signals.py (the GitHub Action) has
+# something to read on its next run.
+#
+# Add to Streamlit Secrets (Settings -> Secrets):
+#   GITHUB_TOKEN = "ghp_your_fine_grained_PAT"   (Contents: Read & write on this repo)
+#   GITHUB_REPO  = "paliwalhimanshu20-droid/ng-signal-app"
+GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
+GITHUB_REPO = st.secrets.get("GITHUB_REPO", "")
+GITHUB_BRANCH = "main"
+
 # ================= SIGNAL LOG =================
 
 def load_signal_log():
@@ -55,8 +70,56 @@ def load_signal_log():
         return pd.DataFrame(columns=SIGNAL_LOG_COLUMNS)
 
 
+def push_signal_log_to_github(df, commit_message="Update signal_log.csv [app]"):
+    """
+    Pushes the given signal log DataFrame to signal_log.csv in the GitHub
+    repo via the Contents API, so new signals logged by the app actually
+    persist (and become visible to the check_signals.py GitHub Action)
+    instead of only existing on Streamlit's ephemeral local filesystem.
+
+    Silently no-ops if GITHUB_TOKEN/GITHUB_REPO aren't configured in
+    Streamlit Secrets, and silently swallows push failures (network issues,
+    bad token, etc.) so a GitHub hiccup never crashes the dashboard itself.
+    """
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return
+
+    content_b64 = base64.b64encode(df.to_csv(index=False).encode()).decode()
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{SIGNAL_LOG_PATH}"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+
+    # Need the current file's SHA to update it (GitHub requires this for
+    # existing files; omit it entirely for a brand-new file).
+    sha = None
+    try:
+        r = requests.get(api_url, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=10)
+        if r.status_code == 200:
+            sha = r.json().get("sha")
+    except Exception:
+        pass
+
+    payload = {
+        "message": commit_message,
+        "content": content_b64,
+        "branch": GITHUB_BRANCH
+    }
+    if sha:
+        payload["sha"] = sha
+
+    try:
+        requests.put(api_url, headers=headers, json=payload, timeout=10)
+    except Exception:
+        # Don't let a GitHub push failure take down the dashboard —
+        # the local copy still saved fine for this session.
+        pass
+
+
 def save_signal_log(df):
     df.to_csv(SIGNAL_LOG_PATH, index=False)
+    push_signal_log_to_github(df)
 
 
 def append_new_signals(scan_results_df):
@@ -1030,9 +1093,10 @@ if run:
 df, full_df = run_scanner(commodity_contracts)
 
 # Log any new actionable (BUY/SELL) signals from this scan to signal_log.csv.
-# Note: on Streamlit Community Cloud this file resets on every redeploy —
-# the GitHub Actions job (check_signals.py) is what makes this durable,
-# by committing updates back to the repo independently of the app.
+# save_signal_log() (called inside append_new_signals) now pushes the
+# updated CSV straight to GitHub via the Contents API — see
+# push_signal_log_to_github() above — so this persists across redeploys
+# and is visible to the check_signals.py GitHub Action.
 if not full_df.empty:
     append_new_signals(full_df)
 
