@@ -383,6 +383,56 @@ def get_watchlist(commodity_contracts=None):
 
     return watchlist
 
+# ================= SECTOR MAP (NEW) =================
+
+# Maps each watchlist symbol to the sector bucket it should appear under in
+# the dashboard's "Full Scanned Universe" view. Mirrors the grouping already
+# implied by the comments in get_watchlist() above. Add new symbols here
+# whenever the watchlist grows — anything not listed falls into "Other".
+SECTOR_MAP = {
+    # Banking
+    "SBIN": "Banking", "HDFCBANK": "Banking", "ICICIBANK": "Banking",
+    "AXISBANK": "Banking", "KOTAKBANK": "Banking", "INDUSINDBK": "Banking",
+    "BANKBARODA": "Banking",
+
+    # IT
+    "TCS": "IT", "INFY": "IT", "WIPRO": "IT", "HCLTECH": "IT", "TECHM": "IT",
+
+    # Auto
+    "TATAMOTORS": "Auto", "MARUTI": "Auto", "M&M": "Auto",
+    "BAJAJ-AUTO": "Auto", "HEROMOTOCO": "Auto",
+
+    # Pharma
+    "SUNPHARMA": "Pharma", "DRREDDY": "Pharma", "CIPLA": "Pharma",
+    "DIVISLAB": "Pharma", "APOLLOHOSP": "Pharma",
+
+    # FMCG
+    "ITC": "FMCG", "HINDUNILVR": "FMCG", "NESTLEIND": "FMCG",
+    "BRITANNIA": "FMCG", "TATACONSUM": "FMCG",
+
+    # Energy
+    "RELIANCE": "Energy", "ONGC": "Energy", "NTPC": "Energy",
+    "POWERGRID": "Energy", "COALINDIA": "Energy", "BPCL": "Energy",
+
+    # Metals
+    "TATASTEEL": "Metals", "JSWSTEEL": "Metals", "HINDALCO": "Metals",
+    "VEDL": "Metals", "JINDALSTEL": "Metals",
+}
+
+# Display order for the sector accordion in the UI
+SECTOR_ORDER = ["Banking", "IT", "Auto", "Pharma", "FMCG", "Energy", "Metals", "Commodities", "Other"]
+
+
+def get_sector(instrument_name):
+    """
+    Resolves an instrument's display name (as used in get_watchlist/run_scanner)
+    to its sector bucket. MCX commodity entries are named "<Display> (MCX)" by
+    get_watchlist(), so those are caught explicitly before the lookup.
+    """
+    if "(MCX)" in instrument_name:
+        return "Commodities"
+    return SECTOR_MAP.get(instrument_name, "Other")
+
 # ================= MARKET DATA =================
 
 def get_price(key):
@@ -878,6 +928,7 @@ def run_scanner(commodity_contracts=None):
             all_results.append({
                 "Instrument": name,
                 "InstrumentKey": instrument_key,
+                "Sector": get_sector(name),
                 "DailyTrend": daily_trend if daily_trend else "N/A",
                 "Signal": signal,
                 "Confidence": confidence,
@@ -986,7 +1037,7 @@ if not full_df.empty:
     append_new_signals(full_df)
 
 # =========================
-# FULL SCANNED UNIVERSE (NEW)
+# FULL SCANNED UNIVERSE — now grouped by sector (NEW)
 # =========================
 
 st.subheader("🔎 Full Scanned Universe")
@@ -1025,30 +1076,44 @@ else:
         "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
     ]
 
-    st.caption("👆 Click a row to view its price chart, EMA, RSI, and volume below.")
+    st.caption(f"Showing {len(filtered_df)} of {len(full_df)} scanned instruments. "
+               f"👇 Expand a sector and click a row to view its chart below.")
 
-    selection_event = st.dataframe(
-        filtered_df[display_cols],
-        use_container_width=True,
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key="universe_table"
-    )
+    # Tracks the most recently clicked row across all sector tables this run.
+    selected_name = None
+    selected_key = None
 
-    st.caption(f"Showing {len(filtered_df)} of {len(full_df)} scanned instruments")
+    for sector in SECTOR_ORDER:
+        sector_df = filtered_df[filtered_df["Sector"] == sector].reset_index(drop=True)
+
+        if sector_df.empty:
+            continue
+
+        with st.expander(f"{sector}  ·  {len(sector_df)} instrument(s)", expanded=False):
+            sel_event = st.dataframe(
+                sector_df[display_cols],
+                use_container_width=True,
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row",
+                key=f"universe_table_{sector}"
+            )
+
+            rows = sel_event.selection.get("rows", []) if sel_event else []
+            if rows:
+                selected_row = sector_df.iloc[rows[0]]
+                selected_name = selected_row["Instrument"]
+                selected_key = selected_row.get("InstrumentKey", "")
 
     # =========================
-    # INSTRUMENT CHART (NEW) — shown when a row is clicked above
+    # INSTRUMENT CHART (NEW) — shown when a row is clicked in any sector above
     # =========================
 
-    selected_rows = selection_event.selection.get("rows", []) if selection_event else []
-
-    if selected_rows:
-        selected_idx = selected_rows[0]
-        selected_row = filtered_df.iloc[selected_idx]
-        selected_name = selected_row["Instrument"]
-        selected_key = selected_row.get("InstrumentKey", "")
+    if selected_name:
+        selected_idx_lookup = filtered_df[filtered_df["Instrument"] == selected_name]
+        if not selected_idx_lookup.empty:
+            selected_row = selected_idx_lookup.iloc[0]
+            selected_key = selected_row.get("InstrumentKey", selected_key)
 
         st.markdown("---")
         st.subheader(f"📊 {selected_name} — Chart & Indicators")
