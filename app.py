@@ -4,6 +4,7 @@ import pandas as pd
 import json
 import os
 import base64
+import time
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
@@ -225,12 +226,19 @@ def compute_performance_summary(log_df):
 
 
 def safe_get(url, headers=None):
+    # UPDATED: surfaces the real failure (status code + response body, or
+    # exception) instead of silently returning None. This is what exposed
+    # the 429 rate-limit issue — previously every failure looked identical
+    # ("no data"), with no way to tell auth/rate-limit/network apart.
     try:
         r = requests.get(url, headers=headers, timeout=10)
+
         if r.status_code != 200:
             st.error(f"API failed ({r.status_code}) for {url}\n{r.text[:300]}")
             return None
+
         return r.json()
+
     except Exception as e:
         st.error(f"API exception for {url}\n{e}")
         return None
@@ -940,6 +948,13 @@ def run_scanner(commodity_contracts=None):
 
         instrument_key = key
 
+        # THROTTLE: Upstox's standard rate limit is 25 requests/sec, 250/min.
+        # Each instrument below fires 2-3 API calls (candles, price, and
+        # daily trend on cache miss). Without a pause, ~39 instruments fire
+        # 80-120 requests almost instantly and trip a 429. This keeps the
+        # loop comfortably under the limit (~15 req/sec worst case).
+        time.sleep(0.2)
+
         try:
             candles = get_candles(instrument_key)
 
@@ -1090,18 +1105,37 @@ if "last_scan" not in st.session_state:
 
 run = st.button("🚀 Run Live Scan")
 
+# UPDATED: run_scanner() now ONLY executes when the button is actually
+# clicked. Previously it ran unconditionally on every script rerun —
+# meaning changing a filter, the commodity expiry dropdown, the score
+# slider, or clicking a row to view its chart would silently trigger a
+# brand-new full scan in the background, burning through Upstox's
+# 25 req/sec rate limit just from normal use of the dashboard.
+#
+# Results are now cached in st.session_state and reused across reruns
+# until the next deliberate "Run Live Scan" click.
 if run:
     st.session_state.scan_count += 1
     st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
+    with st.spinner("Scanning..."):
+        st.session_state.scan_df, st.session_state.scan_full_df = run_scanner(commodity_contracts)
 
-df, full_df = run_scanner(commodity_contracts)
+if "scan_full_df" not in st.session_state:
+    st.session_state.scan_df = pd.DataFrame()
+    st.session_state.scan_full_df = pd.DataFrame()
+
+df = st.session_state.scan_df
+full_df = st.session_state.scan_full_df
 
 # Log any new actionable (BUY/SELL) signals from this scan to signal_log.csv.
 # save_signal_log() (called inside append_new_signals) now pushes the
 # updated CSV straight to GitHub via the Contents API — see
 # push_signal_log_to_github() above — so this persists across redeploys
 # and is visible to the check_signals.py GitHub Action.
-if not full_df.empty:
+#
+# Only run this when a fresh scan was just completed (not on every rerun),
+# to match the throttling fix above and avoid redundant re-logging.
+if run and not full_df.empty:
     append_new_signals(full_df)
 
 # =========================
@@ -1111,7 +1145,7 @@ if not full_df.empty:
 st.subheader("🔎 Full Scanned Universe")
 
 if full_df.empty:
-    st.warning("No data returned from scanner. Check token / market hours / connectivity.")
+    st.warning("No data returned from scanner. Click 'Run Live Scan' above, or check the API error banners if one was just attempted.")
 else:
     fcol1, fcol2, fcol3 = st.columns(3)
 
