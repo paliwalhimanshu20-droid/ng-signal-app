@@ -489,7 +489,7 @@ def get_watchlist(commodity_contracts=None):
 
         # ---- FMCG (top 5, ITC already above) ----
         "HINDUNILVR": "NSE_EQ|INE030A01027",
-        "NESTLEIND": "NSE_EQ|INE239A01016",
+       ,# "NESTLEIND": "NSE_EQ|INE239A01016",
         "BRITANNIA": "NSE_EQ|INE216A01030",
         "TATACONSUM": "NSE_EQ|INE192A01025",
 
@@ -498,7 +498,7 @@ def get_watchlist(commodity_contracts=None):
         "BPCL": "NSE_EQ|INE029A01011",
 
         # ---- Metals (top 5) ----
-        "TATASTEEL": "NSE_EQ|INE081A01012",
+        #"TATASTEEL": "NSE_EQ|INE081A01012",
         "JSWSTEEL": "NSE_EQ|INE019A01038",
         "HINDALCO": "NSE_EQ|INE038A01020",
         "VEDL": "NSE_EQ|INE205A01025",
