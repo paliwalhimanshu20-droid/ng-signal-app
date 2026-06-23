@@ -248,8 +248,16 @@ def safe_get(url, headers=None):
 @st.cache_data(ttl=86400)
 def load_instrument_master():
     url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json"
+
     try:
-        return requests.get(url, timeout=20).json()
+        response = requests.get(url, timeout=20)
+
+        st.write("Status:", response.status_code)
+        st.write("Content-Type:", response.headers.get("content-type"))
+        st.write("First 300 chars:", response.text[:300])
+
+        return response.json()
+
     except Exception as e:
         st.error(f"Instrument Master Error: {e}")
         return []
