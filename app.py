@@ -489,7 +489,7 @@ def get_watchlist(commodity_contracts=None):
 
         # ---- FMCG (top 5, ITC already above) ----
         "HINDUNILVR": "NSE_EQ|INE030A01027",
-       ,# "NESTLEIND": "NSE_EQ|INE239A01016",
+        #"NESTLEIND": "NSE_EQ|INE239A01016",
         "BRITANNIA": "NSE_EQ|INE216A01030",
         "TATACONSUM": "NSE_EQ|INE192A01025",
 
