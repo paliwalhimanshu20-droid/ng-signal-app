@@ -466,7 +466,7 @@ def get_watchlist(commodity_contracts=None):
 
         # ---- Banking (top 5) ----
         "AXISBANK": "NSE_EQ|INE238A01034",
-        "KOTAKBANK": "NSE_EQ|INE237A01028",
+       # "KOTAKBANK": "NSE_EQ|INE237A01028",
         "INDUSINDBK": "NSE_EQ|INE095A01012",
         "BANKBARODA": "NSE_EQ|INE028A01039",
 
@@ -482,7 +482,7 @@ def get_watchlist(commodity_contracts=None):
 
         # ---- Pharma (top 5) ----
         "SUNPHARMA": "NSE_EQ|INE044A01036",
-        "DRREDDY": "NSE_EQ|INE089A01023",
+       # "DRREDDY": "NSE_EQ|INE089A01023",
         "CIPLA": "NSE_EQ|INE059A01026",
         "DIVISLAB": "NSE_EQ|INE361B01024",
         "APOLLOHOSP": "NSE_EQ|INE437A01024",
