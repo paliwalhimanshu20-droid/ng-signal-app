@@ -227,15 +227,12 @@ def compute_performance_summary(log_df):
 def safe_get(url, headers=None):
     try:
         r = requests.get(url, headers=headers, timeout=10)
-
         if r.status_code != 200:
+            st.error(f"API failed ({r.status_code}) for {url}\n{r.text[:300]}")
             return None
-
         return r.json()
-
     except Exception as e:
-        # FIX: narrowed from bare except so real errors aren't silently swallowed.
-        # Currently just suppressed here; surfaced to the caller as None.
+        st.error(f"API exception for {url}\n{e}")
         return None
 
 # ================= INSTRUMENT MASTER =================
