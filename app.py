@@ -1076,8 +1076,12 @@ def run_scanner(commodity_contracts=None):
 
             price = price_lookup.get(instrument_key)
 
+            st.write("Instrument:", name)
+            st.write("Price Key:", instrument_key)
+            st.write("Price:", price)
+
             if not price:
-                continue
+               continue
 
             ema20 = ema(closes, 20)
             ema50 = ema(closes, 50)
