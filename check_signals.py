@@ -123,7 +123,7 @@ def main():
 
     df = pd.read_csv(SIGNAL_LOG_PATH)
     df["status"] = df["status"].astype("object")
-    df["closed_at"] = df["closed_at"].astype("object")")
+    df["closed_at"] = df["closed_at"].astype("object")
 
     if df.empty:
         print("Signal log is empty — nothing to check.")
