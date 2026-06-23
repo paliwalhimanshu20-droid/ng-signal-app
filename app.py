@@ -255,6 +255,53 @@ def load_instrument_master():
         return []
 
 
+def validate_watchlist_keys(watchlist):
+    """
+    Cross-checks every hardcoded NSE equity instrument_key in the watchlist
+    against Upstox's official NSE instrument master file (load_instrument_master(),
+    already defined above but previously unused elsewhere in this app).
+
+    This catches drift caused by corporate actions (stock splits, ISIN
+    re-issuance, delistings, symbol changes) that silently break a single
+    hardcoded key — the only symptom otherwise is a 400 "Invalid Instrument
+    key" error for that one instrument, discovered one at a time during a
+    live scan. This checks all of them in one shot, with zero extra cost
+    against Upstox's rate-limited endpoints (the master file is a public,
+    unauthenticated static asset, cached 24h).
+
+    MCX commodity entries are skipped — those are resolved dynamically via
+    get_commodity_contracts() already, not hardcoded, so they can't drift
+    the same way.
+
+    Returns a list of (name, hardcoded_key, live_key_or_reason) tuples for
+    anything that doesn't match. Empty list = everything checks out.
+    Returns None if the master file itself couldn't be fetched.
+    """
+    master = load_instrument_master()
+    if not master:
+        return None
+
+    lookup = {}
+    for row in master:
+        sym = row.get("trading_symbol")
+        key = row.get("instrument_key")
+        if sym and key:
+            lookup[sym] = key
+
+    mismatches = []
+    for name, key in watchlist.items():
+        if "(MCX)" in name:
+            continue
+
+        live_key = lookup.get(name)
+        if live_key is None:
+            mismatches.append((name, key, "NOT FOUND in NSE master — symbol may have changed/delisted"))
+        elif live_key != key:
+            mismatches.append((name, key, live_key))
+
+    return mismatches
+
+
 def get_commodity_contracts(name_filter, max_contracts=4):
     """
     Generic resolver for any MCX commodity (Natural Gas, Crude Oil, Gold, etc).
@@ -529,6 +576,54 @@ def get_price(key):
         return data["data"][k]["last_price"]
     except Exception:
         return None
+
+
+def get_prices_bulk(keys):
+    """
+    Fetches LTP for MANY instruments in a single API call instead of one
+    call per instrument. Upstox's LTP endpoint accepts a comma-separated
+    list and supports up to 500 instrument keys per request — our whole
+    ~39-instrument watchlist fits in exactly one call.
+
+    This replaces 39 separate get_price() calls (one per instrument, inside
+    the scanner loop) with a single call made once at the start of
+    run_scanner(). Doesn't touch get_candles() — there's no bulk equivalent
+    for historical candle data, each instrument still needs its own call
+    for that — but this still meaningfully cuts total request volume per
+    scan, which matters after hitting Upstox's rate limit.
+
+    Returns {instrument_key: last_price} for whatever came back successfully.
+    Missing/failed instruments are just absent from the dict — callers
+    should treat a missing key the same as get_price() returning None.
+    """
+    if not keys:
+        return {}
+
+    joined = ",".join(keys)
+    url = f"https://api.upstox.com/v2/market-quote/ltp?instrument_key={joined}"
+
+    headers = {
+        "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
+        "Accept": "application/json",
+        "Api-Version": "2.0"
+    }
+
+    data = safe_get(url, headers)
+
+    if not data:
+        return {}
+
+    prices = {}
+    try:
+        for entry in data.get("data", {}).values():
+            ikey = entry.get("instrument_token")
+            price = entry.get("last_price")
+            if ikey and price is not None:
+                prices[ikey] = price
+    except Exception:
+        pass
+
+    return prices
 
 
 def get_candles(key):
@@ -941,6 +1036,10 @@ def run_scanner(commodity_contracts=None):
     watchlist = get_watchlist(commodity_contracts)
     all_results = []
 
+    # Fetch all LTPs in ONE bulk call instead of one call per instrument
+    # inside the loop below (see get_prices_bulk() above for why).
+    price_lookup = get_prices_bulk([key for key in watchlist.values() if key])
+
     for name, key in watchlist.items():
 
         if not key:
@@ -949,10 +1048,11 @@ def run_scanner(commodity_contracts=None):
         instrument_key = key
 
         # THROTTLE: Upstox's standard rate limit is 25 requests/sec, 250/min.
-        # Each instrument below fires 2-3 API calls (candles, price, and
-        # daily trend on cache miss). Without a pause, ~39 instruments fire
-        # 80-120 requests almost instantly and trip a 429. This keeps the
-        # loop comfortably under the limit (~15 req/sec worst case).
+        # Each instrument below fires 1-2 API calls (candles, and daily
+        # trend on cache miss — price now comes from the bulk lookup above,
+        # not a per-instrument call). Without a pause, ~39 instruments could
+        # still fire requests fast enough to trip a 429. This keeps the
+        # loop comfortably under the limit.
         time.sleep(0.2)
 
         try:
@@ -966,7 +1066,7 @@ def run_scanner(commodity_contracts=None):
             if len(closes) < 50:
                 continue
 
-            price = get_price(instrument_key)
+            price = price_lookup.get(instrument_key)
 
             if not price:
                 continue
@@ -1096,6 +1196,34 @@ st.caption(
     f"Scanning {_watchlist_size} instruments (NSE equities across 7 sectors"
     f"{' + selected MCX commodity contract(s)' if commodity_contracts else ''})."
 )
+
+# =========================
+# WATCHLIST KEY VALIDATOR (NEW)
+# =========================
+# One-click check of every hardcoded NSE equity instrument_key against
+# Upstox's own instrument master — catches stale keys (e.g. after a stock
+# split changes the listing record) before they show up one at a time as
+# "Invalid Instrument key" 400 errors during a live scan.
+with st.expander("🔍 Validate Watchlist Instrument Keys"):
+    if st.button("Run validation check"):
+        with st.spinner("Checking watchlist against Upstox's NSE instrument master..."):
+            mismatches = validate_watchlist_keys(get_watchlist(commodity_contracts))
+
+        if mismatches is None:
+            st.error("Couldn't fetch Upstox's NSE instrument master file — try again in a moment.")
+        elif not mismatches:
+            st.success("✅ All hardcoded NSE equity instrument keys match Upstox's current master file.")
+        else:
+            st.warning(f"⚠️ {len(mismatches)} instrument key(s) don't match Upstox's current records:")
+            st.dataframe(
+                pd.DataFrame(mismatches, columns=["Instrument", "Your Hardcoded Key", "Upstox's Current Key / Issue"]),
+                use_container_width=True,
+                hide_index=True
+            )
+            st.caption(
+                "For each row above, replace 'Your Hardcoded Key' with the value shown in "
+                "'Upstox's Current Key' inside get_watchlist() in app.py."
+            )
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
