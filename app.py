@@ -754,7 +754,7 @@ def get_candles(key):
         return None
 
     return data.get("data", {}).get("candles", None)
-    def get_candles_range(key, days_back=5):
+def get_candles_range(key, days_back=5):
     """
     Fetches multiple days of 30-minute candles for the chart view, using
     Upstox's historical-candle range endpoint (from_date/to_date variant)
