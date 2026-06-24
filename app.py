@@ -10,6 +10,19 @@ from plotly.subplots import make_subplots
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from signal_logic import (
+    ema, atr, rsi,
+    SUPERTREND_PERIOD, SUPERTREND_MULTIPLIER, calculate_supertrend,
+    compute_adx, ADX_WEAK_BELOW, ADX_STRONG_AT_OR_ABOVE,
+    MIN_EXPECTED_MOVE_PCT, MAX_EXPECTED_MOVE_PCT,
+    detect_regime, trend_conviction, passes_risk_gates, signal_engine, levels,
+)
+# NOTE: all indicator math and signal-scoring logic now lives in
+# signal_logic.py, NOT here — it's imported so this app and backtest.py
+# (the offline threshold tester) always run the exact same scoring code.
+# If you need to tune a threshold or add a factor, edit signal_logic.py,
+# not this file.
+
 # ================= CONFIG =================
 
 # Token is read from Streamlit's Secrets manager (Settings -> Secrets on
@@ -35,7 +48,15 @@ SIGNAL_LOG_PATH = "signal_log.csv"
 SIGNAL_LOG_COLUMNS = [
     "signal_id", "timestamp", "instrument", "instrument_key", "signal",
     "trend", "confidence", "score", "entry_price", "sl", "t1", "t2",
-    "status", "closed_price", "closed_at", "pnl_pct"
+    "status", "closed_price", "closed_at", "pnl_pct",
+    # NEW (factor tracking, point #4 — "close the loop"): the exact factor
+    # readings present AT SIGNAL TIME, so compute_factor_performance() can
+    # later check which ones actually correlated with wins, instead of
+    # trusting the hand-tuned scoring weights on faith. load_signal_log()
+    # below pads these in as None for any CSV rows written before this
+    # change, so no manual migration is needed.
+    "daily_trend_agree", "supertrend_agree", "market_trend_agree",
+    "adx", "conviction_pct", "expected_move_pct"
 ]
 
 # ---- GitHub push config (NEW) ----
@@ -179,7 +200,16 @@ def append_new_signals(scan_results_df):
             "status": "OPEN",
             "closed_price": None,
             "closed_at": None,
-            "pnl_pct": None
+            "pnl_pct": None,
+            # NEW (point #4): factor readings at signal time, for later
+            # win-rate/avg-P&L breakdowns per factor — see
+            # compute_factor_performance() below.
+            "daily_trend_agree": row.get("DailyTrendAgree", "N/A"),
+            "supertrend_agree": row.get("SupertrendAgree", "N/A"),
+            "market_trend_agree": row.get("MarketTrendAgree", "N/A"),
+            "adx": row.get("ADX", "N/A"),
+            "conviction_pct": row.get("ConvictionPct", "N/A"),
+            "expected_move_pct": row.get("ExpectedMove%", "N/A"),
         })
 
     if new_rows:
@@ -223,6 +253,82 @@ def compute_performance_summary(log_df):
 
     return per_instrument, overall
 
+
+def compute_factor_performance(log_df):
+    """
+    Point #4 ("close the loop"): breaks down win rate / avg P&L% by each
+    scoring factor that was recorded at signal time — daily-trend
+    agreement, Supertrend agreement, market(Nifty)-trend agreement, ADX
+    strength bucket, and volatility (ExpectedMove%) bucket.
+
+    This is how you find out whether a factor is actually pulling its
+    weight instead of assuming it from the hand-tuned scoring weights in
+    signal_logic.py. Only CLOSED trades are considered (status
+    TARGET_HIT/SL_HIT) — OPEN signals have no outcome yet.
+
+    Returns a dict of {factor_label: DataFrame}. Empty dict if there's
+    no closed history yet. Treat any breakdown with fewer than ~20 closed
+    trades in a row as too small a sample to act on — it'll show up here
+    well before that, but the win rates won't be statistically meaningful
+    until you have more.
+    """
+    if log_df.empty:
+        return {}
+
+    closed = log_df[log_df["status"].isin(["TARGET_HIT", "SL_HIT"])].copy()
+    if closed.empty:
+        return {}
+
+    closed["pnl_pct"] = pd.to_numeric(closed["pnl_pct"], errors="coerce")
+    closed["win"] = (closed["status"] == "TARGET_HIT")
+
+    def _breakdown(series, label_col="Factor Value"):
+        sub = closed[series.notna() & (series != "N/A")].copy()
+        if sub.empty:
+            return pd.DataFrame()
+        sub["_grp"] = series[sub.index]
+        g = sub.groupby("_grp").agg(
+            Trades=("win", "count"),
+            Wins=("win", "sum"),
+            AvgPnL_Pct=("pnl_pct", "mean")
+        ).reset_index().rename(columns={"_grp": label_col})
+        g["WinRate_Pct"] = round((g["Wins"] / g["Trades"]) * 100, 1)
+        g["AvgPnL_Pct"] = g["AvgPnL_Pct"].round(2)
+        return g[[label_col, "Trades", "Wins", "WinRate_Pct", "AvgPnL_Pct"]]
+
+    results = {}
+
+    for col, label in [
+        ("daily_trend_agree", "Daily Trend Agreement"),
+        ("supertrend_agree", "Supertrend Agreement"),
+        ("market_trend_agree", "Market (Nifty) Trend Agreement"),
+    ]:
+        if col in closed.columns:
+            df_b = _breakdown(closed[col])
+            if not df_b.empty:
+                results[label] = df_b
+
+    if "adx" in closed.columns:
+        adx_numeric = pd.to_numeric(closed["adx"], errors="coerce")
+        bucket = pd.cut(
+            adx_numeric, bins=[-1, 20, 25, 1000],
+            labels=["Weak (<20)", "Moderate (20-25)", "Strong (25+)"]
+        )
+        df_b = _breakdown(bucket)
+        if not df_b.empty:
+            results["ADX Strength Bucket"] = df_b
+
+    if "expected_move_pct" in closed.columns:
+        move_numeric = pd.to_numeric(closed["expected_move_pct"], errors="coerce")
+        bucket = pd.cut(
+            move_numeric, bins=[-1, 0.15, 1.0, 1000],
+            labels=["Low (<0.15%)", "Normal (0.15-1%)", "High (>1%)"]
+        )
+        df_b = _breakdown(bucket)
+        if not df_b.empty:
+            results["Volatility (ExpectedMove%) Bucket"] = df_b
+
+    return results
 
 
 def safe_get(url, headers=None):
@@ -648,9 +754,7 @@ def get_candles(key):
         return None
 
     return data.get("data", {}).get("candles", None)
-
-
-def get_candles_range(key, days_back=5):
+    def get_candles_range(key, days_back=5):
     """
     Fetches multiple days of 30-minute candles for the chart view, using
     Upstox's historical-candle range endpoint (from_date/to_date variant)
@@ -677,54 +781,7 @@ def get_candles_range(key, days_back=5):
     return data.get("data", {}).get("candles", None)
 
 # ================= INDICATORS =================
-
-def ema(prices, period):
-    m = 2 / (period + 1)
-    e = prices[0]
-    for p in prices[1:]:
-        e = (p - e) * m + e
-    return e
-
-
-def atr(candles):
-    # FIX: original took sum(trs[:14]) which is the OLDEST 14 true ranges
-    # once trs is built in chronological order (since candles here is the
-    # raw, newest-first Upstox response — trs ends up oldest->newest reversed
-    # depending on indexing). We now explicitly use the most recent 14
-    # true ranges so ATR reflects current volatility, not stale data.
-    trs = []
-    for i in range(1, len(candles)):
-        h, l, pc = candles[i][1], candles[i][2], candles[i-1][4]
-        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-
-    if not trs:
-        return 0
-
-    recent = trs[-14:] if len(trs) >= 14 else trs
-    return sum(recent) / len(recent)
-
-
-def rsi(prices, period=14):
-    # NEW: standard Wilder's RSI, computed from the same closes list
-    # you already build in run_scanner(). No extra API calls.
-    if len(prices) < period + 1:
-        return None
-
-    gains, losses = [], []
-    for i in range(1, len(prices)):
-        change = prices[i] - prices[i - 1]
-        gains.append(max(change, 0))
-        losses.append(max(-change, 0))
-
-    avg_gain = sum(gains[-period:]) / period
-    avg_loss = sum(losses[-period:]) / period
-
-    if avg_loss == 0:
-        return 100.0
-
-    rs = avg_gain / avg_loss
-    return round(100 - (100 / (1 + rs)), 2)
-
+# ema(), atr(), rsi() are imported from signal_logic.py above.
 
 def volume_signal(candles):
     # NEW: compares the latest candle's volume to the average volume of the
@@ -755,130 +812,6 @@ def volume_signal(candles):
 
     return ratio, tag
 
-
-# ---- Supertrend config ----
-# Classic/most widely used defaults across trading platforms. Tune here if
-# you want a tighter (lower period/multiplier) or looser (higher) trend filter.
-SUPERTREND_PERIOD = 10
-SUPERTREND_MULTIPLIER = 3.0
-
-
-def calculate_supertrend(candles, period=SUPERTREND_PERIOD, multiplier=SUPERTREND_MULTIPLIER):
-    """
-    Computes the Supertrend indicator from raw Upstox candles (newest-first,
-    format: [timestamp, open, high, low, close, volume, oi]).
-
-    Used for BOTH the chart overlay (needs the full per-bar series) and the
-    scanner/signal engine (needs just the latest trend) — one calculation,
-    no duplicate logic, and no extra API call since it runs on candles
-    already fetched elsewhere.
-
-    ATR here uses Wilder's smoothing (RMA), which is the standard basis for
-    Supertrend's bands — intentionally a different ATR than the simple-average
-    atr() above, which is used for SL/T1/T2 sizing elsewhere in this app.
-
-    Returns None if there isn't enough candle history for a stable read
-    (needs at least period + 2 bars). Otherwise returns a dict:
-      "timestamps":   raw timestamps, chronological (oldest -> newest)
-      "supertrend":   Supertrend line value per bar (None during warm-up)
-      "trend":        "Bullish" / "Bearish" per bar (None during warm-up)
-      "latest_trend": most recent "Bullish"/"Bearish", or None
-      "latest_value": most recent Supertrend line value, or None
-    """
-    if not candles or len(candles) < period + 2:
-        return None
-
-    ordered = list(reversed(candles))  # chronological, oldest first
-
-    timestamps = [c[0] for c in ordered]
-    highs = [c[2] for c in ordered]
-    lows = [c[3] for c in ordered]
-    closes = [c[4] for c in ordered]
-
-    n = len(closes)
-
-    # --- True Range series ---
-    trs = [highs[0] - lows[0]]  # first bar has no previous close to compare
-    for i in range(1, n):
-        tr = max(
-            highs[i] - lows[i],
-            abs(highs[i] - closes[i - 1]),
-            abs(lows[i] - closes[i - 1])
-        )
-        trs.append(tr)
-
-    # --- ATR via Wilder's smoothing, seeded with a simple average of the
-    # first `period` true ranges (standard Wilder seeding) ---
-    atr_vals = [None] * n
-    seed = sum(trs[:period]) / period
-    atr_vals[period - 1] = seed
-    for i in range(period, n):
-        atr_vals[i] = (atr_vals[i - 1] * (period - 1) + trs[i]) / period
-
-    # --- Bands + Supertrend line ---
-    final_upper = [None] * n
-    final_lower = [None] * n
-    st_line = [None] * n
-    st_is_bullish = [None] * n  # True = price riding the lower band (uptrend)
-
-    start = period - 1  # first index with a valid ATR
-
-    for i in range(start, n):
-        mid = (highs[i] + lows[i]) / 2
-        basic_upper = mid + multiplier * atr_vals[i]
-        basic_lower = mid - multiplier * atr_vals[i]
-
-        if i == start:
-            final_upper[i] = basic_upper
-            final_lower[i] = basic_lower
-            # Seed the trend off the first close vs the band midpoint
-            st_is_bullish[i] = closes[i] >= mid
-            st_line[i] = final_lower[i] if st_is_bullish[i] else final_upper[i]
-            continue
-
-        prev_close = closes[i - 1]
-
-        # Bands only "tighten" toward price — they never widen back out
-        # against the prevailing trend (the standard Supertrend rule).
-        final_upper[i] = (
-            basic_upper if (basic_upper < final_upper[i - 1] or prev_close > final_upper[i - 1])
-            else final_upper[i - 1]
-        )
-        final_lower[i] = (
-            basic_lower if (basic_lower > final_lower[i - 1] or prev_close < final_lower[i - 1])
-            else final_lower[i - 1]
-        )
-
-        prev_bullish = st_is_bullish[i - 1]
-
-        if prev_bullish:
-            # Stay bullish unless price closes back below the lower band
-            st_is_bullish[i] = closes[i] >= final_lower[i]
-        else:
-            # Stay bearish unless price closes back above the upper band
-            st_is_bullish[i] = closes[i] > final_upper[i]
-
-        st_line[i] = final_lower[i] if st_is_bullish[i] else final_upper[i]
-
-    trend_labels = [
-        (None if b is None else ("Bullish" if b else "Bearish"))
-        for b in st_is_bullish
-    ]
-
-    latest_trend, latest_value = None, None
-    for i in range(n - 1, -1, -1):
-        if trend_labels[i] is not None:
-            latest_trend = trend_labels[i]
-            latest_value = round(st_line[i], 2) if st_line[i] is not None else None
-            break
-
-    return {
-        "timestamps": timestamps,
-        "supertrend": st_line,
-        "trend": trend_labels,
-        "latest_trend": latest_trend,
-        "latest_value": latest_value,
-    }
 
 # ================= CHART =================
 
@@ -1059,138 +992,60 @@ def get_daily_trend(key):
     return "Bullish" if daily_ema20 > daily_ema50 else "Bearish"
 
 
-# ================= REGIME =================
-
-def detect_regime(ema20, ema50, price):
-    gap = abs(ema20 - ema50)
-
-    if gap > price * 0.01:
-        return "TRENDING"
-    elif gap > price * 0.005:
-        return "BREAKOUT"
-    else:
-        return "RANGING"
-
-# ================= SIGNAL ENGINE =================
-
-def signal_engine(price, ema20, ema50, atr_val, daily_trend=None, supertrend_trend=None):
+# ⚠ VERIFY before relying on this: Upstox index instrument_keys are
+# name-based (no ISIN), and the exact string format can drift. This is
+# the commonly documented value for Nifty 50 but has NOT been confirmed
+# live against your account from this environment (no network access to
+# api.upstox.com here). Run the "Validate Watchlist" pattern against this
+# too, or just check the very first live scan's market trend reading
+# against what Nifty actually did that day.
+NIFTY50_INSTRUMENT_KEY = "NSE_INDEX|Nifty 50"
+    @st.cache_data(ttl=3600)
+def get_market_trend():
     """
-    daily_trend: "Bullish", "Bearish", or None (unavailable). When provided
-    and it DISAGREES with the 30-min trend, the signal is downgraded —
-    BUY/SELL becomes WATCH at most, since we're now fighting the bigger
-    trend. This does not block WATCH/NO TRADE signals, only caps how
-    confident an actionable (BUY/SELL) call can be.
+    Broad-market regime filter (point #1 from the "near-perfect signals"
+    discussion): is Nifty 50 itself trending up or down on the daily
+    timeframe? A single stock's BUY signal fighting a falling index is a
+    bigger headwind than any stock-level filter alone catches — this is
+    usually the single highest-leverage context check a pure stock-level
+    scanner is missing.
 
-    supertrend_trend: "Bullish", "Bearish", or None (unavailable / not
-    enough history). Same gating mechanism as daily_trend, applied
-    independently — Supertrend disagreeing with the EMA trend downgrades
-    the signal the same way a daily-trend disagreement does.
+    Computed ONCE per scan (cached 1h, same pattern as get_daily_trend),
+    not once per instrument — it's the same index for every stock in the
+    watchlist.
+
+    Returns "Bullish", "Bearish", or None if the index data couldn't be
+    fetched or there isn't enough daily history.
     """
+    to_date = datetime.now(IST).strftime("%Y-%m-%d")
+    from_date = (datetime.now(IST) - pd.Timedelta(days=120)).strftime("%Y-%m-%d")
 
-    score = 4
-    reasons = ["Base Score"]
+    url = f"https://api.upstox.com/v2/historical-candle/{NIFTY50_INSTRUMENT_KEY}/day/{to_date}/{from_date}"
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
 
-    trend = "Bullish" if ema20 > ema50 else "Bearish"
-    regime = detect_regime(ema20, ema50, price)
+    if not data:
+        return None
 
-    expected_move = round((atr_val / price) * 100, 2)
+    candles = data.get("data", {}).get("candles", None)
+    if not candles or len(candles) < 50:
+        return None
 
-    if (ema20 > ema50 and price > ema20) or (ema20 < ema50 and price < ema20):
-        score += 2
-        reasons.append("Trend confirmation")
+    closes = [c[4] for c in reversed(candles)]
+    e20 = ema(closes, 20)
+    e50 = ema(closes, 50)
 
-    if atr_val and abs(price - ema20) < atr_val * 1.5:
-        score += 2
-        reasons.append("Valid volatility zone")
+    return "Bullish" if e20 > e50 else "Bearish"
 
-    if ema20 > ema50 and price > ema50:
-        score += 2
-        reasons.append("Momentum bullish")
 
-    if ema20 < ema50 and price < ema50:
-        score += 2
-        reasons.append("Momentum bearish")
+def _agree_label(layer_trend, trend):
+    """Small shared helper: 'Agree'/'Disagree'/'N/A' label for a single
+    higher-context trend layer vs. the instrument's own EMA trend — used
+    to populate the per-factor columns that compute_factor_performance()
+    later groups by."""
+    if layer_trend is None:
+        return "N/A"
+    return "Agree" if layer_trend == trend else "Disagree"
 
-    # NEW: higher-timeframe agreement check
-    daily_agrees = (daily_trend is None) or (daily_trend == trend)
-
-    if daily_trend is not None:
-        if daily_agrees:
-            score += 1
-            reasons.append(f"Daily trend agrees ({daily_trend})")
-        else:
-            score -= 2
-            reasons.append(f"⚠ Daily trend disagrees ({daily_trend}) — downgraded")
-
-    # NEW: Supertrend agreement check (same gating mechanism as daily trend)
-    supertrend_agrees = (supertrend_trend is None) or (supertrend_trend == trend)
-
-    if supertrend_trend is not None:
-        if supertrend_agrees:
-            score += 1
-            reasons.append(f"Supertrend agrees ({supertrend_trend})")
-        else:
-            score -= 2
-            reasons.append(f"⚠ Supertrend disagrees ({supertrend_trend}) — downgraded")
-
-    score = max(0, min(score, 10))
-    probability = int((score / 10) * 100)
-
-    if score >= 8 and daily_agrees and supertrend_agrees:
-        signal = "BUY" if trend == "Bullish" else "SELL"
-    elif score >= 6:
-        signal = "WATCH"
-    else:
-        signal = "NO TRADE"
-
-    return signal, score, probability, trend, regime, expected_move, reasons
-
-# ================= LEVELS =================
-
-def levels(price, atr_val, signal, trend, regime="TRENDING"):
-    """
-    regime: "TRENDING", "BREAKOUT", or "RANGING" — from detect_regime().
-    Position sizing now adapts to regime instead of using one fixed
-    multiplier for every market condition:
-      - TRENDING: wider targets (price has room to run)
-      - BREAKOUT: standard sizing
-      - RANGING: tighter targets/stops (price isn't trending far, so
-        wide targets in a RANGING market are unrealistic and wide stops
-        risk more than the setup justifies)
-    """
-    # FIX: previously, when atr_val was 0 (or None) — which happens for
-    # instruments with too few/flat candles — risk became 0, so SL/T1/T2
-    # all collapsed to exactly `price`. That looked like "missing" data in
-    # the table. Now we explicitly return None so the UI can show
-    # "N/A" instead of a misleading repeated price.
-    if not atr_val or atr_val <= 0:
-        return None, None, None
-
-    # Regime-based risk multiplier and target stretch
-    if regime == "RANGING":
-        risk_mult = 1.0
-        t1_mult, t2_mult = 1.5, 2.0
-    elif regime == "BREAKOUT":
-        risk_mult = 1.5
-        t1_mult, t2_mult = 2.0, 3.0
-    else:  # TRENDING
-        risk_mult = 1.5
-        t1_mult, t2_mult = 2.5, 4.0
-
-    risk = atr_val * risk_mult
-
-    if trend == "Bullish":
-        return (
-            round(price - risk, 2),
-            round(price + risk * t1_mult, 2),
-            round(price + risk * t2_mult, 2)
-        )
-    else:
-        return (
-            round(price + risk, 2),
-            round(price - risk * t1_mult, 2),
-            round(price - risk * t2_mult, 2)
-        )
 
 # ================= SCANNER =================
 
@@ -1211,6 +1066,11 @@ def run_scanner(commodity_contracts=None):
     # Fetch all LTPs in ONE bulk call instead of one call per instrument
     # inside the loop below (see get_prices_bulk() above for why).
     price_lookup = get_prices_bulk([key for key in watchlist.values() if key])
+
+    # NEW: broad-market (Nifty 50) regime — fetched ONCE for the whole
+    # scan, not per instrument (it's cached 1h anyway, but no reason to
+    # even attempt it 39 times).
+    market_trend = get_market_trend()
 
     for name, key in watchlist.items():
 
@@ -1251,23 +1111,29 @@ def run_scanner(commodity_contracts=None):
             rsi_val = rsi(closes, 14)
             vol_ratio, vol_tag = volume_signal(candles)
 
-            # NEW: Supertrend — computed off the same intraday `candles`
+            # Supertrend — computed off the same intraday `candles`
             # already fetched above, no extra API call.
             st_result = calculate_supertrend(candles)
             supertrend_trend = st_result["latest_trend"] if st_result else None
             supertrend_value = st_result["latest_value"] if st_result else None
 
-            # NEW: higher-timeframe (daily) trend filter — cached, so this
+            # NEW: ADX(14) — trend STRENGTH, off the same candles, no
+            # extra API call.
+            adx_val = compute_adx(candles)
+
+            # Higher-timeframe (daily) trend filter — cached, so this
             # doesn't multiply API calls on every scan within the same day.
             daily_trend = get_daily_trend(instrument_key)
 
-            signal, score, prob, trend, regime, expected_move, reasons = signal_engine(
+            signal, score, prob, trend, regime, expected_move, reasons, conviction_pct = signal_engine(
                 price,
                 ema20,
                 ema50,
                 atr_val,
                 daily_trend,
-                supertrend_trend
+                supertrend_trend,
+                market_trend,
+                adx_val
             )
 
             sl, t1, t2 = levels(price, atr_val, signal, trend, regime)
@@ -1286,17 +1152,27 @@ def run_scanner(commodity_contracts=None):
                 else "Low"
             )
 
+            # Per-layer agreement flags — stored individually (not just the
+            # blended ConvictionPct) so compute_factor_performance() can
+            # later check, with real outcome data, whether each factor
+            # actually correlates with wins on its own.
             all_results.append({
                 "Instrument": name,
                 "InstrumentKey": instrument_key,
                 "Sector": get_sector(name),
                 "DailyTrend": daily_trend if daily_trend else "N/A",
+                "MarketTrend": market_trend if market_trend else "N/A",
                 "Signal": signal,
                 "Confidence": confidence,
                 "Trend": trend,
                 "Supertrend": supertrend_trend if supertrend_trend else "N/A",
                 "SupertrendValue": supertrend_value if supertrend_value is not None else "N/A",
                 "Regime": regime,
+                "ADX": adx_val if adx_val is not None else "N/A",
+                "ConvictionPct": conviction_pct if conviction_pct is not None else "N/A",
+                "DailyTrendAgree": _agree_label(daily_trend, trend),
+                "SupertrendAgree": _agree_label(supertrend_trend, trend),
+                "MarketTrendAgree": _agree_label(market_trend, trend),
                 "Score": score,
                 "Prob%": prob,
                 "RSI": rsi_val,
@@ -1453,6 +1329,32 @@ if run and not full_df.empty:
 
 st.subheader("🔎 Full Scanned Universe")
 
+with st.expander("ℹ️ How a signal becomes BUY/SELL now"):
+    st.markdown(
+        f"""
+A score ≥ 8 only becomes an actionable **BUY/SELL** if ALL of these also hold
+— otherwise it's capped at **WATCH**, regardless of score:
+
+- **Trend conviction ≥ 50%** — majority of available higher-context reads
+  (Daily trend, Supertrend, Nifty market trend) agree with the instrument's
+  own EMA20/50 trend. These three are blended into one conviction score
+  rather than each independently vetoing the trade.
+- **ADX ≥ {ADX_WEAK_BELOW}** — trend strength filter. Below this, price action
+  is statistically closer to chop than a real trend (ADX ≥ {ADX_STRONG_AT_OR_ABOVE}
+  gets a bonus as a strong trend).
+- **ExpectedMove% between {MIN_EXPECTED_MOVE_PCT}% and {MAX_EXPECTED_MOVE_PCT}%** —
+  volatility sanity filter. Below the floor usually means a dead/illiquid
+  session; above the ceiling usually means a gap/news spike, not a tradeable trend.
+
+All three checks are folded into the score and explained in each row's
+"Reason" text (full detail in the underlying scan data and the "Best Trade
+Setup" panel further down) — or check `signal_logic.py` directly. These
+thresholds are starting points, not fixed truths — tune them in
+`signal_logic.py` once you've checked the Factor Performance Analysis
+section (further down) against real outcomes.
+        """
+    )
+
 if full_df.empty:
     st.warning("No data returned from scanner. Click 'Run Live Scan' above, or check the API error banners if one was just attempted.")
 else:
@@ -1482,7 +1384,8 @@ else:
     ].reset_index(drop=True)
 
     display_cols = [
-        "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Supertrend", "Regime",
+        "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Supertrend",
+        "MarketTrend", "ConvictionPct", "ADX", "Regime",
         "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
         "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
     ]
@@ -1600,6 +1503,41 @@ else:
 
     with st.expander("View raw signal log"):
         st.dataframe(signal_log_df, use_container_width=True, hide_index=True)
+
+st.markdown("---")
+
+# =========================
+# FACTOR PERFORMANCE ANALYSIS (NEW — point #4, "close the loop")
+# =========================
+
+st.subheader("🔬 Factor Performance Analysis")
+st.caption(
+    "Does each scoring factor actually correlate with wins, using YOUR real "
+    "outcomes — not assumed from the hand-tuned scoring weights. Needs closed "
+    "trades to populate; treat any breakdown under ~20 closed trades as too "
+    "small a sample to act on yet."
+)
+
+factor_perf = compute_factor_performance(signal_log_df)
+
+if not factor_perf:
+    st.info(
+        "No closed trades with factor data yet. This fills in automatically as "
+        "BUY/SELL signals logged from now on get checked against target/stop "
+        "by the outcome-checker. Signals logged before this update won't have "
+        "factor data — only new ones do."
+    )
+else:
+    for label, factor_df in factor_perf.items():
+        st.markdown(f"**{label}**")
+        st.dataframe(
+            factor_df.rename(columns={
+                "Trades": "Trades", "Wins": "Wins",
+                "WinRate_Pct": "Win Rate %", "AvgPnL_Pct": "Avg P&L %"
+            }),
+            use_container_width=True,
+            hide_index=True
+        )
 
 st.markdown("---")
 
