@@ -755,6 +755,131 @@ def volume_signal(candles):
 
     return ratio, tag
 
+
+# ---- Supertrend config ----
+# Classic/most widely used defaults across trading platforms. Tune here if
+# you want a tighter (lower period/multiplier) or looser (higher) trend filter.
+SUPERTREND_PERIOD = 10
+SUPERTREND_MULTIPLIER = 3.0
+
+
+def calculate_supertrend(candles, period=SUPERTREND_PERIOD, multiplier=SUPERTREND_MULTIPLIER):
+    """
+    Computes the Supertrend indicator from raw Upstox candles (newest-first,
+    format: [timestamp, open, high, low, close, volume, oi]).
+
+    Used for BOTH the chart overlay (needs the full per-bar series) and the
+    scanner/signal engine (needs just the latest trend) — one calculation,
+    no duplicate logic, and no extra API call since it runs on candles
+    already fetched elsewhere.
+
+    ATR here uses Wilder's smoothing (RMA), which is the standard basis for
+    Supertrend's bands — intentionally a different ATR than the simple-average
+    atr() above, which is used for SL/T1/T2 sizing elsewhere in this app.
+
+    Returns None if there isn't enough candle history for a stable read
+    (needs at least period + 2 bars). Otherwise returns a dict:
+      "timestamps":   raw timestamps, chronological (oldest -> newest)
+      "supertrend":   Supertrend line value per bar (None during warm-up)
+      "trend":        "Bullish" / "Bearish" per bar (None during warm-up)
+      "latest_trend": most recent "Bullish"/"Bearish", or None
+      "latest_value": most recent Supertrend line value, or None
+    """
+    if not candles or len(candles) < period + 2:
+        return None
+
+    ordered = list(reversed(candles))  # chronological, oldest first
+
+    timestamps = [c[0] for c in ordered]
+    highs = [c[2] for c in ordered]
+    lows = [c[3] for c in ordered]
+    closes = [c[4] for c in ordered]
+
+    n = len(closes)
+
+    # --- True Range series ---
+    trs = [highs[0] - lows[0]]  # first bar has no previous close to compare
+    for i in range(1, n):
+        tr = max(
+            highs[i] - lows[i],
+            abs(highs[i] - closes[i - 1]),
+            abs(lows[i] - closes[i - 1])
+        )
+        trs.append(tr)
+
+    # --- ATR via Wilder's smoothing, seeded with a simple average of the
+    # first `period` true ranges (standard Wilder seeding) ---
+    atr_vals = [None] * n
+    seed = sum(trs[:period]) / period
+    atr_vals[period - 1] = seed
+    for i in range(period, n):
+        atr_vals[i] = (atr_vals[i - 1] * (period - 1) + trs[i]) / period
+
+    # --- Bands + Supertrend line ---
+    final_upper = [None] * n
+    final_lower = [None] * n
+    st_line = [None] * n
+    st_is_bullish = [None] * n  # True = price riding the lower band (uptrend)
+
+    start = period - 1  # first index with a valid ATR
+
+    for i in range(start, n):
+        mid = (highs[i] + lows[i]) / 2
+        basic_upper = mid + multiplier * atr_vals[i]
+        basic_lower = mid - multiplier * atr_vals[i]
+
+        if i == start:
+            final_upper[i] = basic_upper
+            final_lower[i] = basic_lower
+            # Seed the trend off the first close vs the band midpoint
+            st_is_bullish[i] = closes[i] >= mid
+            st_line[i] = final_lower[i] if st_is_bullish[i] else final_upper[i]
+            continue
+
+        prev_close = closes[i - 1]
+
+        # Bands only "tighten" toward price — they never widen back out
+        # against the prevailing trend (the standard Supertrend rule).
+        final_upper[i] = (
+            basic_upper if (basic_upper < final_upper[i - 1] or prev_close > final_upper[i - 1])
+            else final_upper[i - 1]
+        )
+        final_lower[i] = (
+            basic_lower if (basic_lower > final_lower[i - 1] or prev_close < final_lower[i - 1])
+            else final_lower[i - 1]
+        )
+
+        prev_bullish = st_is_bullish[i - 1]
+
+        if prev_bullish:
+            # Stay bullish unless price closes back below the lower band
+            st_is_bullish[i] = closes[i] >= final_lower[i]
+        else:
+            # Stay bearish unless price closes back above the upper band
+            st_is_bullish[i] = closes[i] > final_upper[i]
+
+        st_line[i] = final_lower[i] if st_is_bullish[i] else final_upper[i]
+
+    trend_labels = [
+        (None if b is None else ("Bullish" if b else "Bearish"))
+        for b in st_is_bullish
+    ]
+
+    latest_trend, latest_value = None, None
+    for i in range(n - 1, -1, -1):
+        if trend_labels[i] is not None:
+            latest_trend = trend_labels[i]
+            latest_value = round(st_line[i], 2) if st_line[i] is not None else None
+            break
+
+    return {
+        "timestamps": timestamps,
+        "supertrend": st_line,
+        "trend": trend_labels,
+        "latest_trend": latest_trend,
+        "latest_value": latest_value,
+    }
+
 # ================= CHART =================
 
 def build_instrument_chart(instrument_name, candles):
@@ -824,7 +949,7 @@ def build_instrument_chart(instrument_name, candles):
         shared_xaxes=True,
         row_heights=[0.55, 0.2, 0.25],
         vertical_spacing=0.04,
-        subplot_titles=(f"{instrument_name} — Price & EMA", "RSI (14)", "Volume")
+        subplot_titles=(f"{instrument_name} — Price, EMA & Supertrend", "RSI (14)", "Volume")
     )
 
     # --- Panel 1: Candlestick + EMA overlay ---
@@ -842,6 +967,29 @@ def build_instrument_chart(instrument_name, candles):
         x=timestamps, y=ema50_series, mode="lines", name="EMA50",
         line=dict(color="#e67e22", width=1.5)
     ), row=1, col=1)
+
+    # --- Supertrend overlay (NEW) ---
+    # Split into two traces (Bullish/Bearish) so the line color flips at
+    # each trend flip instead of drawing one flat-colored line. There's a
+    # one-bar gap right at each flip (the point belongs to only one trace)
+    # — a standard, accepted tradeoff for this kind of split-trace coloring.
+    st_result = calculate_supertrend(candles)
+    if st_result:
+        st_line = st_result["supertrend"]
+        st_trend = st_result["trend"]
+
+        bullish_line = [v if t == "Bullish" else None for v, t in zip(st_line, st_trend)]
+        bearish_line = [v if t == "Bearish" else None for v, t in zip(st_line, st_trend)]
+
+        fig.add_trace(go.Scatter(
+            x=timestamps, y=bullish_line, mode="lines", name="Supertrend (Up)",
+            line=dict(color="#2ecc71", width=1.5), connectgaps=False
+        ), row=1, col=1)
+
+        fig.add_trace(go.Scatter(
+            x=timestamps, y=bearish_line, mode="lines", name="Supertrend (Down)",
+            line=dict(color="#e74c3c", width=1.5), connectgaps=False
+        ), row=1, col=1)
 
     # --- Panel 2: RSI ---
     fig.add_trace(go.Scatter(
@@ -925,13 +1073,18 @@ def detect_regime(ema20, ema50, price):
 
 # ================= SIGNAL ENGINE =================
 
-def signal_engine(price, ema20, ema50, atr_val, daily_trend=None):
+def signal_engine(price, ema20, ema50, atr_val, daily_trend=None, supertrend_trend=None):
     """
     daily_trend: "Bullish", "Bearish", or None (unavailable). When provided
     and it DISAGREES with the 30-min trend, the signal is downgraded —
     BUY/SELL becomes WATCH at most, since we're now fighting the bigger
     trend. This does not block WATCH/NO TRADE signals, only caps how
     confident an actionable (BUY/SELL) call can be.
+
+    supertrend_trend: "Bullish", "Bearish", or None (unavailable / not
+    enough history). Same gating mechanism as daily_trend, applied
+    independently — Supertrend disagreeing with the EMA trend downgrades
+    the signal the same way a daily-trend disagreement does.
     """
 
     score = 4
@@ -969,10 +1122,21 @@ def signal_engine(price, ema20, ema50, atr_val, daily_trend=None):
             score -= 2
             reasons.append(f"⚠ Daily trend disagrees ({daily_trend}) — downgraded")
 
+    # NEW: Supertrend agreement check (same gating mechanism as daily trend)
+    supertrend_agrees = (supertrend_trend is None) or (supertrend_trend == trend)
+
+    if supertrend_trend is not None:
+        if supertrend_agrees:
+            score += 1
+            reasons.append(f"Supertrend agrees ({supertrend_trend})")
+        else:
+            score -= 2
+            reasons.append(f"⚠ Supertrend disagrees ({supertrend_trend}) — downgraded")
+
     score = max(0, min(score, 10))
     probability = int((score / 10) * 100)
 
-    if score >= 8 and daily_agrees:
+    if score >= 8 and daily_agrees and supertrend_agrees:
         signal = "BUY" if trend == "Bullish" else "SELL"
     elif score >= 6:
         signal = "WATCH"
@@ -1087,6 +1251,12 @@ def run_scanner(commodity_contracts=None):
             rsi_val = rsi(closes, 14)
             vol_ratio, vol_tag = volume_signal(candles)
 
+            # NEW: Supertrend — computed off the same intraday `candles`
+            # already fetched above, no extra API call.
+            st_result = calculate_supertrend(candles)
+            supertrend_trend = st_result["latest_trend"] if st_result else None
+            supertrend_value = st_result["latest_value"] if st_result else None
+
             # NEW: higher-timeframe (daily) trend filter — cached, so this
             # doesn't multiply API calls on every scan within the same day.
             daily_trend = get_daily_trend(instrument_key)
@@ -1096,7 +1266,8 @@ def run_scanner(commodity_contracts=None):
                 ema20,
                 ema50,
                 atr_val,
-                daily_trend
+                daily_trend,
+                supertrend_trend
             )
 
             sl, t1, t2 = levels(price, atr_val, signal, trend, regime)
@@ -1123,6 +1294,8 @@ def run_scanner(commodity_contracts=None):
                 "Signal": signal,
                 "Confidence": confidence,
                 "Trend": trend,
+                "Supertrend": supertrend_trend if supertrend_trend else "N/A",
+                "SupertrendValue": supertrend_value if supertrend_value is not None else "N/A",
                 "Regime": regime,
                 "Score": score,
                 "Prob%": prob,
@@ -1309,7 +1482,7 @@ else:
     ].reset_index(drop=True)
 
     display_cols = [
-        "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Regime",
+        "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Supertrend", "Regime",
         "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
         "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
     ]
