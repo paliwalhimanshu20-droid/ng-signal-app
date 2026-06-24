@@ -1000,7 +1000,8 @@ def get_daily_trend(key):
 # too, or just check the very first live scan's market trend reading
 # against what Nifty actually did that day.
 NIFTY50_INSTRUMENT_KEY = "NSE_INDEX|Nifty 50"
-    @st.cache_data(ttl=3600)
+
+@st.cache_data(ttl=3600)
 def get_market_trend():
     """
     Broad-market regime filter (point #1 from the "near-perfect signals"
