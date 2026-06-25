@@ -1216,130 +1216,297 @@ def run_scanner(commodity_contracts=None):
 
     return top5_df, full_df
 
+# ================= UI COMPONENTS (NEW — redesign) =================
+# Design system: light minimalist base (calm, generous spacing, restrained
+# color) + bold accent color used SPARINGLY on signature elements only
+# (active tab, conviction bars, the Best Setup hero card's edge) — not
+# splashed everywhere. See the chat history / design rationale: the goal
+# was "modern and easy to explain", not maximalist.
+#
+# Matching .streamlit/config.toml (separate file, same repo root) should
+# set: base="light", primaryColor="#8B5CF6", backgroundColor="#FAFAF8",
+# secondaryBackgroundColor="#F3F1F7", textColor="#1C1B22".
+
+_DASHBOARD_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
+
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+/* App title */
+.dash-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 28px;
+  color: #1C1B22;
+  margin-bottom: 2px;
+}
+.dash-sub { color: #6B6877; font-size: 14px; margin-bottom: 18px; }
+
+/* Stat card grid */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.stat-card {
+  background: #FFFFFF;
+  border: 1px solid #ECE9F1;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.stat-card .label {
+  font-size: 11px; font-weight: 600; color: #A8A3B5;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+}
+.stat-card .value {
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; color: #1C1B22;
+}
+.stat-card .value.pos { color: #16A34A; }
+.stat-card .value.neg { color: #E11D48; }
+
+/* Signal badges */
+.sig-badge {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.sig-badge.buy   { background: #DCFCE7; color: #166534; }
+.sig-badge.sell  { background: #FFE4E8; color: #9F1239; }
+.sig-badge.watch { background: #FEF3C7; color: #92400E; }
+.sig-badge.none  { background: #F3F1F7; color: #6B6877; }
+
+/* Opportunity card (BUY/SELL list) */
+.opp-card {
+  background: #FFFFFF; border: 1px solid #ECE9F1; border-radius: 14px;
+  padding: 14px 16px; margin-bottom: 10px;
+}
+.opp-card .opp-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.opp-card .opp-name { font-weight: 700; font-size: 15px; color: #1C1B22; }
+.opp-card .opp-metrics { display:flex; gap:18px; font-size: 12.5px; color: #6B6877; flex-wrap: wrap; }
+.opp-card .opp-metrics b { color: #1C1B22; }
+
+/* Hero card (Best Trade Setup) — the one place the bold gradient lives */
+.hero-card {
+  background: #FFFFFF; border-radius: 18px; padding: 18px 20px; margin: 6px 0 18px 0;
+  border: 1px solid #ECE9F1;
+  box-shadow: 0 0 0 1.5px transparent;
+  position: relative;
+  border-left: 4px solid transparent;
+  border-image: linear-gradient(180deg, #8B5CF6, #EC4899) 1;
+}
+.hero-card .hero-eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  background: linear-gradient(90deg, #8B5CF6, #EC4899);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  margin-bottom: 6px;
+}
+.hero-card .hero-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 21px; color:#1C1B22; }
+.hero-card .hero-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 10px; margin: 14px 0;
+}
+.hero-card .hero-metrics .m-label { font-size: 10.5px; color:#A8A3B5; text-transform:uppercase; letter-spacing:0.03em; }
+.hero-card .hero-metrics .m-value { font-family: 'Space Grotesk', sans-serif; font-weight:600; font-size: 16px; color:#1C1B22; margin-top:2px; }
+.hero-card .conv-label { display:flex; justify-content:space-between; font-size:11.5px; color:#6B6877; margin-bottom:4px; }
+.hero-card .conv-track { height:6px; background:#F3F1F7; border-radius:999px; overflow:hidden; }
+.hero-card .conv-fill { height:100%; background: linear-gradient(90deg, #8B5CF6, #EC4899); border-radius:999px; }
+.hero-card .levels-row { display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:13px; color:#6B6877; }
+.hero-card .levels-row b { color:#1C1B22; }
+.hero-card .hero-reason { font-size: 12.5px; color:#6B6877; margin-top:12px; line-height:1.5; }
+
+.section-eyebrow {
+  font-size: 12px; font-weight: 700; color:#6B6877; text-transform:uppercase;
+  letter-spacing: 0.05em; margin: 4px 0 10px 0;
+}
+</style>
+"""
+
+
+def inject_dashboard_css():
+    st.markdown(_DASHBOARD_CSS, unsafe_allow_html=True)
+
+
+def render_stat_cards(items):
+    """items: list of (label, value_str, kind) where kind in 'default'/'pos'/'neg'."""
+    cards_html = "".join(
+        f'<div class="stat-card"><div class="label">{label}</div>'
+        f'<div class="value {kind if kind != "default" else ""}">{value}</div></div>'
+        for label, value, kind in items
+    )
+    st.markdown(f'<div class="stat-grid">{cards_html}</div>', unsafe_allow_html=True)
+
+
+def signal_badge_html(signal):
+    cls = {"BUY": "buy", "SELL": "sell", "WATCH": "watch"}.get(signal, "none")
+    label = signal if signal else "N/A"
+    return f'<span class="sig-badge {cls}">{label}</span>'
+
+
+def render_opportunity_card(row):
+    st.markdown(
+        f"""
+        <div class="opp-card">
+          <div class="opp-top">
+            <span class="opp-name">{row['Instrument']}</span>
+            {signal_badge_html(row['Signal'])}
+          </div>
+          <div class="opp-metrics">
+            <span>Price <b>{row['Price']}</b></span>
+            <span>Confidence <b>{row['Prob%']}%</b></span>
+            <span>RSI <b>{row['RSI']}</b></span>
+            <span>Volume <b>{row['Volume']}</b></span>
+            <span>RR <b>{row['RR']}</b></span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def render_hero_card(best):
+    """The single 'signature' element of this design — see module docstring
+    above the CSS block. Everything else stays deliberately calm."""
+    conviction = best.get("ConvictionPct", "N/A")
+    conviction_pct_num = conviction if isinstance(conviction, (int, float)) else 0
+
+    st.markdown(
+        f"""
+        <div class="hero-card">
+          <div class="hero-eyebrow">Best Trade Setup</div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="hero-name">{best['Instrument']}</span>
+            {signal_badge_html(best['Signal'])}
+          </div>
+          <div class="hero-metrics">
+            <div><div class="m-label">Score</div><div class="m-value">{best['Score']}/10</div></div>
+            <div><div class="m-label">Confidence</div><div class="m-value">{best['Prob%']}%</div></div>
+            <div><div class="m-label">RSI</div><div class="m-value">{best['RSI']}</div></div>
+            <div><div class="m-label">RR</div><div class="m-value">{best['RR']}</div></div>
+          </div>
+          <div class="conv-label"><span>Trend Conviction</span><span>{conviction}{'%' if conviction != 'N/A' else ''}</span></div>
+          <div class="conv-track"><div class="conv-fill" style="width:{conviction_pct_num}%"></div></div>
+          <div class="levels-row">
+            <span>Entry <b>{best['Price']}</b></span>
+            <span>SL <b>{best['SL']}</b></span>
+            <span>T1 <b>{best['T1']}</b></span>
+            <span>T2 <b>{best['T2']}</b></span>
+          </div>
+          <div class="hero-reason">{best['Reason']}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def style_signal_column(styler, signal_col="Signal"):
+    """
+    Applies a light background tint to the Signal column of a scanner
+    table so BUY/SELL/WATCH are scannable at a glance, without losing
+    st.dataframe's row-selection (on_select) behavior — only background-
+    color is touched, which Streamlit's dataframe renderer supports
+    alongside selection. (One thing I could not verify end-to-end without
+    a live Streamlit runtime — if row-click-to-chart ever stops working
+    after this change, removing this .style.map() call is the fix.)
+    """
+    def _color(val):
+        return {
+            "BUY": "background-color: #DCFCE7; color: #166534; font-weight: 600;",
+            "SELL": "background-color: #FFE4E8; color: #9F1239; font-weight: 600;",
+            "WATCH": "background-color: #FEF3C7; color: #92400E; font-weight: 600;",
+        }.get(val, "")
+
+    if signal_col in styler.data.columns:
+        return styler.map(_color, subset=[signal_col])
+    return styler
+
+
 # ================= UI =================
 
-st.title("📊 Production Trading System v1")
+inject_dashboard_css()
 
-# =========================
-# COMMODITY EXPIRY SELECTION (NEW)
-# =========================
-
-st.subheader("⚙️ Commodity Contract Selection")
-
-commodity_contracts = {}
-
-if not COMMODITY_DEFINITIONS:
-    st.caption("No commodities configured.")
-else:
-    cols = st.columns(len(COMMODITY_DEFINITIONS))
-
-    for idx, (display_name, symbol_filter) in enumerate(COMMODITY_DEFINITIONS):
-        with cols[idx]:
-            result = get_commodity_contracts(symbol_filter, max_contracts=4)
-            contracts = result["contracts"]
-
-            if result["error"]:
-                st.error(f"{display_name}: {result['error']}")
-                continue
-
-            if not contracts:
-                st.warning(f"No live {display_name} futures contracts found.")
-                continue
-
-            chosen_label = st.selectbox(
-                f"{display_name} expiry",
-                options=[c["label"] for c in contracts],
-                key=f"expiry_{symbol_filter}"
-            )
-
-            # Map the chosen label back to its instrument key
-            chosen = next(c for c in contracts if c["label"] == chosen_label)
-            commodity_contracts[display_name] = chosen["key"]
-
-st.markdown("---")
-
-_watchlist_size = len(get_watchlist(commodity_contracts))
-st.caption(
-    f"Scanning {_watchlist_size} instruments (NSE equities across 7 sectors"
-    f"{' + selected MCX commodity contract(s)' if commodity_contracts else ''})."
-)
-
-# =========================
-# WATCHLIST KEY VALIDATOR (NEW)
-# =========================
-# One-click check of every hardcoded NSE equity instrument_key against
-# Upstox's own instrument master — catches stale keys (e.g. after a stock
-# split changes the listing record) before they show up one at a time as
-# "Invalid Instrument key" 400 errors during a live scan.
-with st.expander("🔍 Validate Watchlist Instrument Keys"):
-    if st.button("Run validation check"):
-        with st.spinner("Checking watchlist against Upstox's NSE instrument master..."):
-            mismatches = validate_watchlist_keys(get_watchlist(commodity_contracts))
-
-        if mismatches is None:
-            st.error("Couldn't fetch Upstox's NSE instrument master file — try again in a moment.")
-        elif not mismatches:
-            st.success("✅ All hardcoded NSE equity instrument keys match Upstox's current master file.")
-        else:
-            st.warning(f"⚠️ {len(mismatches)} instrument key(s) don't match Upstox's current records:")
-            st.dataframe(
-                pd.DataFrame(mismatches, columns=["Instrument", "Your Hardcoded Key", "Upstox's Current Key / Issue"]),
-                use_container_width=True,
-                hide_index=True
-            )
-            st.caption(
-                "For each row above, replace 'Your Hardcoded Key' with the value shown in "
-                "'Upstox's Current Key' inside get_watchlist() in app.py."
-            )
+st.markdown('<div class="dash-title">📊 ng-signal-app</div>', unsafe_allow_html=True)
+st.markdown('<div class="dash-sub">NSE intraday scanner — live signal dashboard</div>', unsafe_allow_html=True)
 
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
-
 if "last_scan" not in st.session_state:
     st.session_state.last_scan = "Never"
 
-run = st.button("🚀 Run Live Scan")
+tab_scanner, tab_performance, tab_settings = st.tabs(["📡 Scanner", "📈 Performance", "⚙️ Settings"])
 
-# UPDATED: run_scanner() now ONLY executes when the button is actually
-# clicked. Previously it ran unconditionally on every script rerun —
-# meaning changing a filter, the commodity expiry dropdown, the score
-# slider, or clicking a row to view its chart would silently trigger a
-# brand-new full scan in the background, burning through Upstox's
-# 25 req/sec rate limit just from normal use of the dashboard.
-#
-# Results are now cached in st.session_state and reused across reruns
-# until the next deliberate "Run Live Scan" click.
-if run:
-    st.session_state.scan_count += 1
-    st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
-    with st.spinner("Scanning..."):
-        st.session_state.scan_df, st.session_state.scan_full_df = run_scanner(commodity_contracts)
+# =========================================================================
+# SETTINGS TAB — runs FIRST in code (so commodity_contracts exists before
+# the Scanner tab needs it) but still renders as the rightmost tab — tab
+# placement comes from the st.tabs() label order above, not code order.
+# =========================================================================
 
-if "scan_full_df" not in st.session_state:
-    st.session_state.scan_df = pd.DataFrame()
-    st.session_state.scan_full_df = pd.DataFrame()
+with tab_settings:
 
-df = st.session_state.scan_df
-full_df = st.session_state.scan_full_df
+    st.markdown('<div class="section-eyebrow">Commodity Contract Selection</div>', unsafe_allow_html=True)
 
-# Log any new actionable (BUY/SELL) signals from this scan to signal_log.csv.
-# save_signal_log() (called inside append_new_signals) now pushes the
-# updated CSV straight to GitHub via the Contents API — see
-# push_signal_log_to_github() above — so this persists across redeploys
-# and is visible to the check_signals.py GitHub Action.
-#
-# Only run this when a fresh scan was just completed (not on every rerun),
-# to match the throttling fix above and avoid redundant re-logging.
-if run and not full_df.empty:
-    append_new_signals(full_df)
+    commodity_contracts = {}
 
-# =========================
-# FULL SCANNED UNIVERSE — now grouped by sector (NEW)
-# =========================
+    if not COMMODITY_DEFINITIONS:
+        st.caption("No commodities configured.")
+    else:
+        cols = st.columns(len(COMMODITY_DEFINITIONS))
 
-st.subheader("🔎 Full Scanned Universe")
+        for idx, (display_name, symbol_filter) in enumerate(COMMODITY_DEFINITIONS):
+            with cols[idx]:
+                result = get_commodity_contracts(symbol_filter, max_contracts=4)
+                contracts = result["contracts"]
 
-with st.expander("ℹ️ How a signal becomes BUY/SELL now"):
+                if result["error"]:
+                    st.error(f"{display_name}: {result['error']}")
+                    continue
+
+                if not contracts:
+                    st.warning(f"No live {display_name} futures contracts found.")
+                    continue
+
+                chosen_label = st.selectbox(
+                    f"{display_name} expiry",
+                    options=[c["label"] for c in contracts],
+                    key=f"expiry_{symbol_filter}"
+                )
+
+                chosen = next(c for c in contracts if c["label"] == chosen_label)
+                commodity_contracts[display_name] = chosen["key"]
+
+    _watchlist_size = len(get_watchlist(commodity_contracts))
+    st.caption(
+        f"Scanning {_watchlist_size} instruments (NSE equities across 7 sectors"
+        f"{' + selected MCX commodity contract(s)' if commodity_contracts else ''})."
+    )
+
+    st.markdown("---")
+    st.markdown('<div class="section-eyebrow">Watchlist Diagnostics</div>', unsafe_allow_html=True)
+
+    with st.expander("🔍 Validate Watchlist Instrument Keys"):
+        if st.button("Run validation check"):
+            with st.spinner("Checking watchlist against Upstox's NSE instrument master..."):
+                mismatches = validate_watchlist_keys(get_watchlist(commodity_contracts))
+
+            if mismatches is None:
+                st.error("Couldn't fetch Upstox's NSE instrument master file — try again in a moment.")
+            elif not mismatches:
+                st.success("✅ All hardcoded NSE equity instrument keys match Upstox's current master file.")
+            else:
+                st.warning(f"⚠️ {len(mismatches)} instrument key(s) don't match Upstox's current records:")
+                st.dataframe(
+                    pd.DataFrame(mismatches, columns=["Instrument", "Your Hardcoded Key", "Upstox's Current Key / Issue"]),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                st.caption(
+                    "For each row above, replace 'Your Hardcoded Key' with the value shown in "
+                    "'Upstox's Current Key' inside get_watchlist() in app.py."
+                )
+
+    st.markdown("---")
+    st.markdown('<div class="section-eyebrow">How a Signal Becomes BUY/SELL</div>', unsafe_allow_html=True)
+
     st.markdown(
         f"""
 A score ≥ 8 only becomes an actionable **BUY/SELL** if ALL of these also hold
@@ -1358,307 +1525,237 @@ A score ≥ 8 only becomes an actionable **BUY/SELL** if ALL of these also hold
 
 All three checks are folded into the score and explained in each row's
 "Reason" text (full detail in the underlying scan data and the "Best Trade
-Setup" panel further down) — or check `signal_logic.py` directly. These
+Setup" card on the Scanner tab) — or check `signal_logic.py` directly. These
 thresholds are starting points, not fixed truths — tune them in
 `signal_logic.py` once you've checked the Factor Performance Analysis
-section (further down) against real outcomes.
+section (Performance tab) against real outcomes.
         """
     )
 
-if full_df.empty:
-    st.warning("No data returned from scanner. Click 'Run Live Scan' above, or check the API error banners if one was just attempted.")
-else:
-    fcol1, fcol2, fcol3 = st.columns(3)
+# =========================================================================
+# SCANNER TAB
+# =========================================================================
 
-    with fcol1:
-        signal_filter = st.multiselect(
-            "Signal",
-            options=sorted(full_df["Signal"].unique()),
-            default=list(sorted(full_df["Signal"].unique()))
-        )
+with tab_scanner:
 
-    with fcol2:
-        confidence_filter = st.multiselect(
-            "Confidence",
-            options=sorted(full_df["Confidence"].unique()),
-            default=list(sorted(full_df["Confidence"].unique()))
-        )
+    run = st.button("🚀 Run Live Scan")
 
-    with fcol3:
-        min_score = st.slider("Minimum Score", min_value=0, max_value=10, value=0)
+    # Results are cached in st.session_state and reused across reruns
+    # until the next deliberate "Run Live Scan" click — switching tabs,
+    # filters, or the commodity dropdown does NOT silently re-trigger a
+    # full scan (that would burn through Upstox's rate limit on normal use).
+    if run:
+        st.session_state.scan_count += 1
+        st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
+        with st.spinner("Scanning..."):
+            st.session_state.scan_df, st.session_state.scan_full_df = run_scanner(commodity_contracts)
 
-    filtered_df = full_df[
-        (full_df["Signal"].isin(signal_filter)) &
-        (full_df["Confidence"].isin(confidence_filter)) &
-        (full_df["Score"] >= min_score)
-    ].reset_index(drop=True)
+    if "scan_full_df" not in st.session_state:
+        st.session_state.scan_df = pd.DataFrame()
+        st.session_state.scan_full_df = pd.DataFrame()
 
-    display_cols = [
-        "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Supertrend",
-        "MarketTrend", "ConvictionPct", "ADX", "Regime",
-        "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
-        "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
-    ]
+    df = st.session_state.scan_df
+    full_df = st.session_state.scan_full_df
 
-    st.caption(f"Showing {len(filtered_df)} of {len(full_df)} scanned instruments. "
-               f"👇 Expand a sector and click a row to view its chart below.")
+    # Log any new actionable (BUY/SELL) signals from this scan to signal_log.csv.
+    if run and not full_df.empty:
+        append_new_signals(full_df)
 
-    # Tracks the most recently clicked row across all sector tables this run.
-    selected_name = None
-    selected_key = None
+    st.caption(f"Scans run: {st.session_state.scan_count} · Last scan: {st.session_state.last_scan}")
 
-    for sector in SECTOR_ORDER:
-        sector_df = filtered_df[filtered_df["Sector"] == sector].reset_index(drop=True)
+    if full_df.empty:
+        st.warning("No data returned from scanner. Click 'Run Live Scan' above, or check the API error banners if one was just attempted.")
+    else:
+        # ---- BUY / SELL opportunity cards (today's actionable picks) ----
+        buy_df = df[df["Signal"] == "BUY"]
+        sell_df = df[df["Signal"] == "SELL"]
 
-        if sector_df.empty:
-            continue
+        if not buy_df.empty:
+            st.markdown('<div class="section-eyebrow">🟢 Buy Opportunities</div>', unsafe_allow_html=True)
+            for _, row in buy_df.iterrows():
+                render_opportunity_card(row)
 
-        with st.expander(f"{sector}  ·  {len(sector_df)} instrument(s)", expanded=False):
-            sel_event = st.dataframe(
-                sector_df[display_cols],
-                use_container_width=True,
-                hide_index=True,
-                on_select="rerun",
-                selection_mode="single-row",
-                key=f"universe_table_{sector}"
-            )
+        if not sell_df.empty:
+            st.markdown('<div class="section-eyebrow">🔴 Sell Opportunities</div>', unsafe_allow_html=True)
+            for _, row in sell_df.iterrows():
+                render_opportunity_card(row)
 
-            rows = sel_event.selection.get("rows", []) if sel_event else []
-            if rows:
-                selected_row = sector_df.iloc[rows[0]]
-                selected_name = selected_row["Instrument"]
-                selected_key = selected_row.get("InstrumentKey", "")
-
-    # =========================
-    # INSTRUMENT CHART (NEW) — shown when a row is clicked in any sector above
-    # =========================
-
-    if selected_name:
-        selected_idx_lookup = filtered_df[filtered_df["Instrument"] == selected_name]
-        if not selected_idx_lookup.empty:
-            selected_row = selected_idx_lookup.iloc[0]
-            selected_key = selected_row.get("InstrumentKey", selected_key)
+        if not df.empty:
+            render_hero_card(df.iloc[0])
+        elif buy_df.empty and sell_df.empty:
+            st.info("No strong setups (score ≥ 7, actionable) found this scan.")
 
         st.markdown("---")
-        st.subheader(f"📊 {selected_name} — Chart & Indicators")
 
-        if not selected_key:
-            st.warning("No instrument key available for this row — can't fetch chart data.")
-        else:
-            with st.spinner(f"Loading {selected_name} chart..."):
-                chart_candles = get_candles_range(selected_key, days_back=7)
+        # ---- Full Scanned Universe ----
+        st.markdown('<div class="section-eyebrow">Full Scanned Universe</div>', unsafe_allow_html=True)
 
-            if not chart_candles:
-                st.warning(
-                    f"Could not load chart data for {selected_name}. "
-                    f"This can happen outside market hours, on holidays, or if the "
-                    f"range endpoint isn't available for this instrument type."
+        fcol1, fcol2, fcol3 = st.columns(3)
+
+        with fcol1:
+            signal_filter = st.multiselect(
+                "Signal",
+                options=sorted(full_df["Signal"].unique()),
+                default=list(sorted(full_df["Signal"].unique()))
+            )
+
+        with fcol2:
+            confidence_filter = st.multiselect(
+                "Confidence",
+                options=sorted(full_df["Confidence"].unique()),
+                default=list(sorted(full_df["Confidence"].unique()))
+            )
+
+        with fcol3:
+            min_score = st.slider("Minimum Score", min_value=0, max_value=10, value=0)
+
+        filtered_df = full_df[
+            (full_df["Signal"].isin(signal_filter)) &
+            (full_df["Confidence"].isin(confidence_filter)) &
+            (full_df["Score"] >= min_score)
+        ].reset_index(drop=True)
+
+        display_cols = [
+            "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Supertrend",
+            "MarketTrend", "ConvictionPct", "ADX", "Regime",
+            "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
+            "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
+        ]
+
+        st.caption(f"Showing {len(filtered_df)} of {len(full_df)} scanned instruments. "
+                   f"👇 Expand a sector and click a row to view its chart below.")
+
+        selected_name = None
+        selected_key = None
+
+        for sector in SECTOR_ORDER:
+            sector_df = filtered_df[filtered_df["Sector"] == sector].reset_index(drop=True)
+
+            if sector_df.empty:
+                continue
+
+            with st.expander(f"{sector}  ·  {len(sector_df)} instrument(s)", expanded=False):
+                styled = style_signal_column(sector_df[display_cols].style)
+                sel_event = st.dataframe(
+                    styled,
+                    use_container_width=True,
+                    hide_index=True,
+                    on_select="rerun",
+                    selection_mode="single-row",
+                    key=f"universe_table_{sector}"
                 )
+
+                rows = sel_event.selection.get("rows", []) if sel_event else []
+                if rows:
+                    selected_row = sector_df.iloc[rows[0]]
+                    selected_name = selected_row["Instrument"]
+                    selected_key = selected_row.get("InstrumentKey", "")
+
+        # ---- Instrument chart (shown when a row is clicked above) ----
+        if selected_name:
+            selected_idx_lookup = filtered_df[filtered_df["Instrument"] == selected_name]
+            if not selected_idx_lookup.empty:
+                selected_row = selected_idx_lookup.iloc[0]
+                selected_key = selected_row.get("InstrumentKey", selected_key)
+
+            st.markdown("---")
+            st.markdown(f'<div class="section-eyebrow">📊 {selected_name} — Chart & Indicators</div>', unsafe_allow_html=True)
+
+            if not selected_key:
+                st.warning("No instrument key available for this row — can't fetch chart data.")
             else:
-                fig = build_instrument_chart(selected_name, chart_candles)
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True)
+                with st.spinner(f"Loading {selected_name} chart..."):
+                    chart_candles = get_candles_range(selected_key, days_back=7)
+
+                if not chart_candles:
+                    st.warning(
+                        f"Could not load chart data for {selected_name}. "
+                        f"This can happen outside market hours, on holidays, or if the "
+                        f"range endpoint isn't available for this instrument type."
+                    )
                 else:
-                    st.info(f"Not enough candle history yet to chart {selected_name}.")
+                    fig = build_instrument_chart(selected_name, chart_candles)
+                    if fig:
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info(f"Not enough candle history yet to chart {selected_name}.")
 
+# =========================================================================
+# PERFORMANCE TAB
+# =========================================================================
 
-st.markdown("---")
+with tab_performance:
 
-# =========================
-# SIGNAL PERFORMANCE TRACKING (NEW)
-# =========================
+    st.markdown('<div class="section-eyebrow">📈 Signal Performance (Historical)</div>', unsafe_allow_html=True)
 
-st.subheader("📈 Signal Performance (Historical)")
+    signal_log_df = load_signal_log()
 
-signal_log_df = load_signal_log()
-
-if signal_log_df.empty:
-    st.info(
-        "No signal history yet. As BUY/SELL signals are generated, they're logged "
-        "automatically. Win rate and P&L% will appear here once signals have been "
-        "checked against price (handled by the scheduled outcome-checker — see setup notes)."
-    )
-else:
-    open_count = (signal_log_df["status"] == "OPEN").sum()
-    per_instrument, overall = compute_performance_summary(signal_log_df)
-
-    if overall is None:
+    if signal_log_df.empty:
         st.info(
-            f"{open_count} signal(s) currently OPEN, none closed yet. "
-            f"Performance stats appear once signals hit their target or stop loss."
+            "No signal history yet. As BUY/SELL signals are generated, they're logged "
+            "automatically. Win rate and P&L% will appear here once signals have been "
+            "checked against price (handled by the scheduled outcome-checker — see setup notes)."
         )
     else:
-        pc1, pc2, pc3, pc4 = st.columns(4)
-        with pc1:
-            st.metric("Closed Trades", overall["total_trades"])
-        with pc2:
-            st.metric("Win Rate", f"{overall['win_rate_pct']}%")
-        with pc3:
-            st.metric("Avg P&L per Trade", f"{overall['avg_pnl_pct']}%")
-        with pc4:
-            st.metric("Currently Open", int(open_count))
+        open_count = (signal_log_df["status"] == "OPEN").sum()
+        per_instrument, overall = compute_performance_summary(signal_log_df)
 
-        st.markdown("**Per-Instrument Breakdown**")
-        st.dataframe(
-            per_instrument.rename(columns={
-                "instrument": "Instrument",
-                "Trades": "Trades",
-                "Wins": "Wins",
-                "WinRate_Pct": "Win Rate %",
-                "AvgPnL_Pct": "Avg P&L %"
-            }),
-            use_container_width=True,
-            hide_index=True
-        )
+        if overall is None:
+            st.info(
+                f"{open_count} signal(s) currently OPEN, none closed yet. "
+                f"Performance stats appear once signals hit their target or stop loss."
+            )
+        else:
+            render_stat_cards([
+                ("Closed Trades", overall["total_trades"], "default"),
+                ("Win Rate", f"{overall['win_rate_pct']}%", "default"),
+                ("Avg P&L / Trade", f"{overall['avg_pnl_pct']}%", "pos" if overall['avg_pnl_pct'] >= 0 else "neg"),
+                ("Currently Open", int(open_count), "default"),
+            ])
 
-    with st.expander("View raw signal log"):
-        st.dataframe(signal_log_df, use_container_width=True, hide_index=True)
+            st.markdown("**Per-Instrument Breakdown**")
+            st.dataframe(
+                per_instrument.rename(columns={
+                    "instrument": "Instrument",
+                    "Trades": "Trades",
+                    "Wins": "Wins",
+                    "WinRate_Pct": "Win Rate %",
+                    "AvgPnL_Pct": "Avg P&L %"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
 
-st.markdown("---")
-
-# =========================
-# FACTOR PERFORMANCE ANALYSIS (NEW — point #4, "close the loop")
-# =========================
-
-st.subheader("🔬 Factor Performance Analysis")
-st.caption(
-    "Does each scoring factor actually correlate with wins, using YOUR real "
-    "outcomes — not assumed from the hand-tuned scoring weights. Needs closed "
-    "trades to populate; treat any breakdown under ~20 closed trades as too "
-    "small a sample to act on yet."
-)
-
-factor_perf = compute_factor_performance(signal_log_df)
-
-if not factor_perf:
-    st.info(
-        "No closed trades with factor data yet. This fills in automatically as "
-        "BUY/SELL signals logged from now on get checked against target/stop "
-        "by the outcome-checker. Signals logged before this update won't have "
-        "factor data — only new ones do."
-    )
-else:
-    for label, factor_df in factor_perf.items():
-        st.markdown(f"**{label}**")
-        st.dataframe(
-            factor_df.rename(columns={
-                "Trades": "Trades", "Wins": "Wins",
-                "WinRate_Pct": "Win Rate %", "AvgPnL_Pct": "Avg P&L %"
-            }),
-            use_container_width=True,
-            hide_index=True
-        )
-
-st.markdown("---")
-
-# =========================
-# EXISTING TOP-5 SECTIONS (unchanged logic)
-# =========================
-
-if df.empty:
-
-    st.warning("No strong setups found")
-
-else:
-
-    # =========================
-    # BUY SETUPS
-    # =========================
-
-    buy_df = df[df["Signal"] == "BUY"]
-
-    if not buy_df.empty:
-
-        st.subheader("🟢 BUY Opportunities")
-
-        for _, row in buy_df.iterrows():
-
-          st.markdown(
-            f"""
-            <div style="
-            padding:15px;
-            border-radius:10px;
-            border:1px solid #2ecc71;
-            margin-bottom:10px;
-            ">
-            <h4>🟢 {row['Instrument']}</h4>
-            <b>BUY</b><br>
-            Price: {row['Price']}<br>
-            Confidence: {row['Prob%']}%<br>
-            RSI: {row['RSI']}<br>
-            Volume: {row['Volume']}<br>
-            RR: {row['RR']}
-            </div>
-            """,
-            unsafe_allow_html=True
-          )
-
-    # =========================
-    # SELL SETUPS
-    # =========================
-
-    sell_df = df[df["Signal"] == "SELL"]
-
-    if not sell_df.empty:
-
-        st.subheader("🔴 SELL Opportunities")
-
-        for _, row in sell_df.iterrows():
-
-          st.markdown(
-            f"""
-            <div style="
-            padding:15px;
-            border-radius:10px;
-            border:1px solid #e74c3c;
-            margin-bottom:10px;
-            ">
-            <h4>🔴 {row['Instrument']}</h4>
-            <b>SELL</b><br>
-            Price: {row['Price']}<br>
-            Confidence: {row['Prob%']}%<br>
-            RSI: {row['RSI']}<br>
-            Volume: {row['Volume']}<br>
-            RR: {row['RR']}
-            </div>
-            """,
-            unsafe_allow_html=True
-          )
-
-    # =========================
-    # BEST SETUP
-    # =========================
-
-    best = df.iloc[0]
-
-    st.markdown("---")
-    st.subheader("🥇 Best Trade Setup")
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.metric("Instrument", best["Instrument"])
-        st.metric("Signal", best["Signal"])
-
-    with c2:
-        st.metric("Entry", best["Price"])
-        st.metric("SL", best["SL"])
-
-    with c3:
-        st.metric("T1", best["T1"])
-        st.metric("T2", best["T2"])
-
-    st.info(
-        f"Trend: {best['Trend']}\n\n"
-        f"Confidence: {best['Prob%']}%\n\n"
-        f"RSI: {best['RSI']} | Volume: {best['Volume']}\n\n"
-        f"RR: {best['RR']}\n\n"
-        f"Reason: {best['Reason']}"
-    )
+        with st.expander("View raw signal log"):
+            st.dataframe(signal_log_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
+    st.markdown('<div class="section-eyebrow">🔬 Factor Performance Analysis</div>', unsafe_allow_html=True)
     st.caption(
-        f"Scans Run: {st.session_state.scan_count} | "
-        f"Last Scan: {st.session_state.last_scan}"
+        "Does each scoring factor actually correlate with wins, using YOUR real "
+        "outcomes — not assumed from the hand-tuned scoring weights. Needs closed "
+        "trades to populate; treat any breakdown under ~20 closed trades as too "
+        "small a sample to act on yet."
     )
+
+    factor_perf = compute_factor_performance(signal_log_df) if not signal_log_df.empty else {}
+
+    if not factor_perf:
+        st.info(
+            "No closed trades with factor data yet. This fills in automatically as "
+            "BUY/SELL signals logged from now on get checked against target/stop "
+            "by the outcome-checker. Signals logged before this update won't have "
+            "factor data — only new ones do."
+        )
+    else:
+        for label, factor_df in factor_perf.items():
+            st.markdown(f"**{label}**")
+            st.dataframe(
+                factor_df.rename(columns={
+                    "Trades": "Trades", "Wins": "Wins",
+                    "WinRate_Pct": "Win Rate %", "AvgPnL_Pct": "Avg P&L %"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
