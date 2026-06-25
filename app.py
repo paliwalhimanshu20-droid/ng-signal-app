@@ -1233,6 +1233,23 @@ _DASHBOARD_CSS = """
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
+/* Force the dark background directly, independent of .streamlit/config.toml.
+   Reason: config.toml theme changes are a well-known Streamlit Community
+   Cloud pain point — they frequently don't apply on a normal git-push
+   redeploy and need a manual "Reboot app" (sometimes twice) to take
+   effect. Rather than depend on that, these rules target Streamlit's
+   actual DOM containers directly with !important, so the background goes
+   dark every time this script runs, regardless of config.toml's state.
+   Keep config.toml too — it still helps native widget colors (buttons,
+   toggles) that this CSS doesn't reach — but don't rely on it alone. */
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="stHeader"] {
+  background-color: #15121F !important;
+}
+.block-container { background-color: transparent !important; }
+
 /* App title */
 .dash-title {
   font-family: 'Space Grotesk', sans-serif;
