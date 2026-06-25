@@ -138,3 +138,32 @@ small, .stCaption { color: #B3A8D6 !important; }
   letter-spacing: 0.06em; margin: 4px 0 10px 0;
 }
 
+/* Sector expanders (Banking, IT, Auto...) — same root cause as tabs/
+   captions: native widget text defaults to a light-theme color that's
+   nearly invisible on this dark page until config.toml's dark theme
+   actually takes effect (see "Reboot app" note in chat). */
+[data-testid="stExpander"] {
+  background-color: #1D1830 !important;
+  border: 1px solid #352C54 !important;
+  border-radius: 12px !important;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary p {
+  color: #F5F3FF !important;
+  font-weight: 600 !important;
+}
+[data-testid="stExpanderDetails"] {
+  background-color: #15121F !important;
+}
+
+/* Dataframe OUTER wrapper only — the grid's actual cells and header row
+   are canvas-rendered by Streamlit (not plain HTML/CSS), so this reaches
+   the box around the table but likely NOT the white cells inside it.
+   If the table itself still looks like a white box after this, that's
+   controlled by config.toml's theme at a level CSS can't reach — the
+   real fix there is the "Reboot app" step, not more CSS. */
+[data-testid="stDataFrame"] {
+  background-color: #1D1830 !important;
+  border-radius: 10px !important;
+}
