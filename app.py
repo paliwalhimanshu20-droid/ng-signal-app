@@ -503,7 +503,13 @@ def get_commodity_contracts(name_filter, max_contracts=4):
             else:
                 expiry_dt = datetime.fromisoformat(str(expiry_raw)).replace(tzinfo=IST)
 
-            if expiry_dt.date() < datetime.now(IST).date():
+            # BUGFIX: this was `< datetime.now(IST).date()`, which only
+            # excludes contracts that have ALREADY expired — a contract
+            # expiring TODAY still passed through and showed up as a
+            # selectable option. Using <= rolls it off the list on its
+            # expiry day itself, so the dropdown always shows the next
+            # *tradeable-beyond-today* contract.
+            if expiry_dt.date() <= datetime.now(IST).date():
                 continue
 
             key = row.get("instrument_key")
@@ -754,6 +760,8 @@ def get_candles(key):
         return None
 
     return data.get("data", {}).get("candles", None)
+
+
 def get_candles_range(key, days_back=5):
     """
     Fetches multiple days of 30-minute candles for the chart view, using
@@ -1000,6 +1008,7 @@ def get_daily_trend(key):
 # too, or just check the very first live scan's market trend reading
 # against what Nifty actually did that day.
 NIFTY50_INSTRUMENT_KEY = "NSE_INDEX|Nifty 50"
+
 
 @st.cache_data(ttl=3600)
 def get_market_trend():
