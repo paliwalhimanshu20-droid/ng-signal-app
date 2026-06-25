@@ -167,3 +167,19 @@ small, .stCaption { color: #B3A8D6 !important; }
   background-color: #1D1830 !important;
   border-radius: 10px !important;
 }
+
+/* THE ACTUAL FIX for "Scanner looks fine, Performance/Settings don't":
+   each st.tabs() panel has its OWN background layer that does NOT
+   inherit from .stApp — this is a confirmed long-standing Streamlit bug
+   (github.com/streamlit/streamlit/issues/5707), not something specific
+   to certain tabs. Scanner only looked fine because its custom cards
+   (hero-card, opp-card — both have their own explicit dark background)
+   happened to cover most of that panel; Performance/Settings have far
+   more bare native content sitting directly on the mismatched panel
+   background, so it shows through there instead. Forcing it here fixes
+   all three tabs the same way, including Scanner's edges. */
+[data-baseweb="tab-panel"],
+[data-testid="stTabsContent"],
+[data-testid="stTabContent"] {
+  background-color: #15121F !important;
+}
