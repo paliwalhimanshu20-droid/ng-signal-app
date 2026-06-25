@@ -1229,7 +1229,7 @@ def run_scanner(commodity_contracts=None):
 
 _DASHBOARD_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap');
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
@@ -1237,11 +1237,11 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .dash-title {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
-  font-size: 28px;
-  color: #1C1B22;
+  font-size: 32px;
+  color: #F5F3FF;
   margin-bottom: 2px;
 }
-.dash-sub { color: #6B6877; font-size: 14px; margin-bottom: 18px; }
+.dash-sub { color: #B3A8D6; font-size: 14px; font-weight: 500; margin-bottom: 18px; }
 
 /* Stat card grid */
 .stat-grid {
@@ -1251,73 +1251,76 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
   margin-bottom: 18px;
 }
 .stat-card {
-  background: #FFFFFF;
-  border: 1px solid #ECE9F1;
+  background: #1D1830;
+  border: 1px solid #352C54;
   border-radius: 14px;
   padding: 14px 16px;
 }
 .stat-card .label {
-  font-size: 11px; font-weight: 600; color: #A8A3B5;
-  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;
+  font-size: 11px; font-weight: 700; color: #786E9E;
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
 }
 .stat-card .value {
-  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; color: #1C1B22;
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 24px; color: #F5F3FF;
 }
-.stat-card .value.pos { color: #16A34A; }
-.stat-card .value.neg { color: #E11D48; }
+.stat-card .value.pos { color: #4ADE80; }
+.stat-card .value.neg { color: #FB7185; }
 
-/* Signal badges */
+/* Signal badges — saturated bg + bright text reads better on a dark canvas
+   than the pastel-chip approach (which needs a light page to land). */
 .sig-badge {
-  display: inline-block; font-size: 11px; font-weight: 700;
-  padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em;
+  display: inline-block; font-size: 11px; font-weight: 800;
+  padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em;
 }
-.sig-badge.buy   { background: #DCFCE7; color: #166534; }
-.sig-badge.sell  { background: #FFE4E8; color: #9F1239; }
-.sig-badge.watch { background: #FEF3C7; color: #92400E; }
-.sig-badge.none  { background: #F3F1F7; color: #6B6877; }
+.sig-badge.buy   { background: rgba(34,197,94,0.18);  color: #4ADE80; }
+.sig-badge.sell  { background: rgba(244,63,94,0.18);  color: #FB7185; }
+.sig-badge.watch { background: rgba(245,158,11,0.18); color: #FBBF24; }
+.sig-badge.none  { background: rgba(120,110,158,0.18); color: #B3A8D6; }
 
 /* Opportunity card (BUY/SELL list) */
 .opp-card {
-  background: #FFFFFF; border: 1px solid #ECE9F1; border-radius: 14px;
+  background: #1D1830; border: 1px solid #352C54; border-radius: 14px;
   padding: 14px 16px; margin-bottom: 10px;
 }
 .opp-card .opp-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-.opp-card .opp-name { font-weight: 700; font-size: 15px; color: #1C1B22; }
-.opp-card .opp-metrics { display:flex; gap:18px; font-size: 12.5px; color: #6B6877; flex-wrap: wrap; }
-.opp-card .opp-metrics b { color: #1C1B22; }
+.opp-card .opp-name { font-weight: 800; font-size: 16px; color: #F5F3FF; }
+.opp-card .opp-metrics { display:flex; gap:18px; font-size: 12.5px; color: #B3A8D6; flex-wrap: wrap; }
+.opp-card .opp-metrics b { color: #F5F3FF; font-weight: 700; }
 
-/* Hero card (Best Trade Setup) — the one place the bold gradient lives */
+/* Hero card (Best Trade Setup) — the gradient pops harder on dark, so this
+   stays the one signature element while everything else stays disciplined. */
 .hero-card {
-  background: #FFFFFF; border-radius: 18px; padding: 18px 20px; margin: 6px 0 18px 0;
-  border: 1px solid #ECE9F1;
-  box-shadow: 0 0 0 1.5px transparent;
+  background: linear-gradient(150deg, #1D1830, #241D3D);
+  border-radius: 18px; padding: 18px 20px; margin: 6px 0 18px 0;
+  border: 1px solid #352C54;
+  box-shadow: 0 8px 28px -10px rgba(184,107,255,0.35);
   position: relative;
   border-left: 4px solid transparent;
-  border-image: linear-gradient(180deg, #8B5CF6, #EC4899) 1;
+  border-image: linear-gradient(180deg, #B86BFF, #FF5FA2) 1;
 }
 .hero-card .hero-eyebrow {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  background: linear-gradient(90deg, #8B5CF6, #EC4899);
+  font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+  background: linear-gradient(90deg, #B86BFF, #FF5FA2);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   margin-bottom: 6px;
 }
-.hero-card .hero-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 21px; color:#1C1B22; }
+.hero-card .hero-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; color:#F5F3FF; }
 .hero-card .hero-metrics {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 10px; margin: 14px 0;
 }
-.hero-card .hero-metrics .m-label { font-size: 10.5px; color:#A8A3B5; text-transform:uppercase; letter-spacing:0.03em; }
-.hero-card .hero-metrics .m-value { font-family: 'Space Grotesk', sans-serif; font-weight:600; font-size: 16px; color:#1C1B22; margin-top:2px; }
-.hero-card .conv-label { display:flex; justify-content:space-between; font-size:11.5px; color:#6B6877; margin-bottom:4px; }
-.hero-card .conv-track { height:6px; background:#F3F1F7; border-radius:999px; overflow:hidden; }
-.hero-card .conv-fill { height:100%; background: linear-gradient(90deg, #8B5CF6, #EC4899); border-radius:999px; }
-.hero-card .levels-row { display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:13px; color:#6B6877; }
-.hero-card .levels-row b { color:#1C1B22; }
-.hero-card .hero-reason { font-size: 12.5px; color:#6B6877; margin-top:12px; line-height:1.5; }
+.hero-card .hero-metrics .m-label { font-size: 10.5px; color:#786E9E; text-transform:uppercase; letter-spacing:0.04em; font-weight:700; }
+.hero-card .hero-metrics .m-value { font-family: 'Space Grotesk', sans-serif; font-weight:700; font-size: 17px; color:#F5F3FF; margin-top:2px; }
+.hero-card .conv-label { display:flex; justify-content:space-between; font-size:11.5px; color:#B3A8D6; margin-bottom:4px; font-weight:600; }
+.hero-card .conv-track { height:6px; background:#352C54; border-radius:999px; overflow:hidden; }
+.hero-card .conv-fill { height:100%; background: linear-gradient(90deg, #B86BFF, #FF5FA2); border-radius:999px; }
+.hero-card .levels-row { display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:13px; color:#B3A8D6; }
+.hero-card .levels-row b { color:#F5F3FF; font-weight:700; }
+.hero-card .hero-reason { font-size: 12.5px; color:#B3A8D6; margin-top:12px; line-height:1.5; }
 
 .section-eyebrow {
-  font-size: 12px; font-weight: 700; color:#6B6877; text-transform:uppercase;
-  letter-spacing: 0.05em; margin: 4px 0 10px 0;
+  font-size: 13px; font-weight: 800; color:#F5F3FF; text-transform:uppercase;
+  letter-spacing: 0.06em; margin: 4px 0 10px 0;
 }
 </style>
 """
@@ -1411,9 +1414,9 @@ def style_signal_column(styler, signal_col="Signal"):
     """
     def _color(val):
         return {
-            "BUY": "background-color: #DCFCE7; color: #166534; font-weight: 600;",
-            "SELL": "background-color: #FFE4E8; color: #9F1239; font-weight: 600;",
-            "WATCH": "background-color: #FEF3C7; color: #92400E; font-weight: 600;",
+            "BUY": "background-color: rgba(34,197,94,0.22); color: #4ADE80; font-weight: 700;",
+            "SELL": "background-color: rgba(244,63,94,0.22); color: #FB7185; font-weight: 700;",
+            "WATCH": "background-color: rgba(245,158,11,0.22); color: #FBBF24; font-weight: 700;",
         }.get(val, "")
 
     if signal_col in styler.data.columns:
