@@ -1227,124 +1227,32 @@ def run_scanner(commodity_contracts=None):
 # set: base="light", primaryColor="#8B5CF6", backgroundColor="#FAFAF8",
 # secondaryBackgroundColor="#F3F1F7", textColor="#1C1B22".
 
-_DASHBOARD_CSS = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap');
-
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-
-/* Force the dark background directly, independent of .streamlit/config.toml.
-   Reason: config.toml theme changes are a well-known Streamlit Community
-   Cloud pain point — they frequently don't apply on a normal git-push
-   redeploy and need a manual "Reboot app" (sometimes twice) to take
-   effect. Rather than depend on that, these rules target Streamlit's
-   actual DOM containers directly with !important, so the background goes
-   dark every time this script runs, regardless of config.toml's state.
-   Keep config.toml too — it still helps native widget colors (buttons,
-   toggles) that this CSS doesn't reach — but don't rely on it alone. */
-.stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stMain"],
-[data-testid="stHeader"] {
-  background-color: #15121F !important;
-}
-.block-container { background-color: transparent !important; }
-
-/* App title */
-.dash-title {
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 32px;
-  color: #F5F3FF;
-  margin-bottom: 2px;
-}
-.dash-sub { color: #B3A8D6; font-size: 14px; font-weight: 500; margin-bottom: 18px; }
-
-/* Stat card grid */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
-  gap: 10px;
-  margin-bottom: 18px;
-}
-.stat-card {
-  background: #1D1830;
-  border: 1px solid #352C54;
-  border-radius: 14px;
-  padding: 14px 16px;
-}
-.stat-card .label {
-  font-size: 11px; font-weight: 700; color: #786E9E;
-  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
-}
-.stat-card .value {
-  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 24px; color: #F5F3FF;
-}
-.stat-card .value.pos { color: #4ADE80; }
-.stat-card .value.neg { color: #FB7185; }
-
-/* Signal badges — saturated bg + bright text reads better on a dark canvas
-   than the pastel-chip approach (which needs a light page to land). */
-.sig-badge {
-  display: inline-block; font-size: 11px; font-weight: 800;
-  padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em;
-}
-.sig-badge.buy   { background: rgba(34,197,94,0.18);  color: #4ADE80; }
-.sig-badge.sell  { background: rgba(244,63,94,0.18);  color: #FB7185; }
-.sig-badge.watch { background: rgba(245,158,11,0.18); color: #FBBF24; }
-.sig-badge.none  { background: rgba(120,110,158,0.18); color: #B3A8D6; }
-
-/* Opportunity card (BUY/SELL list) */
-.opp-card {
-  background: #1D1830; border: 1px solid #352C54; border-radius: 14px;
-  padding: 14px 16px; margin-bottom: 10px;
-}
-.opp-card .opp-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-.opp-card .opp-name { font-weight: 800; font-size: 16px; color: #F5F3FF; }
-.opp-card .opp-metrics { display:flex; gap:18px; font-size: 12.5px; color: #B3A8D6; flex-wrap: wrap; }
-.opp-card .opp-metrics b { color: #F5F3FF; font-weight: 700; }
-
-/* Hero card (Best Trade Setup) — the gradient pops harder on dark, so this
-   stays the one signature element while everything else stays disciplined. */
-.hero-card {
-  background: linear-gradient(150deg, #1D1830, #241D3D);
-  border-radius: 18px; padding: 18px 20px; margin: 6px 0 18px 0;
-  border: 1px solid #352C54;
-  box-shadow: 0 8px 28px -10px rgba(184,107,255,0.35);
-  position: relative;
-  border-left: 4px solid transparent;
-  border-image: linear-gradient(180deg, #B86BFF, #FF5FA2) 1;
-}
-.hero-card .hero-eyebrow {
-  font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
-  background: linear-gradient(90deg, #B86BFF, #FF5FA2);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  margin-bottom: 6px;
-}
-.hero-card .hero-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; color:#F5F3FF; }
-.hero-card .hero-metrics {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-  gap: 10px; margin: 14px 0;
-}
-.hero-card .hero-metrics .m-label { font-size: 10.5px; color:#786E9E; text-transform:uppercase; letter-spacing:0.04em; font-weight:700; }
-.hero-card .hero-metrics .m-value { font-family: 'Space Grotesk', sans-serif; font-weight:700; font-size: 17px; color:#F5F3FF; margin-top:2px; }
-.hero-card .conv-label { display:flex; justify-content:space-between; font-size:11.5px; color:#B3A8D6; margin-bottom:4px; font-weight:600; }
-.hero-card .conv-track { height:6px; background:#352C54; border-radius:999px; overflow:hidden; }
-.hero-card .conv-fill { height:100%; background: linear-gradient(90deg, #B86BFF, #FF5FA2); border-radius:999px; }
-.hero-card .levels-row { display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:13px; color:#B3A8D6; }
-.hero-card .levels-row b { color:#F5F3FF; font-weight:700; }
-.hero-card .hero-reason { font-size: 12.5px; color:#B3A8D6; margin-top:12px; line-height:1.5; }
-
-.section-eyebrow {
-  font-size: 13px; font-weight: 800; color:#F5F3FF; text-transform:uppercase;
-  letter-spacing: 0.06em; margin: 4px 0 10px 0;
-}
-</style>
-"""
-
-
 def inject_dashboard_css():
-    st.markdown(_DASHBOARD_CSS, unsafe_allow_html=True)
+    """
+    Loads styling from dashboard.css (same repo folder as this file) and
+    injects it into the page.
+
+    DELIBERATELY kept in a separate file: this is the ONLY thing you
+    should need to touch for a colors/fonts/spacing tweak going forward —
+    not this 1700+ line app.py. Replace dashboard.css alone in GitHub's
+    web editor and redeploy; no need to paste the whole app file again.
+    """
+    try:
+        with open("dashboard.css", "r") as f:
+            css = f.read()
+        st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        # Minimal fallback so the app isn't unstyled-white if dashboard.css
+        # hasn't been added to the repo yet — the real styling lives in
+        # dashboard.css now, this is just a safety net.
+        st.markdown(
+            "<style>.stApp, [data-testid='stAppViewContainer']{background-color:#15121F !important;}</style>",
+            unsafe_allow_html=True
+        )
+        st.warning(
+            "dashboard.css not found in the repo root — using minimal fallback "
+            "styling. Add dashboard.css alongside app.py to restore the full look."
+        )
 
 
 def render_stat_cards(items):
@@ -1637,7 +1545,7 @@ with tab_scanner:
 
         display_cols = [
             "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Supertrend",
-            "MarketTrend", "ConvictionPct", "ADX", "Regime",
+            rketTrend", "ConvictionPct", "ADX", "Regime",
             "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
             "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
         ]
