@@ -1339,9 +1339,9 @@ def style_signal_column(styler, signal_col="Signal"):
     """
     def _color(val):
         return {
-            "BUY": "background-color: rgba(34,197,94,0.22); color: #4ADE80; font-weight: 700;",
-            "SELL": "background-color: rgba(244,63,94,0.22); color: #FB7185; font-weight: 700;",
-            "WATCH": "background-color: rgba(245,158,11,0.22); color: #FBBF24; font-weight: 700;",
+            "BUY": "background-color: #DCFCE7; color: #166534; font-weight: 700;",
+            "SELL": "background-color: #FFE1E6; color: #9F1239; font-weight: 700;",
+            "WATCH": "background-color: #FEF3C7; color: #92400E; font-weight: 700;",
         }.get(val, "")
 
     if signal_col in styler.data.columns:
