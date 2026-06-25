@@ -2,63 +2,91 @@
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-/* Force the dark background directly, independent of .streamlit/config.toml.
-   Reason: config.toml theme changes are a well-known Streamlit Community
-   Cloud pain point — they frequently don't apply on a normal git-push
-   redeploy and need a manual "Reboot app" (sometimes twice) to take
-   effect. Rather than depend on that, these rules target Streamlit's
-   actual DOM containers directly with !important, so the background goes
-   dark every time this script runs, regardless of config.toml's state.
-   Keep config.toml too — it still helps native widget colors (buttons,
-   toggles) that this CSS doesn't reach — but don't rely on it alone. */
+/* ============================================================
+   PAGE BACKGROUND — soft lavender-tinted off-white, NOT pure white.
+   Forced directly (not relying on config.toml alone) for the same
+   reason as before: config.toml theme changes are unreliable on
+   Streamlit Community Cloud without a manual reboot. Going LIGHT here
+   instead of dark sidesteps most of the native-widget fight, since
+   Streamlit's own components already assume a light theme by default.
+   ============================================================ */
 .stApp,
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"],
 [data-testid="stHeader"] {
-  background-color: #15121F !important;
+  background-color: #F5F2FA !important;
 }
 .block-container { background-color: transparent !important; }
 
-/* Force tab text colors — same root cause as the page background: this
-   native widget's colors come from Streamlit's theme engine, and if
-   config.toml's dark theme hasn't actually taken effect yet (the same
-   Streamlit Cloud reboot issue as the background), inactive tab text
-   renders in a light-theme gray that's nearly invisible on this dark
-   page. Targets both the tab buttons and any nested text element, since
-   Streamlit sometimes wraps the label in an inner <p>/<div> with its own
-   color rule that would otherwise win over a less-specific selector. */
-.stTabs [data-baseweb="tab-list"] { gap: 4px; }
-.stTabs [data-baseweb="tab"],
-.stTabs [data-baseweb="tab"] p,
-.stTabs [data-baseweb="tab"] div {
-  color: #B3A8D6 !important;
-  font-weight: 600 !important;
+/* Tab panel content — same Streamlit bug as before (each tab panel has
+   its own background layer, see github.com/streamlit/streamlit/issues/5707)
+   but now forced to match the SAME light color as the page, so even if
+   this selector misses, nothing goes invisible — light-on-light always
+   reads better than light-on-dark or dark-on-dark. */
+[data-baseweb="tab-panel"],
+[data-testid="stTabsContent"],
+[data-testid="stTabContent"] {
+  background-color: #F5F2FA !important;
 }
-.stTabs [data-baseweb="tab"][aria-selected="true"],
-.stTabs [data-baseweb="tab"][aria-selected="true"] p,
-.stTabs [data-baseweb="tab"][aria-selected="true"] div {
-  color: #B86BFF !important;
-  font-weight: 700 !important;
-}
-.stTabs [data-baseweb="tab-highlight"] { background-color: #B86BFF !important; }
-.stTabs [data-baseweb="tab-border"] { background-color: #352C54 !important; }
-
-/* Caption text (e.g. "Scans run: 0 · Last scan: Never") — same root cause:
-   defaults to a light-theme secondary-gray that's too dim on this dark page. */
-[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
-small, .stCaption { color: #B3A8D6 !important; }
 
 /* App title */
 .dash-title {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
   font-size: 32px;
-  color: #F5F3FF;
+  color: #1C1B22;
   margin-bottom: 2px;
 }
-.dash-sub { color: #B3A8D6; font-size: 14px; font-weight: 500; margin-bottom: 18px; }
+.dash-sub { color: #6B6877; font-size: 14px; font-weight: 500; margin-bottom: 18px; }
 
-/* Stat card grid */
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] { gap: 4px; }
+.stTabs [data-baseweb="tab"],
+.stTabs [data-baseweb="tab"] p,
+.stTabs [data-baseweb="tab"] div {
+  color: #4A4458 !important;
+  font-weight: 600 !important;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"],
+.stTabs [data-baseweb="tab"][aria-selected="true"] p,
+.stTabs [data-baseweb="tab"][aria-selected="true"] div {
+  color: #8B5CF6 !important;
+  font-weight: 700 !important;
+}
+.stTabs [data-baseweb="tab-highlight"] { background-color: #8B5CF6 !important; }
+.stTabs [data-baseweb="tab-border"] { background-color: #E5E0EE !important; }
+
+/* Caption text (e.g. "Scans run: 0 · Last scan: Never") */
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
+small, .stCaption { color: #6B6877 !important; }
+
+/* Expanders */
+[data-testid="stExpander"] {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E5E0EE !important;
+  border-radius: 12px !important;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary p {
+  color: #1C1B22 !important;
+  font-weight: 600 !important;
+}
+[data-testid="stExpanderDetails"] {
+  background-color: #FFFFFF !important;
+}
+
+/* Dataframe outer wrapper (the grid's own cells are canvas-rendered and
+   already look fine against a light page, so no further patching needed
+   there now that we're not fighting a dark/light mismatch) */
+[data-testid="stDataFrame"] {
+  background-color: #FFFFFF !important;
+  border-radius: 10px !important;
+}
+
+/* ============================================================
+   STAT CARDS
+   ============================================================ */
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
@@ -66,120 +94,79 @@ small, .stCaption { color: #B3A8D6 !important; }
   margin-bottom: 18px;
 }
 .stat-card {
-  background: #1D1830;
-  border: 1px solid #352C54;
+  background: #FFFFFF;
+  border: 1px solid #E5E0EE;
   border-radius: 14px;
   padding: 14px 16px;
 }
 .stat-card .label {
-  font-size: 11px; font-weight: 700; color: #786E9E;
+  font-size: 11px; font-weight: 700; color: #8B85A0;
   text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
 }
 .stat-card .value {
-  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 24px; color: #F5F3FF;
+  font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 24px; color: #1C1B22;
 }
-.stat-card .value.pos { color: #4ADE80; }
-.stat-card .value.neg { color: #FB7185; }
+.stat-card .value.pos { color: #16A34A; }
+.stat-card .value.neg { color: #E11D48; }
 
-/* Signal badges — saturated bg + bright text reads better on a dark canvas
-   than the pastel-chip approach (which needs a light page to land). */
+/* ============================================================
+   SIGNAL BADGES — pastel chip + saturated text, reads cleanly on light
+   ============================================================ */
 .sig-badge {
   display: inline-block; font-size: 11px; font-weight: 800;
   padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em;
 }
-.sig-badge.buy   { background: rgba(34,197,94,0.18);  color: #4ADE80; }
-.sig-badge.sell  { background: rgba(244,63,94,0.18);  color: #FB7185; }
-.sig-badge.watch { background: rgba(245,158,11,0.18); color: #FBBF24; }
-.sig-badge.none  { background: rgba(120,110,158,0.18); color: #B3A8D6; }
+.sig-badge.buy   { background: #DCFCE7; color: #166534; }
+.sig-badge.sell  { background: #FFE1E6; color: #9F1239; }
+.sig-badge.watch { background: #FEF3C7; color: #92400E; }
+.sig-badge.none  { background: #F1EEF7; color: #6B6877; }
 
-/* Opportunity card (BUY/SELL list) */
+/* ============================================================
+   OPPORTUNITY CARD (BUY/SELL list)
+   ============================================================ */
 .opp-card {
-  background: #1D1830; border: 1px solid #352C54; border-radius: 14px;
+  background: #FFFFFF; border: 1px solid #E5E0EE; border-radius: 14px;
   padding: 14px 16px; margin-bottom: 10px;
 }
 .opp-card .opp-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-.opp-card .opp-name { font-weight: 800; font-size: 16px; color: #F5F3FF; }
-.opp-card .opp-metrics { display:flex; gap:18px; font-size: 12.5px; color: #B3A8D6; flex-wrap: wrap; }
-.opp-card .opp-metrics b { color: #F5F3FF; font-weight: 700; }
+.opp-card .opp-name { font-weight: 800; font-size: 16px; color: #1C1B22; }
+.opp-card .opp-metrics { display:flex; gap:18px; font-size: 12.5px; color: #6B6877; flex-wrap: wrap; }
+.opp-card .opp-metrics b { color: #1C1B22; font-weight: 700; }
 
-/* Hero card (Best Trade Setup) — the gradient pops harder on dark, so this
-   stays the one signature element while everything else stays disciplined. */
+/* ============================================================
+   HERO CARD (Best Trade Setup) — the one signature element where the
+   bold purple/pink gradient lives; everything else stays calm and light.
+   ============================================================ */
 .hero-card {
-  background: linear-gradient(150deg, #1D1830, #241D3D);
+  background: linear-gradient(150deg, #FFFFFF, #FAF5FF);
   border-radius: 18px; padding: 18px 20px; margin: 6px 0 18px 0;
-  border: 1px solid #352C54;
-  box-shadow: 0 8px 28px -10px rgba(184,107,255,0.35);
+  border: 1px solid #E5E0EE;
+  box-shadow: 0 8px 28px -12px rgba(139,92,246,0.25);
   position: relative;
   border-left: 4px solid transparent;
-  border-image: linear-gradient(180deg, #B86BFF, #FF5FA2) 1;
+  border-image: linear-gradient(180deg, #8B5CF6, #EC4899) 1;
 }
 .hero-card .hero-eyebrow {
   font-size: 11px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
-  background: linear-gradient(90deg, #B86BFF, #FF5FA2);
+  background: linear-gradient(90deg, #8B5CF6, #EC4899);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   margin-bottom: 6px;
 }
-.hero-card .hero-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; color:#F5F3FF; }
+.hero-card .hero-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; color:#1C1B22; }
 .hero-card .hero-metrics {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   gap: 10px; margin: 14px 0;
 }
-.hero-card .hero-metrics .m-label { font-size: 10.5px; color:#786E9E; text-transform:uppercase; letter-spacing:0.04em; font-weight:700; }
-.hero-card .hero-metrics .m-value { font-family: 'Space Grotesk', sans-serif; font-weight:700; font-size: 17px; color:#F5F3FF; margin-top:2px; }
-.hero-card .conv-label { display:flex; justify-content:space-between; font-size:11.5px; color:#B3A8D6; margin-bottom:4px; font-weight:600; }
-.hero-card .conv-track { height:6px; background:#352C54; border-radius:999px; overflow:hidden; }
-.hero-card .conv-fill { height:100%; background: linear-gradient(90deg, #B86BFF, #FF5FA2); border-radius:999px; }
-.hero-card .levels-row { display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:13px; color:#B3A8D6; }
-.hero-card .levels-row b { color:#F5F3FF; font-weight:700; }
-.hero-card .hero-reason { font-size: 12.5px; color:#B3A8D6; margin-top:12px; line-height:1.5; }
+.hero-card .hero-metrics .m-label { font-size: 10.5px; color:#8B85A0; text-transform:uppercase; letter-spacing:0.04em; font-weight:700; }
+.hero-card .hero-metrics .m-value { font-family: 'Space Grotesk', sans-serif; font-weight:700; font-size: 17px; color:#1C1B22; margin-top:2px; }
+.hero-card .conv-label { display:flex; justify-content:space-between; font-size:11.5px; color:#6B6877; margin-bottom:4px; font-weight:600; }
+.hero-card .conv-track { height:6px; background:#EDE9F5; border-radius:999px; overflow:hidden; }
+.hero-card .conv-fill { height:100%; background: linear-gradient(90deg, #8B5CF6, #EC4899); border-radius:999px; }
+.hero-card .levels-row { display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; font-size:13px; color:#6B6877; }
+.hero-card .levels-row b { color:#1C1B22; font-weight:700; }
+.hero-card .hero-reason { font-size: 12.5px; color:#6B6877; margin-top:12px; line-height:1.5; }
 
 .section-eyebrow {
-  font-size: 13px; font-weight: 800; color:#F5F3FF; text-transform:uppercase;
+  font-size: 13px; font-weight: 800; color:#1C1B22; text-transform:uppercase;
   letter-spacing: 0.06em; margin: 4px 0 10px 0;
-}
-
-/* Sector expanders (Banking, IT, Auto...) — same root cause as tabs/
-   captions: native widget text defaults to a light-theme color that's
-   nearly invisible on this dark page until config.toml's dark theme
-   actually takes effect (see "Reboot app" note in chat). */
-[data-testid="stExpander"] {
-  background-color: #1D1830 !important;
-  border: 1px solid #352C54 !important;
-  border-radius: 12px !important;
-}
-[data-testid="stExpander"] summary,
-[data-testid="stExpander"] summary span,
-[data-testid="stExpander"] summary p {
-  color: #F5F3FF !important;
-  font-weight: 600 !important;
-}
-[data-testid="stExpanderDetails"] {
-  background-color: #15121F !important;
-}
-
-/* Dataframe OUTER wrapper only — the grid's actual cells and header row
-   are canvas-rendered by Streamlit (not plain HTML/CSS), so this reaches
-   the box around the table but likely NOT the white cells inside it.
-   If the table itself still looks like a white box after this, that's
-   controlled by config.toml's theme at a level CSS can't reach — the
-   real fix there is the "Reboot app" step, not more CSS. */
-[data-testid="stDataFrame"] {
-  background-color: #1D1830 !important;
-  border-radius: 10px !important;
-}
-
-/* THE ACTUAL FIX for "Scanner looks fine, Performance/Settings don't":
-   each st.tabs() panel has its OWN background layer that does NOT
-   inherit from .stApp — this is a confirmed long-standing Streamlit bug
-   (github.com/streamlit/streamlit/issues/5707), not something specific
-   to certain tabs. Scanner only looked fine because its custom cards
-   (hero-card, opp-card — both have their own explicit dark background)
-   happened to cover most of that panel; Performance/Settings have far
-   more bare native content sitting directly on the mismatched panel
-   background, so it shows through there instead. Forcing it here fixes
-   all three tabs the same way, including Scanner's edges. */
-[data-baseweb="tab-panel"],
-[data-testid="stTabsContent"],
-[data-testid="stTabContent"] {
-  background-color: #15121F !important;
-}
+                       }
