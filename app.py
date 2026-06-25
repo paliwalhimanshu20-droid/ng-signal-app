@@ -1545,7 +1545,7 @@ with tab_scanner:
 
         display_cols = [
             "Instrument", "Signal", "Confidence", "Trend", "DailyTrend", "Supertrend",
-            rketTrend", "ConvictionPct", "ADX", "Regime",
+            "MarketTrend", "ConvictionPct", "ADX", "Regime",
             "Score", "Prob%", "RSI", "Volume", "Volume Ratio",
             "ExpectedMove%", "RR", "Price", "SL", "T1", "T2"
         ]
