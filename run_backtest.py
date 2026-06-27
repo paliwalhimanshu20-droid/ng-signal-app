@@ -3,18 +3,31 @@ from strategy_lab.optimizer import run_parameter_test
 from strategy_lab.reports import print_report
 from strategy_lab.utils import fetch_candles, load_symbol_map
 
+from strategy_lab.backtest import run_backtest
+from strategy_lab.optimizer import run_parameter_test
+from strategy_lab.utils import load_symbol_map
+import pandas as pd
+
 def execute_backtest():
+
     symbol_map = load_symbol_map()
-    data_dict = fetch_candles(symbol_map, days_back=15)
 
-    df = run_backtest(data_dict, config={})
+    all_results = []
 
-    param_grid = {
-        "ema_fast": [18, 20, 22],
-        "ema_slow": [45, 50, 55],
-        "adx": [18, 20, 25]
-    }
+    for instrument_name, instrument_key in symbol_map.items():
 
-    result_df = run_parameter_test(data_dict, param_grid)
+        result = run_backtest(instrument_name, instrument_key)
 
-    return df, result_df
+        if isinstance(result, dict) and "data" in result:
+            df = result["data"].copy()
+            df["Instrument"] = instrument_name
+            all_results.append(df)
+
+    if all_results:
+        trades_df = pd.concat(all_results, ignore_index=True)
+    else:
+        trades_df = pd.DataFrame()
+
+    optimizer_df = run_parameter_test(symbol_map, {})
+
+    return trades_df, optimizer_df
