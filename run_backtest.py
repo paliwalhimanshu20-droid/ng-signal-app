@@ -1,3 +1,4 @@
+print("✅ NEW run_backtest.py LOADED")
 from strategy_lab.backtest import run_backtest
 from strategy_lab.optimizer import run_parameter_test
 from strategy_lab.reports import print_report
