@@ -35,6 +35,7 @@ from upstox_client import validate_watchlist_keys, get_commodity_contracts, get_
 from signal_log import (
     load_signal_log, append_new_signals,
     compute_performance_summary, compute_factor_performance,
+    compute_timing_stats,
 )
 from scanner import run_scanner
 from charts import build_instrument_chart
@@ -355,6 +356,35 @@ with tab_performance:
 
         with st.expander("View raw signal log"):
             st.dataframe(signal_log_df, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    st.markdown('<div class="section-eyebrow">⏱️ Historical Timing Engine</div>', unsafe_allow_html=True)
+    st.caption(
+        "How long closed signals actually took to resolve — purely observational, "
+        "computed from timestamps already in the log. T1/SL timing work from day one; "
+        "T2 timing fills in over time as check_signals.py read-only-tracks signals "
+        "for a few days after they close at T1 (see its module docstring — it never "
+        "manages or re-opens a position, just records whether/when T2 was also touched)."
+    )
+
+    timing_stats = compute_timing_stats(signal_log_df) if not signal_log_df.empty else {"t1": None, "t2": None, "sl": None}
+
+    if not any(timing_stats.values()):
+        st.info("No closed signals yet — timing stats appear once signals start hitting T1 or SL.")
+    else:
+        timing_cards = []
+        for key, label in [("t1", "Avg Time to T1"), ("t2", "Avg Time to T2"), ("sl", "Avg Time to SL")]:
+            stat = timing_stats[key]
+            if stat:
+                timing_cards.append((f"{label} (n={stat['n']})", f"{stat['avg_hours']}h", "default"))
+            else:
+                timing_cards.append((label, "—", "default"))
+        render_stat_cards(timing_cards)
+        st.caption(
+            "n = number of historical signals each average is based on — treat any "
+            "stat with n under ~20 as too small a sample to plan around yet."
+        )
 
     st.markdown("---")
 
