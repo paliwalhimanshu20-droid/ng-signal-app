@@ -165,6 +165,61 @@ def append_new_signals(scan_results_df):
         save_signal_log(log_df)
 
 
+def compute_timing_stats(log_df):
+    """
+    Historical Timing Engine (roadmap Phase 2, item #1).
+
+    Reports, in hours, how long closed signals actually took to resolve:
+      - "t1": timestamp -> closed_at, for rows where status == TARGET_HIT
+      - "sl": timestamp -> closed_at, for rows where status == SL_HIT
+      - "t2": timestamp -> t2_hit_at, for rows where t2_hit_at is set
+
+    t1/sl work immediately from data the app already had — no schema or
+    check_signals.py change needed for those two.
+
+    t2_hit_at is new and PURELY OBSERVATIONAL: it's populated by
+    check_signals.py continuing to read-only-poll price for a bounded
+    window AFTER a signal has already closed at T1, solely to record
+    whether/when price also reached T2. It never reopens the position or
+    changes that signal's already-recorded status/pnl_pct — see
+    check_signals.py's module docstring and check_t2_touch(). Rows where
+    T2 was never reached (or the signal closed at SL, or is still OPEN,
+    or the tracking window expired) simply have no t2_hit_at and are
+    correctly excluded here, not treated as zero.
+
+    Returns {"t1": stat_or_None, "t2": stat_or_None, "sl": stat_or_None}
+    where each stat is {"avg_hours", "median_hours", "n"}.
+    """
+    empty_result = {"t1": None, "t2": None, "sl": None}
+    if log_df.empty:
+        return empty_result
+
+    df = log_df.copy()
+    df["_start"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    df["_closed"] = pd.to_datetime(df["closed_at"], errors="coerce")
+    df["_t2"] = pd.to_datetime(df["t2_hit_at"], errors="coerce") if "t2_hit_at" in df.columns else pd.NaT
+
+    def _summary(mask, end_col):
+        sub = df[mask & df["_start"].notna() & df[end_col].notna()]
+        if sub.empty:
+            return None
+        hours = (sub[end_col] - sub["_start"]).dt.total_seconds() / 3600
+        hours = hours[hours >= 0]  # guard against any bad/clock-skew rows
+        if hours.empty:
+            return None
+        return {
+            "avg_hours": round(float(hours.mean()), 1),
+            "median_hours": round(float(hours.median()), 1),
+            "n": int(len(hours)),
+        }
+
+    return {
+        "t1": _summary(df["status"] == "TARGET_HIT", "_closed"),
+        "sl": _summary(df["status"] == "SL_HIT", "_closed"),
+        "t2": _summary(pd.Series(True, index=df.index), "_t2"),
+    }
+
+
 def compute_performance_summary(log_df):
     """
     Returns a per-instrument and overall summary of closed signal outcomes:
@@ -277,3 +332,4 @@ def compute_factor_performance(log_df):
             results["Volatility (ExpectedMove%) Bucket"] = df_b
 
     return results
+    
