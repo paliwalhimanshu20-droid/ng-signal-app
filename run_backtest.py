@@ -1,44 +1,34 @@
-import pandas as pd
 from strategy_lab.backtest import run_backtest, save_backtest
 from strategy_lab.optimizer import run_parameter_test
 from strategy_lab.reports import print_report
+from strategy_lab.utils import fetch_candles, load_symbol_map
+
+print("Fetching historical data...")
+
+symbol_map = load_symbol_map()
+data_dict = fetch_candles(symbol_map, days_back=15)
+
+print(f"Loaded symbols: {list(data_dict.keys())}")
 
 # =========================
-# SAMPLE DATA PLACEHOLDER
+# BACKTEST
 # =========================
-# Replace this with real Upstox candle fetch later
-# Format:
-# {
-#   "RELIANCE": [[ts,o,h,l,c,v,oi], ...],
-#   "TCS": [[ts,o,h,l,c,v,oi], ...]
-# }
-
-data_dict = {
-    "RELIANCE": [],
-    "TCS": []
-}
-
-# =========================
-# 1. SIMPLE BACKTEST RUN
-# =========================
-print("Running basic backtest...")
+print("\nRunning backtest...")
 
 df = run_backtest(data_dict, config={})
-
 print(df)
 
 if not df.empty:
-    path = save_backtest(df)
-    print("Saved to:", path)
+    save_backtest(df)
 
 # =========================
-# 2. PARAMETER OPTIMIZATION
+# OPTIMIZER
 # =========================
 print("\nRunning optimizer...")
 
 param_grid = {
-    "ema_fast": [18, 20],
-    "ema_slow": [45, 50],
+    "ema_fast": [18, 20, 22],
+    "ema_slow": [45, 50, 55],
     "adx": [18, 20, 25]
 }
 
