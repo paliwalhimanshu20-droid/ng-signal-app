@@ -332,4 +332,4 @@ def compute_factor_performance(log_df):
             results["Volatility (ExpectedMove%) Bucket"] = df_b
 
     return results
-    
+        
