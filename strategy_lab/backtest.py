@@ -1,67 +1,113 @@
 import pandas as pd
 from datetime import datetime
-from strategy_lab.strategies import run_strategy
 
-def run_backtest(data_dict, config):
+from signal_logic import signal_engine, ema, atr
+from upstox_client import get_candles_range
+
+
+# -----------------------------
+# BACKTEST CONFIG
+# -----------------------------
+CANDLE_INTERVAL_DAYS = 30   # chunk size per fetch
+LOOKBACK_DAYS = 120         # total history window
+
+
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+def load_history(instrument_key):
     """
-    data_dict format:
-        {
-            "RELIANCE": candles,
-            "TCS": candles
+    Fetch historical candles from Upstox
+    """
+    candles = get_candles_range(instrument_key, days_back=LOOKBACK_DAYS)
+
+    if not candles:
+        return None
+
+    return candles
+
+
+# -----------------------------
+# RUN BACKTEST
+# -----------------------------
+def run_backtest(instrument_name, instrument_key):
+    candles = load_history(instrument_key)
+
+    if not candles or len(candles) < 100:
+        return {
+            "error": f"Not enough data for {instrument_name}"
         }
-
-    candles format:
-        [ [ts, o, h, l, c, v, oi], ... ]  (newest-first or oldest-first consistent)
-    """
 
     results = []
 
-    for symbol, candles in data_dict.items():
+    closes = []
 
-        if not candles or len(candles) < 50:
+    for i in range(len(candles) - 1, 50, -1):
+        window = candles[i: i - 50: -1]
+
+        if len(window) < 50:
             continue
 
-        signals = run_strategy(symbol, candles, config)
+        closes = [c[4] for c in window]
+        price = closes[-1]
 
-        for s in signals:
-            results.append({
-                "symbol": symbol,
-                "time": datetime.now(),
-                "signal": s["signal"],
-                "score": s["score"],
-                "price": s["price"],
-                "sl": s["sl"],
-                "t1": s["t1"],
-                "t2": s["t2"],
-                "trend": s["trend"],
-                "regime": s["regime"]
-            })
+        ema20 = ema(closes, 20)
+        ema50 = ema(closes, 50)
 
-    return pd.DataFrame(results)
+        atr_val = atr(window)
 
+        signal, score, prob, trend, regime, exp_move, reasons, conviction = signal_engine(
+            price=price,
+            ema20=ema20,
+            ema50=ema50,
+            atr_val=atr_val
+        )
 
-def save_backtest(df, path="backtest_results.csv"):
-    df.to_csv(path, index=False)
-    return path
+        results.append({
+            "Index": i,
+            "Price": price,
+            "Signal": signal,
+            "Score": score,
+            "Prob%": prob,
+            "Trend": trend,
+            "Regime": regime,
+            "ExpectedMove%": exp_move,
+            "Conviction%": conviction
+        })
 
+    df = pd.DataFrame(results)
 
-def load_backtest(path="backtest_results.csv"):
-    try:
-        return pd.read_csv(path)
-    except:
-        return pd.DataFrame()
-
-
-def summarize_backtest(df):
     if df.empty:
-        return {}
+        return {"error": "No signals generated"}
 
+    # -----------------------------
+    # SIMPLE PERFORMANCE STATS
+    # -----------------------------
     total = len(df)
-    buy = len(df[df["signal"] == "BUY"])
-    sell = len(df[df["signal"] == "SELL"])
+    buys = len(df[df["Signal"] == "BUY"])
+    sells = len(df[df["Signal"] == "SELL"])
+    watch = len(df[df["Signal"] == "WATCH"])
+    none = len(df[df["Signal"] == "NO TRADE"])
+
+    summary = {
+        "instrument": instrument_name,
+        "total_checks": total,
+        "buy_signals": buys,
+        "sell_signals": sells,
+        "watch_signals": watch,
+        "no_trade": none,
+        "buy_ratio": round(buys / total * 100, 2),
+        "sell_ratio": round(sells / total * 100, 2),
+    }
 
     return {
-        "total_signals": total,
-        "buy": buy,
-        "sell": sell
+        "summary": summary,
+        "data": df
     }
+
+
+# -----------------------------
+# QUICK TEST RUN (OPTIONAL)
+# -----------------------------
+if __name__ == "__main__":
+    print("Backtest module ready")
