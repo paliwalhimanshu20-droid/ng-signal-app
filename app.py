@@ -425,11 +425,11 @@ st.subheader("🧪 Strategy Lab")
 
 if st.button("🚀 Run Backtest"):
     with st.spinner("Running Strategy Lab Backtest..."):
-        try:
+       try:
           trades_df, optimizer_df = execute_backtest()
-        except Exception as e:
-    st.exception(e)
-    st.stop()
+         except Exception as e:
+           st.exception(e)
+           st.stop()
 
     st.success("✅ Backtest completed!")
 
