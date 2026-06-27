@@ -51,7 +51,17 @@ SIGNAL_LOG_COLUMNS = [
     # pads these in as None for any CSV rows written before this change,
     # so no manual migration is needed.
     "daily_trend_agree", "supertrend_agree", "market_trend_agree",
-    "adx", "conviction_pct", "expected_move_pct"
+    "adx", "conviction_pct", "expected_move_pct",
+    # NEW (Historical Timing Engine — Phase 2 #1): PURELY observational.
+    # Populated by check_signals.py *after* a signal has already closed at
+    # T1, by continuing to read-only-poll price (no order ever placed, no
+    # change to the trade's recorded status/pnl_pct) to see whether/when
+    # price would also have reached T2. Stays empty for: signals that
+    # closed at SL (T2 tracking never starts), signals still OPEN, and
+    # signals where T2 wasn't reached within the tracking window
+    # (check_signals.T2_TRACKING_WINDOW_DAYS) — that absence is itself
+    # meaningful data, not missing data.
+    "t2_hit_at",
 ]
 
 # ---- GitHub push config ----
