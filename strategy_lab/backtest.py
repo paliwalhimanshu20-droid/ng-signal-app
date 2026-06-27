@@ -1,68 +1,67 @@
-"""
-Signal Pro v3 - Strategy Lab
-
-backtest.py
-
-Purpose:
-    Historical strategy testing engine.
-
-This module will:
-    - Load historical candles
-    - Replay candles one by one
-    - Generate signals using signal_logic.py
-    - Simulate trades
-    - Record every trade
-    - Calculate overall performance
-
-IMPORTANT:
-This module NEVER contains separate trading logic.
-All BUY/SELL decisions come from signal_logic.py so that
-live trading and backtesting always use identical rules.
-"""
-
 import pandas as pd
 from datetime import datetime
+from strategy_lab.strategies import run_strategy
 
-# Import the live strategy
-from signal_logic import *
+def run_backtest(data_dict, config):
+    """
+    data_dict format:
+        {
+            "RELIANCE": candles,
+            "TCS": candles
+        }
 
-# ==========================
-# BACKTEST ENGINE
-# ==========================
+    candles format:
+        [ [ts, o, h, l, c, v, oi], ... ]  (newest-first or oldest-first consistent)
+    """
 
-class BacktestEngine:
+    results = []
 
-    def __init__(self):
-        self.trades = []
+    for symbol, candles in data_dict.items():
 
-    def reset(self):
-        """Clear previous backtest results."""
-        self.trades = []
+        if not candles or len(candles) < 50:
+            continue
 
-    def load_data(self, candles):
-        """
-        candles:
-        List returned by Upstox historical API.
+        signals = run_strategy(symbol, candles, config)
 
-        Stores candles for replay.
-        """
-        self.candles = candles
+        for s in signals:
+            results.append({
+                "symbol": symbol,
+                "time": datetime.now(),
+                "signal": s["signal"],
+                "score": s["score"],
+                "price": s["price"],
+                "sl": s["sl"],
+                "t1": s["t1"],
+                "t2": s["t2"],
+                "trend": s["trend"],
+                "regime": s["regime"]
+            })
 
-    def run(self):
-        """
-        Main backtest loop.
+    return pd.DataFrame(results)
 
-        (Implementation will be added next.)
-        """
-        pass
 
-    def save_results(self, filename="backtest_results.csv"):
-        """
-        Save completed trades.
-        """
-        df = pd.DataFrame(self.trades)
+def save_backtest(df, path="backtest_results.csv"):
+    df.to_csv(path, index=False)
+    return path
 
-        if not df.empty:
-            df.to_csv(filename, index=False)
 
-        return df
+def load_backtest(path="backtest_results.csv"):
+    try:
+        return pd.read_csv(path)
+    except:
+        return pd.DataFrame()
+
+
+def summarize_backtest(df):
+    if df.empty:
+        return {}
+
+    total = len(df)
+    buy = len(df[df["signal"] == "BUY"])
+    sell = len(df[df["signal"] == "SELL"])
+
+    return {
+        "total_signals": total,
+        "buy": buy,
+        "sell": sell
+    }
