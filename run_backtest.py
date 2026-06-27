@@ -1,4 +1,4 @@
-from strategy_lab.backtest import run_backtest, save_backtest
+from strategy_lab.backtest import run_backtest
 from strategy_lab.optimizer import run_parameter_test
 from strategy_lab.reports import print_report
 from strategy_lab.utils import fetch_candles, load_symbol_map
