@@ -9,9 +9,6 @@ def execute_backtest():
 
     df = run_backtest(data_dict, config={})
 
-    if not df.empty:
-        save_backtest(df)
-
     param_grid = {
         "ema_fast": [18, 20, 22],
         "ema_slow": [45, 50, 55],
