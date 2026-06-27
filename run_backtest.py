@@ -1,9 +1,3 @@
-print("✅ NEW run_backtest.py LOADED")
-from strategy_lab.backtest import run_backtest
-from strategy_lab.optimizer import run_parameter_test
-from strategy_lab.reports import print_report
-from strategy_lab.utils import fetch_candles, load_symbol_map
-
 from strategy_lab.backtest import run_backtest
 from strategy_lab.optimizer import run_parameter_test
 from strategy_lab.utils import load_symbol_map
@@ -29,6 +23,6 @@ def execute_backtest():
     else:
         trades_df = pd.DataFrame()
 
-    optimizer_df = run_parameter_test(symbol_map, {})
+    optimizer_df = run_parameter_test({}, {})
 
     return trades_df, optimizer_df
