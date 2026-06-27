@@ -36,14 +36,11 @@ def fetch_candles(symbol_key_map, days_back=10):
     return data_dict
 
 
+from watchlist import get_watchlist
+
 def load_symbol_map():
     """
-    Temporary hardcoded mapping.
-    Later you can replace with watchlist.py integration.
+    Use the production watchlist so Strategy Lab and Live Scanner
+    always use the same instrument keys.
     """
-    return {
-        "RELIANCE": "NSE_EQ|RELIANCE",
-        "TCS": "NSE_EQ|TCS",
-        "INFY": "NSE_EQ|INFY",
-        "HDFCBANK": "NSE_EQ|HDFCBANK"
-    }
+    return get_watchlist()
