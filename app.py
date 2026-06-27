@@ -43,6 +43,7 @@ from ui_components import (
     inject_dashboard_css, render_stat_cards, render_opportunity_card,
     render_hero_card, style_signal_column,
 )
+from run_backtest import execute_backtest
 
 # NOTE: all indicator math and signal-scoring logic lives in signal_logic.py,
 # NOT here — it's imported so this app and backtest.py (the offline threshold
@@ -419,19 +420,18 @@ with tab_performance:
     st.markdown("---")
     st.subheader("🧪 Strategy Lab")
 
-    if st.button("🚀 Run Backtest"):
-        st.write("Backtest started...")
+    st.markdown("---")
+st.subheader("🧪 Strategy Lab")
 
-        results = []
+if st.button("🚀 Run Backtest"):
+    with st.spinner("Running Strategy Lab Backtest..."):
+        trades_df, optimizer_df = execute_backtest()
 
-        for i in range(10):
-            results.append({
-                "Trade": i + 1,
-                "Result": "WIN" if i % 2 == 0 else "LOSS"
-            })
+    st.success("✅ Backtest completed!")
 
-        st.dataframe(results)
+    st.subheader("📊 Backtest Results")
+    st.dataframe(trades_df, use_container_width=True)
 
-        wins = sum(1 for r in results if r["Result"] == "WIN")
-        st.success(f"Win Rate: {wins * 10}%")
+    st.subheader("⚙️ Optimizer Results")
+    st.dataframe(optimizer_df, use_container_width=True)
             
