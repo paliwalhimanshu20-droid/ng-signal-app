@@ -416,4 +416,19 @@ with tab_performance:
                 use_container_width=True,
                 hide_index=True
             )
+    if st.button("🚀 Run Backtest"):
+    st.write("Backtest started...")
+
+    results = []
+
+    for i in range(10):
+        results.append({
+            "Trade": i+1,
+            "Result": "WIN" if i % 2 == 0 else "LOSS"
+        })
+
+    st.dataframe(results)
+
+    wins = sum(1 for r in results if r["Result"] == "WIN")
+    st.success(f"Win Rate: {wins * 10}%")
             
