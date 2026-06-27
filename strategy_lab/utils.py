@@ -1,6 +1,6 @@
 import pandas as pd
 from upstox_client import get_candles_range
-
+from watchlist import get_watchlist
 def fetch_candles(symbol_key_map, days_back=10):
     """
     Builds data_dict for backtest.
