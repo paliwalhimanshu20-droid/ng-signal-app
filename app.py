@@ -43,7 +43,6 @@ from ui_components import (
     inject_dashboard_css, render_stat_cards, render_opportunity_card,
     render_hero_card, style_signal_column,
 )
-from run_backtest import execute_backtest
 
 # NOTE: all indicator math and signal-scoring logic lives in signal_logic.py,
 # NOT here — it's imported so this app and backtest.py (the offline threshold
