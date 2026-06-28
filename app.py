@@ -416,35 +416,3 @@ with tab_performance:
                 use_container_width=True,
                 hide_index=True
             )
-    # ==========================================================
-# 🧪 Strategy Lab
-# ==========================================================
-
-st.markdown("---")
-st.markdown("### 🧪 Strategy Lab")
-
-if st.button("🚀 Run Backtest"):
-
-    with st.spinner("Running Strategy Lab..."):
-
-        try:
-            trades_df, optimizer_df = execute_backtest()
-
-        except Exception as e:
-            st.exception(e)
-            st.stop()
-
-    st.success("✅ Backtest Completed")
-
-    if not trades_df.empty:
-        st.subheader("Backtest Results")
-        st.dataframe(trades_df, use_container_width=True)
-    else:
-        st.warning("No backtest trades found.")
-
-    if not optimizer_df.empty:
-        st.subheader("Optimizer Results")
-        st.dataframe(optimizer_df, use_container_width=True)
-    else:
-        st.warning("No optimizer results.")
-            
