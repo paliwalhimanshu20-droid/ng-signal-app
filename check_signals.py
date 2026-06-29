@@ -215,14 +215,28 @@ def main():
     df["t2_hit_at"] = df["t2_hit_at"].astype("object")
 
     if df.empty:
-        print("Signal log is empty — nothing to check.")
-        return
+    print("Signal log is empty — nothing to check.")
+    return
 
-    # ---- Pass 1: OPEN signals -> check T1/SL (UNCHANGED logic) ----
-    open_mask = df["status"] == "OPEN"
-    open_rows = df[open_mask]
+# --------------------------------------------------------
+# Expire old OPEN signals
+# --------------------------------------------------------
+expired_count = 0
 
-    closed_this_run = []
+for idx, row in df[df["status"] == "OPEN"].iterrows():
+
+    if _is_open_signal_expired(row["timestamp"]):
+        df.at[idx, "status"] = "EXPIRED"
+        expired_count += 1
+
+if expired_count:
+    print(f"{expired_count} OPEN signal(s) expired automatically.")
+
+# ---- Pass 1: OPEN signals -> check T1/SL ----
+open_mask = df["status"] == "OPEN"
+open_rows = df[open_mask]
+
+closed_this_run = []
 
     if open_rows.empty:
         print("No OPEN signals to check.")
@@ -308,10 +322,14 @@ def main():
         )
         send_telegram_message(msg)
 
+    if expired_count:
+    print(f"{expired_count} signal(s) expired this run.")
+
     if not closed_this_run:
-        print("No signals closed this run.")
+    print("No signals closed this run.")
+
     if t2_touched_this_run:
-        print(f"{len(t2_touched_this_run)} signal(s) also touched T2 this run (logged, no alert sent).")
+    print(f"{len(t2_touched_this_run)} signal(s) also touched T2 this run (logged, no alert sent).")
 
 
 if __name__ == "__main__":
