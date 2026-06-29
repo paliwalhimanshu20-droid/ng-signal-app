@@ -31,13 +31,11 @@ from datetime import datetime
 from admin_tools import weekly_summary
 
 # Reports
-from reports import (
-    generate_weekly_report,
-    weekly_report_excel,
-)
+from reports import weekly_report_excel
 
 # Signal Log
 from signal_log import (
+    generate_weekly_report,
     load_signal_log,
     get_admin_kpis,
     append_new_signals,
