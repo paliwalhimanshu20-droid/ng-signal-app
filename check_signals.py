@@ -47,6 +47,9 @@ SIGNAL_LOG_PATH = "signal_log.csv"
 # time"), not missing data — compute_timing_stats() in signal_log.py treats
 # it that way.
 T2_TRACKING_WINDOW_DAYS = 3
+# Maximum number of days an OPEN signal is allowed to remain active.
+# After this it will automatically become EXPIRED.
+OPEN_SIGNAL_EXPIRY_DAYS = 3
 
 UPSTOX_ACCESS_TOKEN = os.environ.get("UPSTOX_ACCESS_TOKEN", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -175,6 +178,21 @@ def _is_t2_tracking_expired(closed_at_str):
     now_naive = datetime.now(IST).replace(tzinfo=None)
     age_days = (now_naive - closed_at).total_seconds() / 86400
     return age_days > T2_TRACKING_WINDOW_DAYS
+  
+def _is_open_signal_expired(timestamp_str):
+    """
+    Returns True if an OPEN signal has been active longer than
+    OPEN_SIGNAL_EXPIRY_DAYS.
+    """
+    try:
+        opened_at = pd.to_datetime(timestamp_str)
+    except Exception:
+        return False
+
+    now_naive = datetime.now(IST).replace(tzinfo=None)
+    age_days = (now_naive - opened_at).total_seconds() / 86400
+
+    return age_days > OPEN_SIGNAL_EXPIRY_DAYS
 
 
 def main():
