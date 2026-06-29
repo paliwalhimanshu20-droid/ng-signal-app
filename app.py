@@ -29,6 +29,7 @@ from admin_tools import (
     weekly_summary
 )
 from admin import generate_weekly_report
+from signal_log import get_admin_kpis
 from reports import (
     generate_weekly_report,
     weekly_report_excel
