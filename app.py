@@ -61,7 +61,12 @@ if "scan_count" not in st.session_state:
 if "last_scan" not in st.session_state:
     st.session_state.last_scan = "Never"
 
-tab_scanner, tab_performance, tab_settings = st.tabs(["📡 Scanner", "📈 Performance", "⚙️ Settings"])
+tab_scanner, tab_performance, tab_settings, tab_admin = st.tabs([
+    "📡 Scanner",
+    "📈 Performance",
+    "⚙️ Settings",
+    "🛠️ Admin Center"
+])
 
 # =========================================================================
 # SETTINGS TAB — runs FIRST in code (so commodity_contracts exists before
