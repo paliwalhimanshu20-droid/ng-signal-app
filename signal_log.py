@@ -340,4 +340,40 @@ def compute_factor_performance(log_df):
             results["Volatility (ExpectedMove%) Bucket"] = df_b
 
     return results
+
+    def get_admin_kpis(log_df):
+    """
+    Returns top-level KPIs for Admin dashboard cards.
+    """
+
+    if log_df.empty:
+        return {
+            "total_trades": 0,
+            "win_rate": 0,
+            "avg_pnl": 0,
+            "open_trades": 0,
+            "target_hits": 0,
+            "sl_hits": 0
+        }
+
+    closed = log_df[log_df["status"].isin(["TARGET_HIT", "SL_HIT"])]
+
+    total = len(log_df)
+    open_trades = len(log_df[log_df["status"] == "OPEN"])
+    target_hits = len(log_df[log_df["status"] == "TARGET_HIT"])
+    sl_hits = len(log_df[log_df["status"] == "SL_HIT"])
+
+    win_rate = round((target_hits / len(closed)) * 100, 1) if len(closed) > 0 else 0
+
+    closed["pnl_pct"] = pd.to_numeric(closed["pnl_pct"], errors="coerce")
+    avg_pnl = round(closed["pnl_pct"].mean(), 2) if not closed.empty else 0
+
+    return {
+        "total_trades": total,
+        "win_rate": win_rate,
+        "avg_pnl": avg_pnl,
+        "open_trades": open_trades,
+        "target_hits": target_hits,
+        "sl_hits": sl_hits
+    }
         
