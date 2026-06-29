@@ -24,7 +24,10 @@ change when the TAB LAYOUT itself changes.
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from admin_tools import generate_weekly_report
+from admin_tools import (
+    generate_weekly_report,
+    weekly_summary
+)
 from admin import generate_weekly_report
 from reports import (
     generate_weekly_report,
