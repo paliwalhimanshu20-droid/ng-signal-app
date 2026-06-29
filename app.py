@@ -460,6 +460,14 @@ with tab_admin:
                     use_container_width=True,
                     hide_index=True
                 )
+                excel_file = weekly_report_excel(report)
+                st.download_button(
+                   "📥 Download Weekly Report (.xlsx)",
+                   data=excel_file,
+                   file_name="weekly_report.xlsx",
+                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
 
         st.button("📈 Monthly Report", disabled=True)
         st.button("📉 Performance Report", disabled=True)
