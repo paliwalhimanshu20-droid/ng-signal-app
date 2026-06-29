@@ -378,6 +378,11 @@ def get_admin_kpis():
 def generate_weekly_report():
     df = load_signal_log()
 
+    st.write("DEBUG START")
+    st.write(df["timestamp"].dtype)
+    st.write(df["timestamp"].head(5))
+    st.stop()
+
     if df.empty:
         st.write("Signal log is empty.")
         return pd.DataFrame(), {
