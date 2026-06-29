@@ -379,8 +379,9 @@ def generate_weekly_report():
     df = load_signal_log()
 
     st.write("DEBUG START")
-    st.write(df["timestamp"].dtype)
-    st.write(df["timestamp"].head(5))
+    st.write("Dtype:", df["timestamp"].dtype)
+    st.write("First 10 timestamps:")
+    st.write(df["timestamp"].head(10).tolist())
     st.stop()
 
     if df.empty:
