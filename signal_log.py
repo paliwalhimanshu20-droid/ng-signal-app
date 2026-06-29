@@ -140,30 +140,33 @@ def append_new_signals(scan_results_df):
             continue
 
         new_rows.append({
-            "signal_id": f"{row['Instrument']}_{datetime.now(IST).strftime('%Y%m%d%H%M%S')}",
-            "timestamp": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
-            "instrument": row["Instrument"],
-            "instrument_key": row.get("InstrumentKey", ""),
-            "signal": row["Signal"],
-            "trend": row["Trend"],
-            "confidence": row["Confidence"],
-            "score": row["Score"],
-            "entry_price": row["Price"],
-            "sl": row["SL"],
-            "t1": row["T1"],
-            "t2": row["T2"],
-            "status": "OPEN",
-            "closed_price": None,
-            "closed_at": None,
-            "pnl_pct": None,
-            "t2_hit_at": None,
-            "daily_trend_agree": row.get("DailyTrendAgree", "N/A"),
-            "supertrend_agree": row.get("SupertrendAgree", "N/A"),
-            "market_trend_agree": row.get("MarketTrendAgree", "N/A"),
-            "adx": row.get("ADX", "N/A"),
-            "conviction_pct": row.get("ConvictionPct", "N/A"),
-            "expected_move_pct": row.get("ExpectedMove%", "N/A"),
-        })
+    "signal_id": f"{row['Instrument']}_{datetime.now(IST).strftime('%Y%m%d%H%M%S')}",
+    "timestamp": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
+    "instrument": row["Instrument"],
+    "instrument_key": row.get("InstrumentKey", ""),
+    "signal": row["Signal"],
+    "trend": row["Trend"],
+    "confidence": row["Confidence"],
+    "score": row["Score"],
+    "entry_price": row["Price"],
+    "sl": row["SL"],
+    "t1": row["T1"],
+    "t2": row["T2"],
+    "status": "OPEN",
+    "closed_price": None,
+    "closed_at": None,
+    "pnl_pct": None,
+
+    "daily_trend_agree": row.get("DailyTrendAgree", "N/A"),
+    "supertrend_agree": row.get("SupertrendAgree", "N/A"),
+    "market_trend_agree": row.get("MarketTrendAgree", "N/A"),
+    "adx": row.get("ADX", "N/A"),
+    "conviction_pct": row.get("ConvictionPct", "N/A"),
+    "expected_move_pct": row.get("ExpectedMove%", "N/A"),
+
+    # ✅ FIXED POSITION (inside dict)
+    "t2_hit_at": None,
+})
 
     if new_rows:
         log_df = pd.concat([log_df, pd.DataFrame(new_rows)], ignore_index=True)
