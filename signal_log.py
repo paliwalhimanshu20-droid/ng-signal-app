@@ -20,6 +20,7 @@ from config import (
     SIGNAL_LOG_PATH, SIGNAL_LOG_COLUMNS,
     GITHUB_TOKEN, GITHUB_REPO, GITHUB_BRANCH, IST,
 )
+st.error("🚨 LOADED signal_log.py - VERSION TEST")
 
 # ================= SIGNAL LOG =================
 
