@@ -454,14 +454,24 @@ with tab_admin:
             report = generate_weekly_report()
 
             if report.empty:
-                st.info("No signals found in the last 7 days.")
+               st.info("No signals found in the last 7 days.")
             else:
-                st.success(f"{len(report)} signals found.")
+               summary = weekly_summary(report)
+
+               st.success(f"{len(report)} signals found.")
+
+               if summary:
+                  c1, c2, c3, c4 = st.columns(4)
+
+                  c1.metric("Total Signals", summary["Total Signals"])
+                  c2.metric("BUY / SELL", f"{summary['BUY']} / {summary['SELL']}")
+                  c3.metric("Target / SL", f"{summary['Target Hit']} / {summary['Stop Loss']}")
+                  c4.metric("Avg P&L %", summary["Avg P&L"])
 
                 st.dataframe(
-                    report,
-                    use_container_width=True,
-                    hide_index=True
+                  report,
+                  use_container_width=True,
+                  hide_index=True
                 )
                 excel_file = weekly_report_excel(report)
                 st.download_button(
