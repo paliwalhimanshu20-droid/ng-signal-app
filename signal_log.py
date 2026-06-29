@@ -384,11 +384,12 @@ def generate_weekly_report():
         return pd.DataFrame(), {}
 
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    df = df.dropna(subset=["timestamp"])
 
-    cutoff = datetime.now() - timedelta(days=7)
+    cutoff = datetime.now(IST) - timedelta(days=7)
     week_df = df[df["timestamp"] >= cutoff]
 
-    closed = week_df[week_df["status"].isin(["TARGET_HIT", "SL_HIT"])]
+    closed = week_df[df["status"].isin(["TARGET_HIT", "SL_HIT"])]
 
     summary = {
         "total_trades": len(week_df),
