@@ -440,7 +440,20 @@ with tab_admin:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.button("📊 Weekly Report", disabled=True)
+        if st.button("📊 Weekly Report"):
+
+    report = generate_weekly_report()
+
+    if report.empty:
+        st.info("No signals found in the last 7 days.")
+    else:
+        st.success(f"{len(report)} signals found.")
+
+        st.dataframe(
+            report,
+            use_container_width=True,
+            hide_index=True
+        )
         st.button("📈 Monthly Report", disabled=True)
         st.button("📉 Performance Report", disabled=True)
 
