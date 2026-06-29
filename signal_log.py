@@ -26,19 +26,26 @@ from config import (
 def load_signal_log():
     """Read the signal history CSV. Returns an empty, correctly-shaped
     DataFrame if the file doesn't exist yet (first run)."""
+
     if not os.path.exists(SIGNAL_LOG_PATH):
         return pd.DataFrame(columns=SIGNAL_LOG_COLUMNS)
 
     try:
         df = pd.read_csv(SIGNAL_LOG_PATH)
-        # Guard against a manually-edited/corrupted CSV missing columns
+
+        # Guard against old CSVs missing newly-added columns
         for col in SIGNAL_LOG_COLUMNS:
             if col not in df.columns:
                 df[col] = None
+
+        # Historical Timing Engine compatibility
+        if "t2_hit_at" not in df.columns:
+            df["t2_hit_at"] = None
+
         return df
+
     except Exception:
         return pd.DataFrame(columns=SIGNAL_LOG_COLUMNS)
-
 
 def push_signal_log_to_github(df, commit_message="Update signal_log.csv [app]"):
     """
