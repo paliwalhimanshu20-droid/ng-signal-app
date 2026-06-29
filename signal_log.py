@@ -381,33 +381,39 @@ def generate_weekly_report():
     if df.empty:
         return pd.DataFrame(), {}
 
+    # Parse timestamps
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+
+    # Remove invalid rows
     df = df.dropna(subset=["timestamp"])
 
-    # Convert both sides to timezone-naive
-    if getattr(df["timestamp"].dt, "tz", None) is not None:
-    df["timestamp"] = df["timestamp"].dt.tz_convert(None)
+    # Compare using plain Python datetime objects
+    cutoff = datetime.now() - timedelta(days=7)
 
-    cutoff = pd.Timestamp.now().normalize() - timedelta(days=7)
+    week_df = df[df["timestamp"] >= cutoff].copy()
 
-    week_df = df[df["timestamp"] >= cutoff]
-
-    closed = week_df[week_df["status"].isin(["TARGET_HIT", "SL_HIT"])]
+    closed = week_df[
+        week_df["status"].isin(["TARGET_HIT", "SL_HIT"])
+    ].copy()
 
     summary = {
         "total_trades": len(week_df),
         "closed_trades": len(closed),
-        "wins": len(closed[closed["status"] == "TARGET_HIT"]),
-        "losses": len(closed[closed["status"] == "SL_HIT"]),
+        "wins": (closed["status"] == "TARGET_HIT").sum(),
+        "losses": (closed["status"] == "SL_HIT").sum(),
     }
 
-    summary["win_rate"] = round(
-        (summary["wins"] / summary["closed_trades"]) * 100,
-        1
-    ) if summary["closed_trades"] > 0 else 0
+    summary["win_rate"] = (
+        round(summary["wins"] / summary["closed_trades"] * 100, 1)
+        if summary["closed_trades"] > 0
+        else 0
+    )
 
     if not closed.empty:
-        closed["pnl_pct"] = pd.to_numeric(closed["pnl_pct"], errors="coerce")
+        closed["pnl_pct"] = pd.to_numeric(
+            closed["pnl_pct"],
+            errors="coerce"
+        )
         summary["avg_pnl"] = round(closed["pnl_pct"].mean(), 2)
     else:
         summary["avg_pnl"] = 0
