@@ -379,9 +379,18 @@ def generate_weekly_report():
     df = load_signal_log()
 
     st.write("DEBUG START")
-    st.write("Dtype:", df["timestamp"].dtype)
-    st.write("First 10 timestamps:")
-    st.write(df["timestamp"].head(10).tolist())
+
+    st.write("Before conversion:")
+    st.write(df["timestamp"].dtype)
+
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+
+    st.write("After conversion:")
+    st.write(df["timestamp"].dtype)
+
+    st.write("First timestamp:")
+    st.write(df["timestamp"].iloc[0])
+
     st.stop()
 
     if df.empty:
