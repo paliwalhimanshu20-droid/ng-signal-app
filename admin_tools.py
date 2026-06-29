@@ -5,11 +5,6 @@ from signal_log import load_signal_log
 
 
 def generate_weekly_report():
-    """
-    Returns a DataFrame containing only the last 7 days
-    of signals from signal_log.csv.
-    """
-
     df = load_signal_log()
 
     if df.empty:
@@ -21,34 +16,41 @@ def generate_weekly_report():
 
     weekly = df[df["timestamp"] >= cutoff].copy()
 
-    weekly = weekly.sort_values("timestamp", ascending=False)
+    return weekly.sort_values("timestamp", ascending=False)
 
-    return weekly
 
-def weekly_summary(report):
-
-    if report.empty:
+def weekly_summary(df):
+    if df.empty:
         return None
 
-    total = len(report)
-    buy = (report["signal"] == "BUY").sum()
-    sell = (report["signal"] == "SELL").sum()
+    total = len(df)
+    buy = len(df[df["signal"] == "BUY"])
+    sell = len(df[df["signal"] == "SELL"])
 
-    target = (report["status"] == "TARGET_HIT").sum()
-    stop = (report["status"] == "SL_HIT").sum()
-    open_trades = (report["status"] == "OPEN").sum()
+    target = len(df[df["status"] == "TARGET_HIT"])
+    sl = len(df[df["status"] == "SL_HIT"])
 
-    avg_pnl = pd.to_numeric(
-        report["pnl_pct"],
-        errors="coerce"
-    ).mean()
+    df["pnl_pct"] = pd.to_numeric(df["pnl_pct"], errors="coerce")
+
+    avg_pnl = round(df["pnl_pct"].mean(), 2) if not df["pnl_pct"].isna().all() else 0
 
     return {
         "Total Signals": total,
         "BUY": buy,
         "SELL": sell,
         "Target Hit": target,
-        "Stop Loss": stop,
-        "Open": open_trades,
-        "Avg P&L": 0 if pd.isna(avg_pnl) else round(avg_pnl, 2)
+        "Stop Loss": sl,
+        "Avg P&L": avg_pnl
     }
+
+
+def weekly_report_excel(df):
+    from io import BytesIO
+
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Weekly Report")
+
+    output.seek(0)
+    return output
