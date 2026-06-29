@@ -435,6 +435,22 @@ with tab_performance:
 # ADMIN CENTER
 # =========================================================================
 
+log_df = load_signal_log()
+kpis = get_admin_kpis(log_df)
+
+c1, c2, c3, c4 = st.columns(4)
+
+with c1:
+    st.metric("Total Trades", kpis["total_trades"])
+
+with c2:
+    st.metric("Win Rate %", f"{kpis['win_rate']}%")
+
+with c3:
+    st.metric("Avg P&L %", kpis["avg_pnl"])
+
+with c4:
+    st.metric("Open Trades", kpis["open_trades"])
 with tab_admin:
 
     st.markdown(
