@@ -29,7 +29,7 @@ from admin_tools import (
     weekly_summary
 )
 from admin import generate_weekly_report
-from signal_log import get_admin_kpis
+from signal_log import load_signal_log, get_admin_kpis
 from reports import (
     generate_weekly_report,
     weekly_report_excel
@@ -435,8 +435,8 @@ with tab_performance:
 # ADMIN CENTER
 # =========================================================================
 
-log_df = load_signal_log()
-kpis = get_admin_kpis()
+df = load_signal_log()
+kpis = get_admin_kpis(df)
 
 c1, c2, c3, c4 = st.columns(4)
 
