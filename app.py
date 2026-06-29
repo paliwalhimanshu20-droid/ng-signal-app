@@ -436,7 +436,7 @@ with tab_performance:
 # =========================================================================
 
 df = load_signal_log()
-kpis = get_admin_kpis(df)
+kpis = get_admin_kpis()
 
 c1, c2, c3, c4 = st.columns(4)
 
