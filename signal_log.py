@@ -384,7 +384,9 @@ def generate_weekly_report():
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     df = df.dropna(subset=["timestamp"])
 
-    cutoff = datetime.now(IST) - timedelta(days=7)
+    # ✅ FIX: make cutoff timezone-safe match
+    cutoff = pd.Timestamp.now(tz="Asia/Kolkata") - timedelta(days=7)
+
     week_df = df[df["timestamp"] >= cutoff]
 
     closed = week_df[week_df["status"].isin(["TARGET_HIT", "SL_HIT"])]
