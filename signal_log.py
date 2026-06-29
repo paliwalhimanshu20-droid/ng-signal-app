@@ -166,6 +166,7 @@ def append_new_signals(scan_results_df):
             "conviction_pct": row.get("ConvictionPct", "N/A"),
             "expected_move_pct": row.get("ExpectedMove%", "N/A"),
         })
+        "t2_hit_at": None,
 
     if new_rows:
         log_df = pd.concat([log_df, pd.DataFrame(new_rows)], ignore_index=True)
