@@ -447,6 +447,7 @@ with tab_admin:
 
     col1, col2 = st.columns(2)
 
+    # ================= LEFT COLUMN =================
     with col1:
 
         if st.button("📊 Weekly Report"):
@@ -454,37 +455,43 @@ with tab_admin:
             report = generate_weekly_report()
 
             if report.empty:
-               st.info("No signals found in the last 7 days.")
+                st.info("No signals found in the last 7 days.")
             else:
-               summary = weekly_summary(report)
+                st.success(f"{len(report)} signals found.")
 
-               st.success(f"{len(report)} signals found.")
+                # Optional summary block (safe guard)
+                if "weekly_summary" in globals():
+                    summary = weekly_summary(report)
 
-               if summary:
-                  c1, c2, c3, c4 = st.columns(4)
+                    if summary:
+                        c1, c2, c3, c4 = st.columns(4)
 
-                  c1.metric("Total Signals", summary["Total Signals"])
-                  c2.metric("BUY / SELL", f"{summary['BUY']} / {summary['SELL']}")
-                  c3.metric("Target / SL", f"{summary['Target Hit']} / {summary['Stop Loss']}")
-                  c4.metric("Avg P&L %", summary["Avg P&L"])
+                        c1.metric("Total Signals", summary.get("Total Signals", 0))
+                        c2.metric("BUY / SELL", f"{summary.get('BUY', 0)} / {summary.get('SELL', 0)}")
+                        c3.metric("Target / SL", f"{summary.get('Target Hit', 0)} / {summary.get('Stop Loss', 0)}")
+                        c4.metric("Avg P&L %", summary.get("Avg P&L", 0))
 
                 st.dataframe(
-                  report,
-                  use_container_width=True,
-                  hide_index=True
-                )
-                excel_file = weekly_report_excel(report)
-                st.download_button(
-                   "📥 Download Weekly Report (.xlsx)",
-                   data=excel_file,
-                   file_name="weekly_report.xlsx",
-                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    report,
+                    use_container_width=True,
+                    hide_index=True
                 )
 
+                # Excel export (safe guard)
+                if "weekly_report_excel" in globals():
+                    excel_file = weekly_report_excel(report)
+
+                    st.download_button(
+                        "📥 Download Weekly Report (.xlsx)",
+                        data=excel_file,
+                        file_name="weekly_report.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
 
         st.button("📈 Monthly Report", disabled=True)
         st.button("📉 Performance Report", disabled=True)
 
+    # ================= RIGHT COLUMN =================
     with col2:
 
         st.button("🧪 Run Backtest", disabled=True)
