@@ -21,4 +21,34 @@ def generate_weekly_report():
 
     weekly = df[df["timestamp"] >= cutoff].copy()
 
-    return weekly.sort_values("timestamp", ascending=False)
+    weekly = weekly.sort_values("timestamp", ascending=False)
+
+    return weekly
+
+def weekly_summary(report):
+
+    if report.empty:
+        return None
+
+    total = len(report)
+    buy = (report["signal"] == "BUY").sum()
+    sell = (report["signal"] == "SELL").sum()
+
+    target = (report["status"] == "TARGET_HIT").sum()
+    stop = (report["status"] == "SL_HIT").sum()
+    open_trades = (report["status"] == "OPEN").sum()
+
+    avg_pnl = pd.to_numeric(
+        report["pnl_pct"],
+        errors="coerce"
+    ).mean()
+
+    return {
+        "Total Signals": total,
+        "BUY": buy,
+        "SELL": sell,
+        "Target Hit": target,
+        "Stop Loss": stop,
+        "Open": open_trades,
+        "Avg P&L": 0 if pd.isna(avg_pnl) else round(avg_pnl, 2)
+    }
