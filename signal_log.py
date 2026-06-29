@@ -379,43 +379,33 @@ def generate_weekly_report():
     df = load_signal_log()
 
     if df.empty:
-        return pd.DataFrame(), {}
+        st.write("Signal log is empty.")
+        return pd.DataFrame(), {
+            "total_trades": 0,
+            "closed_trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0,
+            "avg_pnl": 0,
+        }
 
-    # Parse timestamps
+    st.write("=== DEBUG WEEKLY REPORT ===")
+    st.write("Columns:", df.columns.tolist())
+    st.write("Timestamp dtype BEFORE:", df["timestamp"].dtype)
+    st.write("First 5 timestamp values:")
+    st.write(df["timestamp"].head())
+
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
-    # Remove invalid rows
-    df = df.dropna(subset=["timestamp"])
+    st.write("Timestamp dtype AFTER:", df["timestamp"].dtype)
+    st.write("First parsed timestamp:")
+    st.write(df["timestamp"].iloc[0])
 
-    # Compare using plain Python datetime objects
-    cutoff = datetime.now() - timedelta(days=7)
-
-    week_df = df[df["timestamp"] >= cutoff].copy()
-
-    closed = week_df[
-        week_df["status"].isin(["TARGET_HIT", "SL_HIT"])
-    ].copy()
-
-    summary = {
-        "total_trades": len(week_df),
-        "closed_trades": len(closed),
-        "wins": (closed["status"] == "TARGET_HIT").sum(),
-        "losses": (closed["status"] == "SL_HIT").sum(),
+    return pd.DataFrame(), {
+        "total_trades": len(df),
+        "closed_trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0,
+        "avg_pnl": 0,
     }
-
-    summary["win_rate"] = (
-        round(summary["wins"] / summary["closed_trades"] * 100, 1)
-        if summary["closed_trades"] > 0
-        else 0
-    )
-
-    if not closed.empty:
-        closed["pnl_pct"] = pd.to_numeric(
-            closed["pnl_pct"],
-            errors="coerce"
-        )
-        summary["avg_pnl"] = round(closed["pnl_pct"].mean(), 2)
-    else:
-        summary["avg_pnl"] = 0
-
-    return week_df, summary
