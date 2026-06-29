@@ -24,6 +24,7 @@ change when the TAB LAYOUT itself changes.
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from admin_tools import generate_weekly_report
 
 from config import IST, COMMODITY_DEFINITIONS, SECTOR_ORDER
 from signal_logic import (
