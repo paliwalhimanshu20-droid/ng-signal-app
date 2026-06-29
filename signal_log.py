@@ -384,10 +384,11 @@ def generate_weekly_report():
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     df = df.dropna(subset=["timestamp"])
 
-    # Make timestamps timezone-naive to match the stored CSV values
-    df["timestamp"] = df["timestamp"].dt.tz_localize(None)
+    # Convert both sides to timezone-naive
+    if getattr(df["timestamp"].dt, "tz", None) is not None:
+    df["timestamp"] = df["timestamp"].dt.tz_convert(None)
 
-    cutoff = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None) - timedelta(days=7)
+    cutoff = pd.Timestamp.now().normalize() - timedelta(days=7)
 
     week_df = df[df["timestamp"] >= cutoff]
 
