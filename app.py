@@ -421,3 +421,29 @@ with tab_performance:
                 use_container_width=True,
                 hide_index=True
             )
+    # =========================================================================
+# ADMIN CENTER
+# =========================================================================
+
+with tab_admin:
+
+    st.markdown(
+        '<div class="section-eyebrow">🛠️ Signal Pro Admin Center</div>',
+        unsafe_allow_html=True
+    )
+
+    st.info(
+        "Developer tools, reports and diagnostics will be managed from here."
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.button("📊 Weekly Report", disabled=True)
+        st.button("📈 Monthly Report", disabled=True)
+        st.button("📉 Performance Report", disabled=True)
+
+    with col2:
+        st.button("🧪 Run Backtest", disabled=True)
+        st.button("🔍 Diagnostics", disabled=True)
+        st.button("🗂️ Data Management", disabled=True)
