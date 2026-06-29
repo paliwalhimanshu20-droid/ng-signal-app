@@ -341,12 +341,10 @@ def compute_factor_performance(log_df):
 
     return results
 
-def get_admin_kpis(log_df):
-    """
-    Returns top-level KPIs for Admin dashboard cards.
-    """
+def get_admin_kpis():
+    df = load_signal_log()
 
-    if log_df.empty:
+    if df.empty:
         return {
             "total_trades": 0,
             "win_rate": 0,
@@ -356,12 +354,12 @@ def get_admin_kpis(log_df):
             "sl_hits": 0
         }
 
-    closed = log_df[log_df["status"].isin(["TARGET_HIT", "SL_HIT"])]
+    closed = df[df["status"].isin(["TARGET_HIT", "SL_HIT"])]
 
-    total = len(log_df)
-    open_trades = len(log_df[log_df["status"] == "OPEN"])
-    target_hits = len(log_df[log_df["status"] == "TARGET_HIT"])
-    sl_hits = len(log_df[log_df["status"] == "SL_HIT"])
+    total = len(df)
+    open_trades = len(df[df["status"] == "OPEN"])
+    target_hits = len(df[df["status"] == "TARGET_HIT"])
+    sl_hits = len(df[df["status"] == "SL_HIT"])
 
     win_rate = round((target_hits / len(closed)) * 100, 1) if len(closed) > 0 else 0
 
@@ -376,4 +374,3 @@ def get_admin_kpis(log_df):
         "target_hits": target_hits,
         "sl_hits": sl_hits
     }
-        
