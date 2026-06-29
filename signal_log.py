@@ -14,7 +14,7 @@ import base64
 import requests
 import pandas as pd
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from config import (
     SIGNAL_LOG_PATH, SIGNAL_LOG_COLUMNS,
@@ -374,8 +374,6 @@ def get_admin_kpis():
         "target_hits": target_hits,
         "sl_hits": sl_hits
     }
-from datetime import datetime, timedelta
-import pandas as pd
 
 def generate_weekly_report():
     df = load_signal_log()
@@ -389,7 +387,7 @@ def generate_weekly_report():
     cutoff = datetime.now(IST) - timedelta(days=7)
     week_df = df[df["timestamp"] >= cutoff]
 
-    closed = week_df[df["status"].isin(["TARGET_HIT", "SL_HIT"])]
+    closed = week_df[week_df["status"].isin(["TARGET_HIT", "SL_HIT"])]
 
     summary = {
         "total_trades": len(week_df),
