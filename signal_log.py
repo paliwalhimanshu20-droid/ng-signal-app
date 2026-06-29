@@ -374,3 +374,38 @@ def get_admin_kpis():
         "target_hits": target_hits,
         "sl_hits": sl_hits
     }
+from datetime import datetime, timedelta
+import pandas as pd
+
+def generate_weekly_report():
+    df = load_signal_log()
+
+    if df.empty:
+        return pd.DataFrame(), {}
+
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+
+    cutoff = datetime.now() - timedelta(days=7)
+    week_df = df[df["timestamp"] >= cutoff]
+
+    closed = week_df[week_df["status"].isin(["TARGET_HIT", "SL_HIT"])]
+
+    summary = {
+        "total_trades": len(week_df),
+        "closed_trades": len(closed),
+        "wins": len(closed[closed["status"] == "TARGET_HIT"]),
+        "losses": len(closed[closed["status"] == "SL_HIT"]),
+    }
+
+    summary["win_rate"] = round(
+        (summary["wins"] / summary["closed_trades"]) * 100,
+        1
+    ) if summary["closed_trades"] > 0 else 0
+
+    if not closed.empty:
+        closed["pnl_pct"] = pd.to_numeric(closed["pnl_pct"], errors="coerce")
+        summary["avg_pnl"] = round(closed["pnl_pct"].mean(), 2)
+    else:
+        summary["avg_pnl"] = 0
+
+    return week_df, summary
