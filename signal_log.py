@@ -375,16 +375,3 @@ def get_admin_kpis():
         "target_hits": target_hits,
         "sl_hits": sl_hits
     }
-
-def generate_weekly_report():
-    df = load_signal_log()
-
-    if df.empty:
-        return pd.DataFrame(), {}
-
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-
-    st.write(df.dtypes)
-    st.write(df.head())
-
-    st.stop()
