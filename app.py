@@ -508,3 +508,13 @@ with tab_admin:
         st.button("🧪 Run Backtest", disabled=True)
         st.button("🔍 Diagnostics", disabled=True)
         st.button("🗂️ Data Management", disabled=True)
+st.subheader("📊 Weekly Report")
+
+week_df, report = generate_weekly_report()
+
+st.metric("Total Trades", report["total_trades"])
+st.metric("Closed Trades", report["closed_trades"])
+st.metric("Win Rate", f"{report['win_rate']}%")
+st.metric("Avg P&L", report["avg_pnl"])
+
+st.dataframe(week_df)
