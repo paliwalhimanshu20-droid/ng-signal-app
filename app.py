@@ -24,35 +24,58 @@ change when the TAB LAYOUT itself changes.
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from admin_tools import (
-    generate_weekly_report,
-    weekly_summary
-)
-from admin import generate_weekly_report
-from signal_log import generate_weekly_report
-from signal_log import load_signal_log, get_admin_kpis
-from reports import (
-    generate_weekly_report,
-    weekly_report_excel
-)
 
-from config import IST, COMMODITY_DEFINITIONS, SECTOR_ORDER
-from signal_logic import (
-    ADX_WEAK_BELOW, ADX_STRONG_AT_OR_ABOVE,
-    MIN_EXPECTED_MOVE_PCT, MAX_EXPECTED_MOVE_PCT,
-)
-from watchlist import get_watchlist
-from upstox_client import validate_watchlist_keys, get_commodity_contracts, get_candles_range
+# Admin
+from admin_tools import weekly_summary
+
+# Reports
+from reports import weekly_report_excel
+
+# Signal Log
 from signal_log import (
-    load_signal_log, append_new_signals,
-    compute_performance_summary, compute_factor_performance,
+    generate_weekly_report,
+    load_signal_log,
+    get_admin_kpis,
+    append_new_signals,
+    compute_performance_summary,
+    compute_factor_performance,
     compute_timing_stats,
 )
+
+# Config
+from config import IST, COMMODITY_DEFINITIONS, SECTOR_ORDER
+
+# Signal Logic
+from signal_logic import (
+    ADX_WEAK_BELOW,
+    ADX_STRONG_AT_OR_ABOVE,
+    MIN_EXPECTED_MOVE_PCT,
+    MAX_EXPECTED_MOVE_PCT,
+)
+
+# Watchlist
+from watchlist import get_watchlist
+
+# Upstox
+from upstox_client import (
+    validate_watchlist_keys,
+    get_commodity_contracts,
+    get_candles_range,
+)
+
+# Scanner
 from scanner import run_scanner
+
+# Charts
 from charts import build_instrument_chart
+
+# UI
 from ui_components import (
-    inject_dashboard_css, render_stat_cards, render_opportunity_card,
-    render_hero_card, style_signal_column,
+    inject_dashboard_css,
+    render_stat_cards,
+    render_opportunity_card,
+    render_hero_card,
+    style_signal_column,
 )
 
 # NOTE: all indicator math and signal-scoring logic lives in signal_logic.py,
