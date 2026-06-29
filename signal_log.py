@@ -341,7 +341,7 @@ def compute_factor_performance(log_df):
 
     return results
 
-    def get_admin_kpis(log_df):
+def get_admin_kpis(log_df):
     """
     Returns top-level KPIs for Admin dashboard cards.
     """
