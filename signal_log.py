@@ -156,9 +156,7 @@ def append_new_signals(scan_results_df):
             "closed_price": None,
             "closed_at": None,
             "pnl_pct": None,
-            # NEW (point #4): factor readings at signal time, for later
-            # win-rate/avg-P&L breakdowns per factor — see
-            # compute_factor_performance() below.
+            "t2_hit_at": None,
             "daily_trend_agree": row.get("DailyTrendAgree", "N/A"),
             "supertrend_agree": row.get("SupertrendAgree", "N/A"),
             "market_trend_agree": row.get("MarketTrendAgree", "N/A"),
@@ -166,7 +164,6 @@ def append_new_signals(scan_results_df):
             "conviction_pct": row.get("ConvictionPct", "N/A"),
             "expected_move_pct": row.get("ExpectedMove%", "N/A"),
         })
-        "t2_hit_at": None,
 
     if new_rows:
         log_df = pd.concat([log_df, pd.DataFrame(new_rows)], ignore_index=True)
