@@ -26,7 +26,10 @@ import pandas as pd
 from datetime import datetime
 from admin_tools import generate_weekly_report
 from admin import generate_weekly_report
-from reports import generate_weekly_report
+from reports import (
+    generate_weekly_report,
+    weekly_report_excel
+)
 
 from config import IST, COMMODITY_DEFINITIONS, SECTOR_ORDER
 from signal_logic import (
