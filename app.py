@@ -441,24 +441,27 @@ with tab_admin:
     col1, col2 = st.columns(2)
 
     with col1:
+
         if st.button("📊 Weekly Report"):
 
-    report = generate_weekly_report()
+            report = generate_weekly_report()
 
-    if report.empty:
-        st.info("No signals found in the last 7 days.")
-    else:
-        st.success(f"{len(report)} signals found.")
+            if report.empty:
+                st.info("No signals found in the last 7 days.")
+            else:
+                st.success(f"{len(report)} signals found.")
 
-        st.dataframe(
-            report,
-            use_container_width=True,
-            hide_index=True
-        )
+                st.dataframe(
+                    report,
+                    use_container_width=True,
+                    hide_index=True
+                )
+
         st.button("📈 Monthly Report", disabled=True)
         st.button("📉 Performance Report", disabled=True)
 
     with col2:
+
         st.button("🧪 Run Backtest", disabled=True)
         st.button("🔍 Diagnostics", disabled=True)
         st.button("🗂️ Data Management", disabled=True)
