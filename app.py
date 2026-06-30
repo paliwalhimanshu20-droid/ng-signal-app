@@ -543,7 +543,7 @@ with tab_admin:
 
         if st.button("📈 Monthly Report"):
 
-           month_df, summary = generate_monthly_report()
+    month_df, summary = generate_monthly_report()
 
     if month_df.empty:
         st.info("No signals found in the last 30 days.")
@@ -573,16 +573,17 @@ with tab_admin:
             file_name="SignalPro_Monthly_Report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        st.button("📉 Performance Report", disabled=True)
 
-    # =====================================================
-    # TOOLS
-    # =====================================================
+st.button("📉 Performance Report", disabled=True)
 
-    with col2:
+# =====================================================
+# TOOLS
+# =====================================================
 
-        st.button("🧪 Run Backtest", disabled=True)
+with col2:
 
-        st.button("🔍 Diagnostics", disabled=True)
+    st.button("🧪 Run Backtest", disabled=True)
 
-        st.button("🗂️ Data Management", disabled=True)
+    st.button("🔍 Diagnostics", disabled=True)
+
+    st.button("🗂️ Data Management", disabled=True)
