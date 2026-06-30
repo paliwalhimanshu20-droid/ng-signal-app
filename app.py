@@ -543,7 +543,7 @@ with tab_admin:
 
         if st.button("📈 Monthly Report"):
 
-    month_df, summary = generate_monthly_report()
+           month_df, summary = generate_monthly_report()
 
     if month_df.empty:
         st.info("No signals found in the last 30 days.")
