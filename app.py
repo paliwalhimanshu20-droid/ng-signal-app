@@ -496,9 +496,9 @@ with tab_admin:
 
         if st.button("📊 Weekly Report"):
 
-            report = generate_weekly_report()
+            week_df, summary = generate_weekly_report()
 
-            if report.empty:
+            if week_df.empty:
                 st.info("No signals found in the last 7 days.")
             else:
                 summary = weekly_summary(report)
