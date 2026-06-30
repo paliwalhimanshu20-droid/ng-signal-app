@@ -500,6 +500,9 @@ with tab_admin:
 
     with col1:
 
+        # -----------------------------
+        # WEEKLY REPORT
+        # -----------------------------
         if st.button("📊 Weekly Report"):
 
             week_df, summary = generate_weekly_report()
@@ -535,55 +538,66 @@ with tab_admin:
                 excel_file = export_excel_report(week_df)
 
                 st.download_button(
-                    "📥 Download Excel Report",
+                    "📥 Download Weekly Excel Report",
                     data=excel_file,
                     file_name="SignalPro_Weekly_Report.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
 
+        # -----------------------------
+        # MONTHLY REPORT
+        # -----------------------------
         if st.button("📈 Monthly Report"):
 
-    month_df, summary = generate_monthly_report()
+            month_df, summary = generate_monthly_report()
 
-    if month_df.empty:
-        st.info("No signals found in the last 30 days.")
+            if month_df.empty:
 
-    else:
+                st.info("No signals found in the last 30 days.")
 
-        st.success(f"{len(month_df)} signals found.")
+            else:
 
-        c1, c2, c3, c4 = st.columns(4)
+                st.success(f"{len(month_df)} signals found.")
 
-        c1.metric("Total Trades", summary["total_trades"])
-        c2.metric("Closed Trades", summary["closed_trades"])
-        c3.metric("Win Rate", f"{summary['win_rate']}%")
-        c4.metric("Avg P&L", f"{summary['avg_pnl']}%")
+                rc1, rc2, rc3, rc4 = st.columns(4)
 
-        st.dataframe(
-            month_df,
-            use_container_width=True,
-            hide_index=True
-        )
+                with rc1:
+                    st.metric("Total Trades", summary["total_trades"])
 
-        excel_file = export_excel_report(month_df)
+                with rc2:
+                    st.metric("Closed Trades", summary["closed_trades"])
 
-        st.download_button(
-            "📥 Download Monthly Excel Report",
-            data=excel_file,
-            file_name="SignalPro_Monthly_Report.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+                with rc3:
+                    st.metric("Win Rate", f"{summary['win_rate']}%")
 
-st.button("📉 Performance Report", disabled=True)
+                with rc4:
+                    st.metric("Avg P&L", f"{summary['avg_pnl']}%")
 
-# =====================================================
-# TOOLS
-# =====================================================
+                st.dataframe(
+                    month_df,
+                    use_container_width=True,
+                    hide_index=True,
+                )
 
-with col2:
+                excel_file = export_excel_report(month_df)
 
-    st.button("🧪 Run Backtest", disabled=True)
+                st.download_button(
+                    "📥 Download Monthly Excel Report",
+                    data=excel_file,
+                    file_name="SignalPro_Monthly_Report.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
 
-    st.button("🔍 Diagnostics", disabled=True)
+        st.button("📉 Performance Report", disabled=True)
 
-    st.button("🗂️ Data Management", disabled=True)
+    # =====================================================
+    # TOOLS
+    # =====================================================
+
+    with col2:
+
+        st.button("🧪 Run Backtest", disabled=True)
+
+        st.button("🔍 Diagnostics", disabled=True)
+
+        st.button("🗂️ Data Management", disabled=True)
