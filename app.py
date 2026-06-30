@@ -33,7 +33,8 @@ from admin_tools import weekly_summary
 # Reports
 from reports import (
     generate_weekly_report,
-    weekly_report_excel,
+    generate_monthly_report,
+    export_excel_report,
 )
 # Signal Log
 from signal_log import (
@@ -540,8 +541,38 @@ with tab_admin:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
 
-        st.button("📈 Monthly Report", disabled=True)
+        if st.button("📈 Monthly Report"):
 
+    month_df, summary = generate_monthly_report()
+
+    if month_df.empty:
+        st.info("No signals found in the last 30 days.")
+
+    else:
+
+        st.success(f"{len(month_df)} signals found.")
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric("Total Trades", summary["total_trades"])
+        c2.metric("Closed Trades", summary["closed_trades"])
+        c3.metric("Win Rate", f"{summary['win_rate']}%")
+        c4.metric("Avg P&L", f"{summary['avg_pnl']}%")
+
+        st.dataframe(
+            month_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        excel_file = export_excel_report(month_df)
+
+        st.download_button(
+            "📥 Download Monthly Excel Report",
+            data=excel_file,
+            file_name="SignalPro_Monthly_Report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
         st.button("📉 Performance Report", disabled=True)
 
     # =====================================================
