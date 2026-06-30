@@ -479,6 +479,8 @@ with c3:
 
 with c4:
     st.metric("Open Trades", kpis["open_trades"])
+
+
 with tab_admin:
 
     st.markdown(
@@ -492,6 +494,10 @@ with tab_admin:
 
     col1, col2 = st.columns(2)
 
+    # =====================================================
+    # REPORTS
+    # =====================================================
+
     with col1:
 
         if st.button("📊 Weekly Report"):
@@ -499,50 +505,54 @@ with tab_admin:
             week_df, summary = generate_weekly_report()
 
             if week_df.empty:
+
                 st.info("No signals found in the last 7 days.")
+
             else:
-                summary = weekly_summary(report)
 
-                st.success(f"{len(report)} signals found.")
+                st.success(f"{len(week_df)} signals found.")
 
-                if summary:
-                    c1, c2, c3, c4 = st.columns(4)
+                rc1, rc2, rc3, rc4 = st.columns(4)
 
-                    c1.metric("Total Signals", summary["Total Signals"])
-                    c2.metric("BUY / SELL", f"{summary['BUY']} / {summary['SELL']}")
-                    c3.metric("Target / SL", f"{summary['Target Hit']} / {summary['Stop Loss']}")
-                    c4.metric("Avg P&L %", summary["Avg P&L"])
+                with rc1:
+                    st.metric("Total Trades", summary["total_trades"])
+
+                with rc2:
+                    st.metric("Closed Trades", summary["closed_trades"])
+
+                with rc3:
+                    st.metric("Win Rate", f"{summary['win_rate']}%")
+
+                with rc4:
+                    st.metric("Avg P&L", f"{summary['avg_pnl']}%")
 
                 st.dataframe(
-                    report,
+                    week_df,
                     use_container_width=True,
-                    hide_index=True
+                    hide_index=True,
                 )
 
-                excel_file = weekly_report_excel(report)
+                excel_file = weekly_report_excel(week_df)
 
                 st.download_button(
-                    "📥 Download Weekly Report (.xlsx)",
+                    "📥 Download Excel Report",
                     data=excel_file,
-                    file_name="weekly_report.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    file_name="SignalPro_Weekly_Report.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
 
         st.button("📈 Monthly Report", disabled=True)
+
         st.button("📉 Performance Report", disabled=True)
+
+    # =====================================================
+    # TOOLS
+    # =====================================================
 
     with col2:
 
         st.button("🧪 Run Backtest", disabled=True)
+
         st.button("🔍 Diagnostics", disabled=True)
+
         st.button("🗂️ Data Management", disabled=True)
-st.subheader("📊 Weekly Report")
-
-week_df, report = generate_weekly_report()
-
-st.metric("Total Trades", report["total_trades"])
-st.metric("Closed Trades", report["closed_trades"])
-st.metric("Win Rate", f"{report['win_rate']}%")
-st.metric("Avg P&L", report["avg_pnl"])
-
-st.dataframe(week_df)
