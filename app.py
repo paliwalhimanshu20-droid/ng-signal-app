@@ -35,7 +35,6 @@ from reports import (
     generate_weekly_report,
     weekly_report_excel,
 )
-
 # Signal Log
 from signal_log import (
     load_signal_log,
@@ -532,7 +531,7 @@ with tab_admin:
                     hide_index=True,
                 )
 
-                excel_file = weekly_report_excel(week_df)
+                excel_file = export_excel_report((week_df)
 
                 st.download_button(
                     "📥 Download Excel Report",
