@@ -532,7 +532,7 @@ with tab_admin:
                     hide_index=True,
                 )
 
-                excel_file = export_excel_report((week_df)
+                excel_file = export_excel_report(week_df)
 
                 st.download_button(
                     "📥 Download Excel Report",
