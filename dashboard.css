@@ -170,3 +170,49 @@ small, .stCaption { color: #6B6877 !important; }
   font-size: 13px; font-weight: 800; color:#1C1B22; text-transform:uppercase;
   letter-spacing: 0.06em; margin: 4px 0 10px 0;
                        }
+
+/* ============================================================
+   RISK CARD (Position Sizing & Risk Management, NGSP-003) — same card
+   shell as .opp-card, own metric-grid so RR/exposure/portfolio-risk
+   numbers get their own labeled tiles rather than being crammed into
+   .opp-metrics' inline-span layout.
+   ============================================================ */
+.risk-card {
+  background: #FFFFFF; border: 1px solid #E5E0EE; border-radius: 14px;
+  padding: 14px 16px; margin-bottom: 14px;
+}
+.risk-card.risk-card-invalid {
+  background: #FFF7F0; border-color: #FBD9B8;
+}
+.risk-card .risk-top {
+  display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
+}
+.risk-card .risk-name { font-weight: 800; font-size: 14px; color: #1C1B22; }
+.risk-card .risk-invalid-msg { font-size: 12.5px; color: #9A5B1F; }
+.risk-card .risk-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px; margin-bottom: 6px;
+}
+.risk-card .rm-label {
+  font-size: 10px; font-weight: 700; color: #8B85A0;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;
+}
+.risk-card .rm-value { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 15px; color: #1C1B22; }
+.risk-card .rm-value.pos { color: #16A34A; }
+.risk-card .risk-warning {
+  font-size: 12px; color: #9A5B1F; background: #FFF7ED; border-radius: 8px;
+  padding: 6px 10px; margin-top: 6px;
+}
+
+/* ============================================================
+   TRADE QUALITY BADGE — same pill shape as .sig-badge, own palette
+   ============================================================ */
+.quality-badge {
+  display: inline-block; font-size: 11px; font-weight: 800;
+  padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.quality-badge.excellent { background: #EDE9FE; color: #6D28D9; }
+.quality-badge.good      { background: #DCFCE7; color: #166534; }
+.quality-badge.average   { background: #FEF3C7; color: #92400E; }
+.quality-badge.poor      { background: #FFE1E6; color: #9F1239; }
+.quality-badge.none      { background: #F1EEF7; color: #6B6877; }
