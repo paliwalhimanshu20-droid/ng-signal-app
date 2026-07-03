@@ -33,7 +33,24 @@ def get_watchlist(commodity_contracts=None):
         "ONGC": "NSE_EQ|INE213A01029",
         "NTPC": "NSE_EQ|INE733E01010",
         "POWERGRID": "NSE_EQ|INE752E01010",
-        "TATAMOTORS": "NSE_EQ|INE155A01022",
+        # RENAMED Oct 24, 2025 (NSE circular): Tata Motors demerged on
+        # Oct 1, 2025 into two listed entities. THIS is the original
+        # legal entity (same company, same ISIN/INE155A01022) — it was
+        # renamed "Tata Motors Passenger Vehicles Ltd", trading symbol
+        # TMPV, not delisted. The instrument_key below is almost
+        # certainly still correct (ISIN doesn't change on a company
+        # rename), but the display key had to change to "TMPV" since
+        # that's the current trading_symbol Upstox's master now uses —
+        # that's what validate_watchlist_keys() was actually flagging
+        # ("NOT FOUND" for the old TATAMOTORS symbol, not a bad key).
+        # CONFIRM via "Validate Watchlist Instrument Keys" after this
+        # deploys — if the ISIN did change, that tool will show the
+        # correct live key to swap in.
+        #
+        # The NEW commercial-vehicles spinoff (a separate company) got
+        # its own separate listing under symbol TMCV — that's a
+        # different entity entirely and isn't in this watchlist.
+        "TMPV": "NSE_EQ|INE155A01022",
 
         # ---- Banking (top 5) ----
         "AXISBANK": "NSE_EQ|INE238A01034",
@@ -45,7 +62,7 @@ def get_watchlist(commodity_contracts=None):
         "HCLTECH": "NSE_EQ|INE860A01027",
         "TECHM": "NSE_EQ|INE669C01036",
 
-        # ---- Auto (top 5, TATAMOTORS already above) ----
+        # ---- Auto (top 5, TMPV already above) ----
         "MARUTI": "NSE_EQ|INE585B01010",
         "M&M": "NSE_EQ|INE101A01026",
         "BAJAJ-AUTO": "NSE_EQ|INE917I01010",
@@ -94,3 +111,4 @@ def get_sector(instrument_name):
     if "(MCX)" in instrument_name:
         return "Commodities"
     return SECTOR_MAP.get(instrument_name, "Other")
+    
