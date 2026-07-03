@@ -128,6 +128,37 @@ def render_hero_card(best):
     )
 
 
+def render_risk_unavailable_card(instrument_name, signal):
+    """
+    Shown in place of render_risk_card() for non-actionable signals
+    (WATCH, NO TRADE, or anything that isn't BUY/SELL). risk_engine's
+    generate_trade_summary()/calculate_position_size() deliberately
+    raise ValueError for a non-BUY/SELL signal — sizing a trade that
+    hasn't confirmed is meaningless, and the engine is supposed to stay
+    strict about that. This function is the UI-side guard: callers must
+    check the signal type themselves and route WATCH/NO TRADE here
+    instead of calling generate_trade_summary() at all. Same card shell
+    as render_risk_card() so it doesn't look like a broken/error state.
+    """
+    label = signal if signal else "NO TRADE"
+    st.markdown(
+        f"""
+        <div class="risk-card risk-card-unavailable">
+          <div class="risk-top">
+            <span class="risk-name">{instrument_name} — Position Sizing</span>
+            {signal_badge_html(signal)}
+          </div>
+          <div class="risk-unavailable-msg">
+            Position sizing is available only for actionable BUY and SELL signals.
+            "{label}" is not yet a confirmed trade — waiting for a BUY/SELL signal
+            before calculating position size.
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_risk_card(summary):
     """
     summary: the dict returned by risk_engine.generate_trade_summary().
