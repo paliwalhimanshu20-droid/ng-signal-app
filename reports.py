@@ -3,6 +3,27 @@ from io import BytesIO
 from datetime import datetime, timedelta
 
 from signal_log import load_signal_log
+from risk_engine import annotate_dataframe_with_risk
+from risk_config import DEFAULT_ACCOUNT_SIZE, DEFAULT_RISK_PER_TRADE_PCT
+
+# signal_log.csv's column names -> risk_engine.annotate_dataframe_with_risk()'s
+# generic field names. See that function's docstring for why this mapping
+# exists (scanner.py's live-scan columns use different names for the same
+# fields, and this mapping is specific to the signal_log.csv schema).
+_SIGNAL_LOG_RISK_COLUMN_MAP = {
+    "instrument": "instrument",
+    "signal": "signal",
+    "entry": "entry_price",
+    "sl": "sl",
+    "t1": "t1",
+    "t2": "t2",
+    "confidence_pct": "conviction_pct",
+    "score": "score",
+    # signal_log.csv doesn't store a "regime" column (see risk_config.py's
+    # comment on this) — omitted here, so Trade Quality can reach "Good"
+    # but not "Excellent" from historical log rows, which need a regime
+    # match. This is a known, documented limitation, not an oversight.
+}
 
 
 # ==========================================================
@@ -98,8 +119,22 @@ def generate_monthly_report():
 # Excel Export
 # ==========================================================
 
-def export_excel_report(report_df):
+def export_excel_report(report_df, account_size=DEFAULT_ACCOUNT_SIZE, risk_per_trade_pct=DEFAULT_RISK_PER_TRADE_PCT):
+    """
+    account_size / risk_per_trade_pct: OPTIONAL — default to risk_config's
+    defaults, so any existing call site that doesn't pass these (there
+    were none touching this signature before NGSP-003) keeps working.
+    app.py's Admin tab passes the same account-size/risk% the trader has
+    set in Settings, so exported reports reflect their actual sizing
+    assumptions rather than a generic default.
 
+    Adds Risk_Quantity / Risk_CapitalRequired / Risk_MaxRiskAmount /
+    Risk_RR_T1 / Risk_TradeQuality columns to every sheet except Summary
+    (NGSP-003's "Reports -> CSV/Excel Export" requirement) — computed
+    fresh at export time from each row's logged entry/SL/T1/T2, not a
+    frozen snapshot from when the signal originally fired (account
+    size/risk% are settings that can change; see risk_config.py).
+    """
     output = BytesIO()
 
     all_df = load_signal_log()
@@ -116,6 +151,23 @@ def export_excel_report(report_df):
         )
     ].copy()
 
+    open_count = len(open_df)
+
+    def _annotate(df):
+        if df.empty:
+            return df
+        return annotate_dataframe_with_risk(
+            df, _SIGNAL_LOG_RISK_COLUMN_MAP,
+            account_size=account_size,
+            risk_per_trade_pct=risk_per_trade_pct,
+            open_signal_count=open_count,
+        )
+
+    report_df = _annotate(report_df)
+    month_df = _annotate(month_df)
+    open_df = _annotate(open_df)
+    closed_df = _annotate(closed_df)
+
     summary = pd.DataFrame({
 
         "Metric": [
@@ -125,6 +177,8 @@ def export_excel_report(report_df):
             "Monthly Trades",
             "Open Trades",
             "Closed Trades",
+            "Account Size Used",
+            "Risk Per Trade % Used",
         ],
 
         "Value": [
@@ -134,6 +188,8 @@ def export_excel_report(report_df):
             len(month_df),
             len(open_df),
             len(closed_df),
+            account_size,
+            risk_per_trade_pct,
         ],
     })
 
@@ -175,3 +231,4 @@ def export_excel_report(report_df):
     output.seek(0)
 
     return output
+    
