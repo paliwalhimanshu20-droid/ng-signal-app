@@ -61,6 +61,17 @@ def signal_badge_html(signal):
     return f'<span class="sig-badge {cls}">{label}</span>'
 
 
+def trade_quality_badge_html(quality):
+    """Same visual language as signal_badge_html — small pill, not a
+    second competing style system. See dashboard.css's .quality-badge.*"""
+    cls = {
+        "Excellent": "excellent", "Good": "good",
+        "Average": "average", "Poor": "poor",
+    }.get(quality, "none")
+    label = quality if quality else "N/A"
+    return f'<span class="quality-badge {cls}">{label}</span>'
+
+
 def render_opportunity_card(row):
     st.markdown(
         f"""
@@ -117,6 +128,64 @@ def render_hero_card(best):
     )
 
 
+def render_risk_card(summary):
+    """
+    summary: the dict returned by risk_engine.generate_trade_summary().
+    Renders the Position Sizing & Risk Management (NGSP-003) breakdown
+    for one signal — quantity, capital required, RR, exposure, portfolio
+    heat, and a Trade Quality badge — using the same visual language as
+    render_opportunity_card()/render_hero_card() (see dashboard.css's
+    .risk-card.* rules), not a new competing style.
+
+    Purely a rendering function — it does not compute anything itself,
+    and it never places or suggests placing an order; see
+    risk_engine.py's module docstring.
+    """
+    if not summary["is_valid"]:
+        st.markdown(
+            f"""
+            <div class="risk-card risk-card-invalid">
+              <div class="risk-top">
+                <span class="risk-name">{summary['instrument']} — Position Sizing</span>
+              </div>
+              <div class="risk-invalid-msg">⚠ {summary['invalid_reason']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    warnings_html = "".join(f'<div class="risk-warning">⚠ {w}</div>' for w in summary["warnings"])
+
+    def _fmt_money(v):
+        return f"₹{v:,.2f}" if v is not None else "N/A"
+
+    st.markdown(
+        f"""
+        <div class="risk-card">
+          <div class="risk-top">
+            <span class="risk-name">{summary['instrument']} — Position Sizing</span>
+            {trade_quality_badge_html(summary['trade_quality'])}
+          </div>
+          <div class="risk-metrics">
+            <div><div class="rm-label">Quantity</div><div class="rm-value">{summary['quantity']:,}</div></div>
+            <div><div class="rm-label">Capital Required</div><div class="rm-value">{_fmt_money(summary['capital_required'])}</div></div>
+            <div><div class="rm-label">Max Risk</div><div class="rm-value">{_fmt_money(summary['max_risk_amount'])}</div></div>
+            <div><div class="rm-label">RR (T1)</div><div class="rm-value">{summary['rr_t1'] if summary['rr_t1'] is not None else 'N/A'}</div></div>
+          </div>
+          <div class="risk-metrics">
+            <div><div class="rm-label">Profit @ T1</div><div class="rm-value pos">{_fmt_money(summary['potential_profit_t1'])}</div></div>
+            <div><div class="rm-label">Profit @ T2</div><div class="rm-value pos">{_fmt_money(summary['potential_profit_t2'])}</div></div>
+            <div><div class="rm-label">Exposure</div><div class="rm-value">{summary['exposure_pct']}% ({summary['exposure_tier']})</div></div>
+            <div><div class="rm-label">Portfolio Risk</div><div class="rm-value">{summary['portfolio_risk_pct']}% ({summary['portfolio_risk_tier']})</div></div>
+          </div>
+          {warnings_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def style_signal_column(styler, signal_col="Signal"):
     """
     Applies a light background tint to the Signal column of a scanner
@@ -137,3 +206,4 @@ def style_signal_column(styler, signal_col="Signal"):
     if signal_col in styler.data.columns:
         return styler.map(_color, subset=[signal_col])
     return styler
+    
