@@ -17,6 +17,7 @@ from signal_logic import (
     ema, atr, rsi,
     calculate_supertrend, compute_adx, signal_engine, levels,
 )
+from config import COMMODITY_RISK_PARAMS
 
 
 def volume_signal(candles):
@@ -135,6 +136,17 @@ def run_scanner(commodity_contracts=None):
             # doesn't multiply API calls on every scan within the same day.
             daily_trend = get_daily_trend(instrument_key)
 
+            # NG SIGNAL ACCURACY FIX: instruments added via the MCX commodity
+            # dropdown are named "<Display> (MCX)" (same convention
+            # watchlist.get_sector() uses). Those get asset-class-appropriate
+            # ADX/ExpectedMove% gate bounds from config.COMMODITY_RISK_PARAMS
+            # instead of the NSE-equity-tuned signal_logic.py defaults — see
+            # that dict's comment for why. Every NSE equity is unaffected
+            # (risk_overrides stays {} for them, so signal_engine() falls
+            # back to its original module-level defaults exactly as before).
+            is_commodity = "(MCX)" in name
+            risk_overrides = COMMODITY_RISK_PARAMS if is_commodity else {}
+
             signal, score, prob, trend, regime, expected_move, reasons, conviction_pct = signal_engine(
                 price,
                 ema20,
@@ -143,7 +155,8 @@ def run_scanner(commodity_contracts=None):
                 daily_trend,
                 supertrend_trend,
                 market_trend,
-                adx_val
+                adx_val,
+                **risk_overrides
             )
 
             sl, t1, t2 = levels(price, atr_val, signal, trend, regime)
@@ -215,3 +228,4 @@ def run_scanner(commodity_contracts=None):
         top5_df = full_df
 
     return top5_df, full_df
+    
