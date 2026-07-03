@@ -215,7 +215,7 @@ with tab_settings:
 
     with rc4:
         round_label = st.radio(
-            "Round Quantity", options=["Nearest Lot", "Nearest Share"], key="risk_round_mode", horizontal=True,
+            "Round Quantity", options=["Nearest Lot", "Nearest Share"], key="risk_round_mode_widget", horizontal=True,
         )
         st.session_state.risk_round_mode = "nearest_lot" if round_label == "Nearest Lot" else "nearest_share"
 
