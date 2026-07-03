@@ -49,6 +49,17 @@ from signal_log import (
 # Config
 from config import IST, COMMODITY_DEFINITIONS, SECTOR_ORDER
 
+# Risk Config (NGSP-003)
+from risk_config import (
+    ACCOUNT_SIZE_PRESETS, DEFAULT_ACCOUNT_SIZE,
+    RISK_PER_TRADE_PRESETS_PCT, DEFAULT_RISK_PER_TRADE_PCT,
+)
+
+# Risk Engine (NGSP-003) — position sizing / risk management, decision
+# support only. See risk_engine.py's module docstring: no broker
+# integration, no order placement.
+from risk_engine import generate_trade_summary
+
 # Signal Logic
 from signal_logic import (
     ADX_WEAK_BELOW,
@@ -79,6 +90,7 @@ from ui_components import (
     render_stat_cards,
     render_opportunity_card,
     render_hero_card,
+    render_risk_card,
     style_signal_column,
 )
 
@@ -152,6 +164,69 @@ with tab_settings:
     )
 
     st.markdown("---")
+    st.markdown('<div class="section-eyebrow">Risk Management Settings (NGSP-003)</div>', unsafe_allow_html=True)
+    st.caption(
+        "These settings drive position sizing on every signal card and in "
+        "exported reports — decision support only, this never places an order."
+    )
+
+    rc1, rc2 = st.columns(2)
+
+    with rc1:
+        account_preset = st.selectbox(
+            "Account Size",
+            options=[f"₹{p:,}" for p in ACCOUNT_SIZE_PRESETS] + ["Custom"],
+            index=ACCOUNT_SIZE_PRESETS.index(DEFAULT_ACCOUNT_SIZE) if DEFAULT_ACCOUNT_SIZE in ACCOUNT_SIZE_PRESETS else 0,
+            key="risk_account_preset",
+        )
+        if account_preset == "Custom":
+            st.session_state.risk_account_size = st.number_input(
+                "Custom Account Size (₹)", min_value=1.0,
+                value=float(DEFAULT_ACCOUNT_SIZE), step=10000.0, key="risk_account_custom",
+            )
+        else:
+            st.session_state.risk_account_size = float(account_preset.replace("₹", "").replace(",", ""))
+
+    with rc2:
+        risk_preset = st.selectbox(
+            "Risk Per Trade",
+            options=[f"{p}%" for p in RISK_PER_TRADE_PRESETS_PCT] + ["Custom"],
+            index=RISK_PER_TRADE_PRESETS_PCT.index(DEFAULT_RISK_PER_TRADE_PCT) if DEFAULT_RISK_PER_TRADE_PCT in RISK_PER_TRADE_PRESETS_PCT else 0,
+            key="risk_pct_preset",
+        )
+        if risk_preset == "Custom":
+            st.session_state.risk_per_trade_pct = st.number_input(
+                "Custom Risk Per Trade (%)", min_value=0.01, max_value=100.0,
+                value=DEFAULT_RISK_PER_TRADE_PCT, step=0.1, key="risk_pct_custom",
+            )
+        else:
+            st.session_state.risk_per_trade_pct = float(risk_preset.replace("%", ""))
+
+    rc3, rc4 = st.columns(2)
+
+    with rc3:
+        lot_mode = st.radio("Lot Size", options=["Auto", "Manual Override"], key="risk_lot_mode", horizontal=True)
+        if lot_mode == "Manual Override":
+            st.session_state.risk_lot_override = st.number_input(
+                "Manual Lot Size", min_value=1.0, value=1.0, step=1.0, key="risk_lot_override_input",
+            )
+        else:
+            st.session_state.risk_lot_override = None
+
+    with rc4:
+        round_label = st.radio(
+            "Round Quantity", options=["Nearest Lot", "Nearest Share"], key="risk_round_mode", horizontal=True,
+        )
+        st.session_state.risk_round_mode = "nearest_lot" if round_label == "Nearest Lot" else "nearest_share"
+
+    st.caption(
+        f"Sizing every signal for a ₹{st.session_state.risk_account_size:,.0f} account at "
+        f"{st.session_state.risk_per_trade_pct}% risk per trade "
+        f"({'lot size: ' + str(st.session_state.risk_lot_override) if st.session_state.risk_lot_override else 'auto lot size'}, "
+        f"rounding to {round_label.lower()})."
+    )
+
+
     st.markdown('<div class="section-eyebrow">Watchlist Diagnostics</div>', unsafe_allow_html=True)
 
     with st.expander("🔍 Validate Watchlist Instrument Keys"):
@@ -237,6 +312,32 @@ with tab_scanner:
     if full_df.empty:
         st.warning("No data returned from scanner. Click 'Run Live Scan' above, or check the API error banners if one was just attempted.")
     else:
+        # ---- Position sizing (NGSP-003): one summary function reused by
+        # every card below, driven by the Settings-tab session_state values
+        # set earlier in this file. open_signal_count is read once per
+        # render (not per card) since it's the same "how many trades are
+        # already open" number for every candidate this scan.
+        _log_df = load_signal_log()
+        _open_count = int((_log_df["status"] == "OPEN").sum()) if not _log_df.empty else 0
+
+        def _risk_summary_for_row(row):
+            return generate_trade_summary(
+                instrument_name=row["Instrument"],
+                signal=row["Signal"],
+                entry=row["Price"],
+                stop_loss=row["SL"],
+                target1=row["T1"],
+                target2=row["T2"],
+                confidence_pct=row["Prob%"],
+                regime=row["Regime"],
+                technical_score=row["Score"],
+                account_size=st.session_state.risk_account_size,
+                risk_per_trade_pct=st.session_state.risk_per_trade_pct,
+                lot_size_override=st.session_state.risk_lot_override,
+                round_mode=st.session_state.risk_round_mode,
+                open_signal_count=_open_count,
+            )
+
         # ---- BUY / SELL opportunity cards (today's actionable picks) ----
         buy_df = df[df["Signal"] == "BUY"]
         sell_df = df[df["Signal"] == "SELL"]
@@ -245,14 +346,20 @@ with tab_scanner:
             st.markdown('<div class="section-eyebrow">🟢 Buy Opportunities</div>', unsafe_allow_html=True)
             for _, row in buy_df.iterrows():
                 render_opportunity_card(row)
+                with st.expander(f"💰 Position Sizing — {row['Instrument']}"):
+                    render_risk_card(_risk_summary_for_row(row))
 
         if not sell_df.empty:
             st.markdown('<div class="section-eyebrow">🔴 Sell Opportunities</div>', unsafe_allow_html=True)
             for _, row in sell_df.iterrows():
                 render_opportunity_card(row)
+                with st.expander(f"💰 Position Sizing — {row['Instrument']}"):
+                    render_risk_card(_risk_summary_for_row(row))
 
         if not df.empty:
             render_hero_card(df.iloc[0])
+            with st.expander(f"💰 Position Sizing — {df.iloc[0]['Instrument']} (Best Setup)", expanded=True):
+                render_risk_card(_risk_summary_for_row(df.iloc[0]))
         elif buy_df.empty and sell_df.empty:
             st.info("No strong setups (score ≥ 7, actionable) found this scan.")
 
@@ -535,7 +642,7 @@ with tab_admin:
                     hide_index=True,
                 )
 
-                excel_file = export_excel_report(week_df)
+                excel_file = export_excel_report(week_df, account_size=st.session_state.risk_account_size, risk_per_trade_pct=st.session_state.risk_per_trade_pct)
 
                 st.download_button(
                     "📥 Download Weekly Excel Report",
@@ -579,7 +686,7 @@ with tab_admin:
                     hide_index=True,
                 )
 
-                excel_file = export_excel_report(month_df)
+                excel_file = export_excel_report(month_df, account_size=st.session_state.risk_account_size, risk_per_trade_pct=st.session_state.risk_per_trade_pct)
 
                 st.download_button(
                     "📥 Download Monthly Excel Report",
