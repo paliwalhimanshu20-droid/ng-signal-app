@@ -23,6 +23,8 @@ Functions:
 import requests
 import streamlit as st
 import pandas as pd
+import gzip
+import json
 from datetime import datetime
 
 from config import UPSTOX_ACCESS_TOKEN, IST, NIFTY50_INSTRUMENT_KEY
@@ -51,16 +53,35 @@ def safe_get(url, headers=None):
 
 @st.cache_data(ttl=86400)
 def load_instrument_master():
-    url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json"
+    """
+    Fetches Upstox's official NSE instrument master file, used by
+    validate_watchlist_keys() to catch hardcoded instrument_key drift
+    (see that function's docstring). Public, unauthenticated S3-hosted
+    asset — no auth headers required.
+
+    NOTE: the uncompressed .json object on this bucket has been
+    deprecated by Upstox — requesting it now returns a 403 AccessDenied
+    (S3's standard response for a missing object key when the bucket
+    denies anonymous s3:ListBucket, so it presents as a permissions
+    error rather than a plain 404, which is a bit misleading). Every
+    current example in Upstox's own docs/community uses the gzipped
+    .json.gz path instead, so that's what's fetched here — decompressed
+    locally before parsing, same resulting data shape as before.
+    """
+    url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz"
 
     try:
         response = requests.get(url, timeout=20)
 
-        st.write("Status:", response.status_code)
-        st.write("Content-Type:", response.headers.get("content-type"))
-        st.write("First 300 chars:", response.text[:300])
+        if response.status_code != 200:
+            st.error(
+                f"Instrument master fetch failed ({response.status_code}) for {url}\n"
+                f"{response.text[:300]}"
+            )
+            return []
 
-        return response.json()
+        raw_bytes = gzip.decompress(response.content)
+        return json.loads(raw_bytes)
 
     except Exception as e:
         st.error(f"Instrument Master Error: {e}")
@@ -432,3 +453,4 @@ def get_market_trend():
     e50 = ema(closes, 50)
 
     return "Bullish" if e20 > e50 else "Bearish"
+    
