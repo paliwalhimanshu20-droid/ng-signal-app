@@ -216,3 +216,13 @@ small, .stCaption { color: #6B6877 !important; }
 .quality-badge.average   { background: #FEF3C7; color: #92400E; }
 .quality-badge.poor      { background: #FFE1E6; color: #9F1239; }
 .quality-badge.none      { background: #F1EEF7; color: #6B6877; }
+
+/* NGSP-003 integration fix: WATCH/NO TRADE informational state — calm
+   neutral tone, deliberately NOT the .risk-card-invalid orange, since
+   this isn't an error, it's an expected "nothing to size yet" state. */
+.risk-card.risk-card-unavailable {
+  background: #F8F7FB; border-color: #E5E0EE;
+}
+.risk-card .risk-unavailable-msg {
+  font-size: 12.5px; color: #6B6877; line-height: 1.5;
+}
