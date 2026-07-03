@@ -363,20 +363,44 @@ def trend_conviction(trend, daily_trend=None, supertrend_trend=None, market_tren
 # function — so testing "what if the score threshold were 6 instead of
 # 8" can never silently diverge from what the live gates actually do.
 
-def passes_risk_gates(conviction_pct, adx_val, expected_move):
+def passes_risk_gates(conviction_pct, adx_val, expected_move,
+                       adx_weak_below=None,
+                       min_expected_move_pct=None,
+                       max_expected_move_pct=None):
     """
     conviction_pct: from trend_conviction(), or None.
     adx_val: from compute_adx(), or None.
     expected_move: ExpectedMove% (ATR/price*100).
 
+    adx_weak_below / min_expected_move_pct / max_expected_move_pct:
+    OPTIONAL asset-class-specific overrides for the module-level
+    ADX_WEAK_BELOW / MIN_EXPECTED_MOVE_PCT / MAX_EXPECTED_MOVE_PCT
+    defaults. Every existing caller that doesn't pass these keeps
+    getting EXACT equity-tuned behavior, unchanged (backtest.py,
+    app.py, and every test all continue to work as before).
+
+    Why this exists: these three module constants were tuned against
+    NSE cash-equity behavior. Commodity futures (e.g. MCX Natural Gas)
+    have a structurally different volatility profile — NG routinely
+    posts ExpectedMove% readings well above the equity-tuned 5.0%
+    ceiling on perfectly ordinary trend days, which previously caused
+    this exact gate to reject or downgrade NG's best, most tradeable
+    setups as "extreme volatility". scanner.py now passes
+    config.COMMODITY_RISK_PARAMS for MCX instruments; every other
+    instrument still resolves to the original defaults below.
+
     Returns (passes_all: bool, detail: dict) — detail breaks out each
     individual gate so callers (e.g. backtest.py) can report exactly
     which gate blocked a setup, not just a single pass/fail bit.
     """
+    adx_weak_below = ADX_WEAK_BELOW if adx_weak_below is None else adx_weak_below
+    min_expected_move_pct = MIN_EXPECTED_MOVE_PCT if min_expected_move_pct is None else min_expected_move_pct
+    max_expected_move_pct = MAX_EXPECTED_MOVE_PCT if max_expected_move_pct is None else max_expected_move_pct
+
     detail = {
         "conviction": (conviction_pct is None) or (conviction_pct >= 50),
-        "strength": (adx_val is None) or (adx_val >= ADX_WEAK_BELOW),
-        "volatility": MIN_EXPECTED_MOVE_PCT <= expected_move <= MAX_EXPECTED_MOVE_PCT,
+        "strength": (adx_val is None) or (adx_val >= adx_weak_below),
+        "volatility": min_expected_move_pct <= expected_move <= max_expected_move_pct,
     }
     return all(detail.values()), detail
 
@@ -384,7 +408,9 @@ def passes_risk_gates(conviction_pct, adx_val, expected_move):
 # ================= SIGNAL ENGINE =================
 
 def signal_engine(price, ema20, ema50, atr_val, daily_trend=None, supertrend_trend=None,
-                   market_trend=None, adx_val=None):
+                   market_trend=None, adx_val=None,
+                   adx_weak_below=None, adx_strong_at_or_above=None,
+                   min_expected_move_pct=None, max_expected_move_pct=None):
     """
     price/ema20/ema50/atr_val: same as before — the 30-min-timeframe
     base inputs.
@@ -401,13 +427,29 @@ def signal_engine(price, ema20, ema50, atr_val, daily_trend=None, supertrend_tre
     ADX) or vice versa.
 
     Also applies a volatility sanity filter (point #5): ExpectedMove%
-    outside [MIN_EXPECTED_MOVE_PCT, MAX_EXPECTED_MOVE_PCT] is penalized.
+    outside [min_expected_move_pct, max_expected_move_pct] is penalized.
+
+    adx_weak_below / adx_strong_at_or_above / min_expected_move_pct /
+    max_expected_move_pct: OPTIONAL asset-class-specific overrides for
+    the module-level ADX_WEAK_BELOW / ADX_STRONG_AT_OR_ABOVE /
+    MIN_EXPECTED_MOVE_PCT / MAX_EXPECTED_MOVE_PCT defaults (equity-
+    tuned). Omit these (as every pre-existing caller does) and behavior
+    is byte-for-byte identical to before. scanner.py passes
+    config.COMMODITY_RISK_PARAMS for MCX instruments (e.g. Natural
+    Gas) so the same equity ceiling doesn't gate out NG's genuinely
+    tradeable, higher-volatility setups. See passes_risk_gates() for
+    the matching gate-side overrides.
 
     Returns: signal, score, probability, trend, regime, expected_move,
              reasons, conviction_pct
     (conviction_pct is returned so callers can log it for later factor-
     performance analysis without recomputing it.)
     """
+    adx_weak_below = ADX_WEAK_BELOW if adx_weak_below is None else adx_weak_below
+    adx_strong_at_or_above = ADX_STRONG_AT_OR_ABOVE if adx_strong_at_or_above is None else adx_strong_at_or_above
+    min_expected_move_pct = MIN_EXPECTED_MOVE_PCT if min_expected_move_pct is None else min_expected_move_pct
+    max_expected_move_pct = MAX_EXPECTED_MOVE_PCT if max_expected_move_pct is None else max_expected_move_pct
+
     score = 4
     reasons = ["Base Score"]
 
@@ -454,26 +496,31 @@ def signal_engine(price, ema20, ema50, atr_val, daily_trend=None, supertrend_tre
     # --- ADX trend-strength filter (point #2) — score penalty/bonus only;
     # the actual gating decision is centralized in passes_risk_gates() below.
     if adx_val is not None:
-        if adx_val < ADX_WEAK_BELOW:
+        if adx_val < adx_weak_below:
             score -= 2
             reasons.append(f"⚠ Weak trend strength (ADX {adx_val}) — choppy/range risk")
-        elif adx_val >= ADX_STRONG_AT_OR_ABOVE:
+        elif adx_val >= adx_strong_at_or_above:
             score += 1
             reasons.append(f"Strong trend strength (ADX {adx_val})")
 
     # --- Volatility sanity filter (point #5) — same: score effect here,
     # gating decision centralized below.
-    if expected_move < MIN_EXPECTED_MOVE_PCT:
+    if expected_move < min_expected_move_pct:
         score -= 2
         reasons.append(f"⚠ Volatility too low ({expected_move}%) — dead session, unreliable")
-    elif expected_move > MAX_EXPECTED_MOVE_PCT:
+    elif expected_move > max_expected_move_pct:
         score -= 2
         reasons.append(f"⚠ Volatility extreme ({expected_move}%) — possible news/gap spike")
 
     score = max(0, min(score, 10))
     probability = int((score / 10) * 100)
 
-    passes_all, _gate_detail = passes_risk_gates(conviction_pct, adx_val, expected_move)
+    passes_all, _gate_detail = passes_risk_gates(
+        conviction_pct, adx_val, expected_move,
+        adx_weak_below=adx_weak_below,
+        min_expected_move_pct=min_expected_move_pct,
+        max_expected_move_pct=max_expected_move_pct,
+    )
 
     if score >= 8 and passes_all:
         signal = "BUY" if trend == "Bullish" else "SELL"
