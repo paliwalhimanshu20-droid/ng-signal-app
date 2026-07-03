@@ -91,6 +91,7 @@ from ui_components import (
     render_opportunity_card,
     render_hero_card,
     render_risk_card,
+    render_risk_unavailable_card,
     style_signal_column,
 )
 
@@ -320,6 +321,8 @@ with tab_scanner:
         _log_df = load_signal_log()
         _open_count = int((_log_df["status"] == "OPEN").sum()) if not _log_df.empty else 0
 
+        _ACTIONABLE_SIGNALS = ("BUY", "SELL")
+
         def _risk_summary_for_row(row):
             return generate_trade_summary(
                 instrument_name=row["Instrument"],
@@ -338,6 +341,25 @@ with tab_scanner:
                 open_signal_count=_open_count,
             )
 
+        def _render_position_sizing(row):
+            """
+            THE fix for the WATCH/ValueError bug: every call site below
+            goes through this one gate instead of calling
+            generate_trade_summary() directly. risk_engine.py stays
+            strict (BUY/SELL only, by design — see its module docstring)
+            and is never touched here; this function is purely the UI
+            traffic cop deciding whether it's even appropriate to call it.
+            Routes WATCH/NO TRADE/anything else to the informational card
+            instead of the sizing card, so the Best Trade Setup slot (which
+            scanner.py's top5_df deliberately allows to be a WATCH row) can
+            never again reach generate_trade_summary() with a non-
+            actionable signal.
+            """
+            if row["Signal"] in _ACTIONABLE_SIGNALS:
+                render_risk_card(_risk_summary_for_row(row))
+            else:
+                render_risk_unavailable_card(row["Instrument"], row["Signal"])
+
         # ---- BUY / SELL opportunity cards (today's actionable picks) ----
         buy_df = df[df["Signal"] == "BUY"]
         sell_df = df[df["Signal"] == "SELL"]
@@ -347,19 +369,19 @@ with tab_scanner:
             for _, row in buy_df.iterrows():
                 render_opportunity_card(row)
                 with st.expander(f"💰 Position Sizing — {row['Instrument']}"):
-                    render_risk_card(_risk_summary_for_row(row))
+                    _render_position_sizing(row)
 
         if not sell_df.empty:
             st.markdown('<div class="section-eyebrow">🔴 Sell Opportunities</div>', unsafe_allow_html=True)
             for _, row in sell_df.iterrows():
                 render_opportunity_card(row)
                 with st.expander(f"💰 Position Sizing — {row['Instrument']}"):
-                    render_risk_card(_risk_summary_for_row(row))
+                    _render_position_sizing(row)
 
         if not df.empty:
             render_hero_card(df.iloc[0])
             with st.expander(f"💰 Position Sizing — {df.iloc[0]['Instrument']} (Best Setup)", expanded=True):
-                render_risk_card(_risk_summary_for_row(df.iloc[0]))
+                _render_position_sizing(df.iloc[0])
         elif buy_df.empty and sell_df.empty:
             st.info("No strong setups (score ≥ 7, actionable) found this scan.")
 
