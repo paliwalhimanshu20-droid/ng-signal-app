@@ -97,6 +97,35 @@ COMMODITY_DEFINITIONS = [
     ("Natural Gas", "NATURALGAS"),
 ]
 
+# ================= COMMODITY RISK CALIBRATION =================
+# signal_logic.signal_engine()'s live BUY/SELL/WATCH gate (ADX strength
+# band + ExpectedMove% sanity band) was tuned against NSE cash-equity
+# behavior. MCX commodity futures — Natural Gas especially — have a
+# structurally different volatility profile: ExpectedMove% (ATR/price)
+# readings well above the equity-tuned 5.0% ceiling are ORDINARY on real
+# NG trend days (particularly around the weekly EIA storage report),
+# so leaving every instrument on the equity defaults meant the app's own
+# volatility sanity filter was penalizing and gating out NG's best,
+# most tradeable setups as "extreme" — not a data or math bug, a
+# calibration gap.
+#
+# scanner.py passes this dict (via **kwargs) into signal_engine() only
+# for watchlist entries whose display name contains "(MCX)" (the same
+# convention watchlist.get_sector() already uses to detect commodities).
+# Every NSE equity keeps using signal_logic.py's original module-level
+# defaults untouched.
+#
+# These are calibrated STARTING POINTS based on NG's typical intraday
+# range, not a backtested optimum. Re-validate/refine them with
+# backtest.py once enough live NG signal history has accumulated in
+# signal_log.csv — do not treat these as final.
+COMMODITY_RISK_PARAMS = {
+    "adx_weak_below": 18,            # commodities trend more persistently than NSE cash equities intraday; a slightly looser floor avoids penalizing genuine trend days as "choppy"
+    "adx_strong_at_or_above": 25,    # unchanged from the equity default — no evidence yet this needs to differ
+    "min_expected_move_pct": 0.25,   # NG is rarely truly dead; a slightly higher floor filters thin/off-peak-hour noise better than the equity 0.15%
+    "max_expected_move_pct": 12.0,   # was silently inherited from the equity default (5.0%) before this fix — NG routinely exceeds that on ordinary trend/news days without it being a "gap spike"
+}
+
 # ================= SECTOR MAP =================
 # Maps each watchlist symbol to the sector bucket it should appear under in
 # the dashboard's "Full Scanned Universe" view. Mirrors the grouping already
@@ -134,3 +163,4 @@ SECTOR_MAP = {
 
 # Display order for the sector accordion in the UI
 SECTOR_ORDER = ["Banking", "IT", "Auto", "Pharma", "FMCG", "Energy", "Metals", "Commodities", "Other"]
+
