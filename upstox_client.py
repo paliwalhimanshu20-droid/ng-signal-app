@@ -56,35 +56,119 @@ def load_instrument_master():
     """
     Fetches Upstox's official NSE instrument master file, used by
     validate_watchlist_keys() to catch hardcoded instrument_key drift
-    (see that function's docstring). Public, unauthenticated S3-hosted
-    asset — no auth headers required.
+    (see that function's docstring).
 
-    NOTE: the uncompressed .json object on this bucket has been
-    deprecated by Upstox — requesting it now returns a 403 AccessDenied
-    (S3's standard response for a missing object key when the bucket
-    denies anonymous s3:ListBucket, so it presents as a permissions
-    error rather than a plain 404, which is a bit misleading). Every
-    current example in Upstox's own docs/community uses the gzipped
-    .json.gz path instead, so that's what's fetched here — decompressed
-    locally before parsing, same resulting data shape as before.
+    URL/format verified directly against Upstox's current official docs
+    (https://upstox.com/developer/api-documentation/instruments) as of
+    this fix: the gzipped NSE.json.gz path below is the ONLY NSE BOD
+    instrument link listed there — the plain uncompressed .json path
+    is gone from the docs entirely (not just slow/broken — actually
+    removed as a documented endpoint). No authentication is documented
+    or required for this asset; it's a public static file.
+
+    ROOT CAUSE OF THE 403 ACCESSDENIED XML (found by comparing a raw
+    `requests.get()` call, which failed, against a fetch using ordinary
+    browser-like headers, which succeeded and returned valid gzip data):
+    this is NOT Upstox denying access to the object. It's the CDN in
+    front of assets.upstox.com blocking the request before it reaches
+    S3, because Python's `requests` library sends `User-Agent:
+    python-requests/X.Y.Z` by default — a signature CDN/WAF bot filters
+    commonly reject on public static-asset buckets. The bucket returns
+    an S3-style AccessDenied error page for the block, which reads like
+    a permissions problem but isn't one — the object is public and the
+    URL is correct. Sending a standard browser User-Agent (below) is
+    the fix; nothing about the URL, auth, or response format needed to
+    change.
     """
     url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.json.gz"
+    headers = {
+        # Ordinary desktop-browser User-Agent -- see docstring above for
+        # why this specific header is what was actually causing the 403.
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/gzip, application/octet-stream, */*",
+    }
+
+    # ---- Network-level failures (DNS, connection refused, timeout) ----
+    # Caught separately from HTTP-level failures below: these never get a
+    # response object at all, so they need their own message rather than
+    # falling into the "check response.status_code" path.
+    try:
+        response = requests.get(url, headers=headers, timeout=20)
+    except requests.exceptions.Timeout:
+        st.error(
+            f"Instrument master fetch timed out after 20s ({url}). "
+            f"Upstox's asset CDN may be slow or temporarily unreachable — try again shortly. "
+            f"The rest of the app continues to work; only 'Validate Watchlist Instrument Keys' is affected."
+        )
+        return []
+    except requests.exceptions.ConnectionError as e:
+        st.error(
+            f"Network error reaching Upstox's instrument master ({url}): {e}\n"
+            f"Check connectivity to assets.upstox.com. The rest of the app continues to work."
+        )
+        return []
+    except requests.exceptions.RequestException as e:
+        st.error(f"Unexpected network error fetching instrument master ({url}): {e}")
+        return []
+
+    # ---- HTTP-level failures: distinguish WHY, not just THAT it failed ----
+    if response.status_code != 200:
+        content_type = response.headers.get("content-type", "")
+        body_preview = response.text[:300]
+
+        if "xml" in content_type.lower() and "AccessDenied" in response.text:
+            # The specific failure this fix targets -- see the module-level
+            # docstring above for the confirmed root cause. Distinguished
+            # from a genuine auth failure below because the fix for THIS
+            # case is "the CDN blocked the request", not "check credentials"
+            # -- there are no credentials involved in this call at all.
+            st.error(
+                f"Instrument master blocked by Upstox's CDN (HTTP {response.status_code}, "
+                f"XML AccessDenied) for {url}.\n\n"
+                f"This is CDN/WAF-level bot filtering, not a real permissions or "
+                f"authentication issue — this file is public and unauthenticated. "
+                f"If this fix (a standard browser User-Agent header) stops working "
+                f"again in the future, Upstox's CDN provider may have tightened its "
+                f"bot-filtering rules further; check the response body below for clues.\n\n"
+                f"Response body: {body_preview}"
+            )
+        elif response.status_code in (401, 403):
+            st.error(
+                f"Instrument master fetch returned {response.status_code} for {url}.\n"
+                f"This asset is documented as public/unauthenticated, so a persistent "
+                f"401/403 here (that ISN'T the XML AccessDenied case above) may mean "
+                f"Upstox has changed this endpoint to require authentication — check "
+                f"https://upstox.com/developer/api-documentation/instruments for updates.\n\n"
+                f"Content-Type: {content_type}\nResponse body: {body_preview}"
+            )
+        else:
+            st.error(
+                f"Instrument master fetch failed (HTTP {response.status_code}) for {url}\n"
+                f"Content-Type: {content_type}\nResponse body: {body_preview}"
+            )
+        return []
+
+    # ---- Response-parsing failures (bad gzip, bad JSON) ----
+    try:
+        raw_bytes = gzip.decompress(response.content)
+    except (OSError, EOFError) as e:
+        # gzip.BadGzipFile is a subclass of OSError -- catching OSError
+        # covers it across supported Python versions without importing it
+        # by name.
+        st.error(
+            f"Instrument master response wasn't valid gzip data ({url}): {e}\n"
+            f"Content-Type: {response.headers.get('content-type', '')}\n"
+            f"First 300 chars: {response.text[:300]}"
+        )
+        return []
 
     try:
-        response = requests.get(url, timeout=20)
-
-        if response.status_code != 200:
-            st.error(
-                f"Instrument master fetch failed ({response.status_code}) for {url}\n"
-                f"{response.text[:300]}"
-            )
-            return []
-
-        raw_bytes = gzip.decompress(response.content)
         return json.loads(raw_bytes)
-
-    except Exception as e:
-        st.error(f"Instrument Master Error: {e}")
+    except json.JSONDecodeError as e:
+        st.error(f"Instrument master decompressed but wasn't valid JSON ({url}): {e}")
         return []
 
 
@@ -453,4 +537,3 @@ def get_market_trend():
     e50 = ema(closes, 50)
 
     return "Bullish" if e20 > e50 else "Bearish"
-    
