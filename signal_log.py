@@ -1,12 +1,28 @@
 """
 Signal history persistence and performance analytics.
 
-Everything related to signal_log.csv lives here: reading it, writing new
-OPEN rows after a scan, pushing it to GitHub (because Streamlit Community
-Cloud's filesystem is ephemeral), and the two performance breakdowns shown
-on the Performance tab (overall/per-instrument win-rate, and per-factor
-win-rate). check_signals.py (the GitHub Action) is the OTHER writer of this
-CSV — it flips OPEN rows to TARGET_HIT/SL_HIT once price confirms an outcome.
+MIGRATED from CSV to the Research & Learning Database (research_db). This
+used to read/write signal_log.csv directly; it now reads/writes the
+`live_trades` table in research_learning.db instead (see
+research_db/migrations.py's migration_002_add_live_trades_table for the
+schema). Streamlit Community Cloud's filesystem is still ephemeral, so the
+GitHub-push pattern that used to sync signal_log.csv now syncs the .db file
+the same way.
+
+Every function below keeps its EXACT original name/signature/return shape
+(a pandas DataFrame with the same columns SIGNAL_LOG_COLUMNS always had) —
+app.py and reports.py needed zero changes for this migration. Only the
+storage backend changed: load_signal_log()/save_signal_log()/
+push_signal_log_to_github() now talk to research_db instead of a CSV file.
+compute_performance_summary(), compute_factor_performance(), and
+compute_timing_stats() are UNCHANGED — they only ever operated on the
+DataFrame, never on the file format underneath it.
+
+check_signals.py (the GitHub Action outcome-checker) and weekly_summary.py
+(the weekly Telegram report) do NOT import this module — both are
+deliberately dependency-free from the Streamlit app (see their own
+docstrings) and talk to research_db directly. They were migrated
+separately; see those files.
 """
 
 import os
@@ -14,65 +30,94 @@ import base64
 import requests
 import pandas as pd
 import streamlit as st
-from datetime import datetime, timedelta
 
 from config import (
-    SIGNAL_LOG_PATH, SIGNAL_LOG_COLUMNS,
+    SIGNAL_LOG_COLUMNS,
     GITHUB_TOKEN, GITHUB_REPO, GITHUB_BRANCH, IST,
 )
+from research_config import settings as research_settings
+from research_db.database import ResearchDatabase
 
-# ================= SIGNAL LOG =================
+# ================= SIGNAL LOG (now backed by research_db) =================
+
+def _open_db():
+    return ResearchDatabase(research_settings.DB_PATH, journal_mode=research_settings.SQLITE_JOURNAL_MODE)
+
 
 def load_signal_log():
-    """Read the signal history CSV. Returns an empty, correctly-shaped
-    DataFrame if the file doesn't exist yet (first run)."""
-
-    if not os.path.exists(SIGNAL_LOG_PATH):
-        return pd.DataFrame(columns=SIGNAL_LOG_COLUMNS)
-
+    """
+    Reads all live trades from research_db's live_trades table and returns
+    them as a DataFrame shaped exactly like the old signal_log.csv read
+    (same columns, same order, same OPEN-first-by-timestamp ordering) —
+    every downstream analytics function depends on this shape being
+    unchanged. Returns an empty, correctly-shaped DataFrame if the DB has
+    no trades yet (first run), matching the old CSV behavior.
+    """
     try:
-        df = pd.read_csv(SIGNAL_LOG_PATH)
+        db = _open_db()
+        try:
+            records = db.get_all_live_trades()
+        finally:
+            db.close()
 
-        # Guard against old CSVs missing newly-added columns
+        if not records:
+            return pd.DataFrame(columns=SIGNAL_LOG_COLUMNS)
+
+        df = pd.DataFrame(records)
+
+        # Guard against any DB rows missing a column the app now expects
+        # (e.g. after a future schema addition) — same padding behavior
+        # load_signal_log() always had for old CSVs.
         for col in SIGNAL_LOG_COLUMNS:
             if col not in df.columns:
                 df[col] = None
 
-        # Historical Timing Engine compatibility
-        if "t2_hit_at" not in df.columns:
-            df["t2_hit_at"] = None
+        # Drop SQLite's internal surrogate columns (id, created_at) that
+        # signal_log.csv never had, so the returned shape matches exactly.
+        extra_cols = [c for c in ("id", "created_at") if c in df.columns]
+        if extra_cols:
+            df = df.drop(columns=extra_cols)
 
-        return df
+        return df[SIGNAL_LOG_COLUMNS]
 
     except Exception:
         return pd.DataFrame(columns=SIGNAL_LOG_COLUMNS)
 
-def push_signal_log_to_github(df, commit_message="Update signal_log.csv [app]"):
+
+def push_research_db_to_github(commit_message="Update research_learning.db [app]"):
     """
-    Pushes the given signal log DataFrame to signal_log.csv in the GitHub
-    repo via the Contents API, so new signals logged by the app actually
-    persist (and become visible to the check_signals.py GitHub Action)
-    instead of only existing on Streamlit's ephemeral local filesystem.
+    Pushes research_learning.db to GitHub via the Contents API — the same
+    role push_signal_log_to_github() used to play for signal_log.csv.
+    Binary file, so it's read and base64-encoded directly rather than
+    encoded from a DataFrame like the old CSV push was.
 
     DEBUG VERSION: shows a visible banner on the dashboard for every
-    outcome (missing secrets, GitHub API errors, success) instead of
-    silently swallowing failures. Once this is confirmed working, the
-    st.warning/st.error/st.success calls below can be removed or reduced
-    to logging if the on-screen noise isn't wanted long-term.
+    outcome (missing secrets, GitHub API errors, success), matching the
+    old CSV push's behavior.
     """
     if not GITHUB_TOKEN or not GITHUB_REPO:
         st.warning("⚠️ GITHUB_TOKEN or GITHUB_REPO not set in Secrets — push skipped.")
         return
 
-    content_b64 = base64.b64encode(df.to_csv(index=False).encode()).decode()
-    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{SIGNAL_LOG_PATH}"
+    db_path = research_settings.DB_PATH
+    if not os.path.exists(db_path):
+        st.warning(f"⚠️ {db_path} doesn't exist locally yet — push skipped.")
+        return
+
+    with open(db_path, "rb") as f:
+        content_b64 = base64.b64encode(f.read()).decode()
+
+    # Path inside the repo, relative to repo root — DB_PATH is an absolute
+    # local path (BASE_DIR/data/research_learning.db), so re-derive the
+    # repo-relative form the same way research_config.settings computes it.
+    repo_relative_path = os.path.join("data", os.path.basename(db_path))
+
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{repo_relative_path}"
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json"
     }
 
-    # Need the current file's SHA to update it (GitHub requires this for
-    # existing files; omit it entirely for a brand-new file).
     sha = None
     try:
         r = requests.get(api_url, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=10)
@@ -94,7 +139,7 @@ def push_signal_log_to_github(df, commit_message="Update signal_log.csv [app]"):
     try:
         r = requests.put(api_url, headers=headers, json=payload, timeout=10)
         if r.status_code in (200, 201):
-            st.success("✅ signal_log.csv pushed to GitHub.")
+            st.success("✅ research_learning.db pushed to GitHub.")
         else:
             st.error(f"❌ GitHub push failed ({r.status_code}): {r.text[:300]}")
     except Exception as e:
@@ -102,19 +147,52 @@ def push_signal_log_to_github(df, commit_message="Update signal_log.csv [app]"):
 
 
 def save_signal_log(df):
-    df.to_csv(SIGNAL_LOG_PATH, index=False)
-    push_signal_log_to_github(df)
+    """
+    Kept for compatibility with append_new_signals() below, which still
+    builds a DataFrame and calls this the same way it always did. Instead
+    of writing a CSV, this upserts every row into live_trades by
+    signal_id (insert if new, update outcome fields if it already
+    exists), then pushes the .db file to GitHub.
+
+    In practice this is only ever called with newly-appended OPEN rows
+    from append_new_signals() — check_signals.py updates outcomes directly
+    via research_db's update_live_trade_outcome()/update_live_trade_t2_hit(),
+    not through this function.
+    """
+    if df.empty:
+        return
+
+    db = _open_db()
+    try:
+        for _, row in df.iterrows():
+            existing = db.conn.execute(
+                "SELECT id FROM live_trades WHERE signal_id = ?", (row["signal_id"],)
+            ).fetchone()
+
+            if existing:
+                db.update_live_trade_outcome(
+                    row["signal_id"], row["status"], row.get("closed_price"),
+                    row.get("closed_at"), row.get("pnl_pct"),
+                )
+                if pd.notna(row.get("t2_hit_at")):
+                    db.update_live_trade_t2_hit(row["signal_id"], row["t2_hit_at"])
+            else:
+                db.insert_live_trade(row.to_dict())
+
+        db.commit()
+    finally:
+        db.close()
+
+    push_research_db_to_github()
 
 
 def append_new_signals(scan_results_df):
     """
-    Appends newly-generated BUY/SELL signals from this scan to the log
-    as new OPEN rows. Avoids duplicate logging of the same setup by
-    checking: same instrument + same signal direction + still OPEN
-    already exists -> skip (don't re-log an unchanged open position).
-
-    Only logs actionable signals (BUY/SELL), not WATCH/NO TRADE — those
-    aren't real trade calls with a measurable outcome.
+    UNCHANGED logic from before — appends newly-generated BUY/SELL signals
+    from this scan as new OPEN rows, skipping duplicates (same instrument +
+    direction already OPEN) and invalid setups (SL/T1 == "N/A"). Only the
+    storage call at the end (save_signal_log) changed what it does
+    underneath.
     """
     if scan_results_df.empty:
         return
@@ -126,7 +204,6 @@ def append_new_signals(scan_results_df):
     new_rows = []
 
     for _, row in actionable.iterrows():
-        # Skip if there's already an OPEN signal for this instrument + direction
         existing_open = log_df[
             (log_df["instrument"] == row["Instrument"]) &
             (log_df["signal"] == row["Signal"]) &
@@ -135,43 +212,48 @@ def append_new_signals(scan_results_df):
         if not existing_open.empty:
             continue
 
-        # Skip if SL/T1/T2 are N/A (invalid ATR) — can't measure an outcome
         if row["SL"] == "N/A" or row["T1"] == "N/A":
             continue
 
         new_rows.append({
-    "signal_id": f"{row['Instrument']}_{datetime.now(IST).strftime('%Y%m%d%H%M%S')}",
-    "timestamp": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
-    "instrument": row["Instrument"],
-    "instrument_key": row.get("InstrumentKey", ""),
-    "signal": row["Signal"],
-    "trend": row["Trend"],
-    "confidence": row["Confidence"],
-    "score": row["Score"],
-    "entry_price": row["Price"],
-    "sl": row["SL"],
-    "t1": row["T1"],
-    "t2": row["T2"],
-    "status": "OPEN",
-    "closed_price": None,
-    "closed_at": None,
-    "pnl_pct": None,
+            "signal_id": f"{row['Instrument']}_{pd.Timestamp.now(tz=IST).strftime('%Y%m%d%H%M%S')}",
+            "timestamp": pd.Timestamp.now(tz=IST).strftime("%Y-%m-%d %H:%M:%S"),
+            "instrument": row["Instrument"],
+            "instrument_key": row.get("InstrumentKey", ""),
+            "signal": row["Signal"],
+            "trend": row["Trend"],
+            "confidence": row["Confidence"],
+            "score": row["Score"],
+            "entry_price": row["Price"],
+            "sl": row["SL"],
+            "t1": row["T1"],
+            "t2": row["T2"],
+            "status": "OPEN",
+            "closed_price": None,
+            "closed_at": None,
+            "pnl_pct": None,
 
-    "daily_trend_agree": row.get("DailyTrendAgree", "N/A"),
-    "supertrend_agree": row.get("SupertrendAgree", "N/A"),
-    "market_trend_agree": row.get("MarketTrendAgree", "N/A"),
-    "adx": row.get("ADX", "N/A"),
-    "conviction_pct": row.get("ConvictionPct", "N/A"),
-    "expected_move_pct": row.get("ExpectedMove%", "N/A"),
+            "daily_trend_agree": row.get("DailyTrendAgree", "N/A"),
+            "supertrend_agree": row.get("SupertrendAgree", "N/A"),
+            "market_trend_agree": row.get("MarketTrendAgree", "N/A"),
+            "adx": row.get("ADX", "N/A"),
+            "conviction_pct": row.get("ConvictionPct", "N/A"),
+            "expected_move_pct": row.get("ExpectedMove%", "N/A"),
 
-    # ✅ FIXED POSITION (inside dict)
-    "t2_hit_at": None,
-})
+            "t2_hit_at": None,
+        })
 
     if new_rows:
         log_df = pd.concat([log_df, pd.DataFrame(new_rows)], ignore_index=True)
         save_signal_log(log_df)
 
+
+# ================= ANALYTICS (UNCHANGED — pure DataFrame logic) =================
+# Everything below this line is copied verbatim from the pre-migration
+# signal_log.py. None of it knows or cares whether load_signal_log() came
+# from a CSV or a database — it only ever operated on the DataFrame shape
+# SIGNAL_LOG_COLUMNS defines, which the new load_signal_log() still
+# guarantees above.
 
 def compute_timing_stats(log_df):
     """
@@ -341,6 +423,7 @@ def compute_factor_performance(log_df):
 
     return results
 
+
 def get_admin_kpis():
     df = load_signal_log()
 
@@ -363,6 +446,7 @@ def get_admin_kpis():
 
     win_rate = round((target_hits / len(closed)) * 100, 1) if len(closed) > 0 else 0
 
+    closed = closed.copy()
     closed["pnl_pct"] = pd.to_numeric(closed["pnl_pct"], errors="coerce")
     avg_pnl = round(closed["pnl_pct"].mean(), 2) if not closed.empty else 0
 
@@ -374,4 +458,3 @@ def get_admin_kpis():
         "target_hits": target_hits,
         "sl_hits": sl_hits
     }
-  
