@@ -1,9 +1,13 @@
 name: Check Trading Signal Outcomes
 
 # Runs automatically on a schedule, independent of the Streamlit app.
-# Checks all OPEN signals against live prices, updates signal_log.csv,
+# Checks all OPEN trades against live prices, updates the Research &
+# Learning Database's live_trades table (data/research_learning.db),
 # commits the change back to the repo, and sends Telegram alerts for
 # any signal that hit its target or stop loss in this run.
+#
+# MIGRATED from signal_log.csv to research_learning.db — same schedule,
+# same logic, different file committed at the end.
 
 on:
   schedule:
@@ -14,7 +18,7 @@ on:
   workflow_dispatch: {}   # lets you trigger it manually from the Actions tab too
 
 permissions:
-  contents: write   # needed so the workflow can commit signal_log.csv back
+  contents: write   # needed so the workflow can commit research_learning.db back
 
 jobs:
   check-signals:
@@ -30,7 +34,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install requests pandas
+        run: pip install requests
 
       - name: Run signal outcome checker
         env:
@@ -39,14 +43,14 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python check_signals.py
 
-      - name: Commit updated signal log
+      - name: Commit updated database
         run: |
           git config --global user.name "signal-bot"
           git config --global user.email "actions@github.com"
-          if [ -f signal_log.csv ]; then
-            git add signal_log.csv
+          if [ -f data/research_learning.db ]; then
+            git add data/research_learning.db
             git diff --staged --quiet || git commit -m "Update signal outcomes [automated]"
             git push
           else
-            echo "signal_log.csv does not exist yet — no signals have been logged. Nothing to commit."
+            echo "data/research_learning.db does not exist yet — no signals have been logged. Nothing to commit."
           fi
