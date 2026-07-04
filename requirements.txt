@@ -3,3 +3,4 @@ requests>=2.31.0
 pandas>=2.0.0
 plotly
 openpyxl
+# No external dependencies required — uses Python's built-in sqlite3, json, uuid.
