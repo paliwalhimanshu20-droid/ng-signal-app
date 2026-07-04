@@ -19,7 +19,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import settings
+from instrument_config import settings
 from instrument_master.classifier import ClassificationRules
 from instrument_master.database import InstrumentDatabase
 from instrument_master.update_engine import run_full_sync
