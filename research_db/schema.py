@@ -60,6 +60,11 @@ TABLE_PERFORMANCE_METRICS = "performance_metrics"
 TABLE_VALIDATION_RESULTS = "validation_results"
 TABLE_EXPERIMENT_NOTES = "experiment_notes"
 
+# Added via migration 2 (research_db/migrations.py), not part of the frozen
+# v1 baseline below — migrated from signal_log.csv. See migrations.py's
+# migration_002_add_live_trades_table for the actual DDL.
+TABLE_LIVE_TRADES = "live_trades"
+
 # ---------------------------------------------------------------------------
 # DDL — order matters (FK targets must exist before the tables that reference
 # them). Each entry is executed in sequence.
@@ -248,6 +253,12 @@ CREATE_INDEXES_SQL = [
 # Enums — enforced at the application layer (database.py), not as SQLite
 # CHECK constraints, so new values can be added without a migration.
 # ---------------------------------------------------------------------------
+
+# live_trades.status — execution lifecycle for a live BUY/SELL signal
+# (MUTABLE — same lifecycle signal_log.csv's status column always had).
+# Set once by check_signals.check_outcome() (OPEN -> TARGET_HIT/SL_HIT) or
+# by the open-signal expiry pass (OPEN -> EXPIRED); never by anything else.
+LIVE_TRADE_STATUS_VALUES = ["OPEN", "TARGET_HIT", "SL_HIT", "EXPIRED"]
 
 # research_experiments.research_status — execution lifecycle (MUTABLE)
 EXPERIMENT_STATUS_VALUES = ["PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED"]

@@ -497,3 +497,122 @@ class ResearchDatabase:
     def count_experiments(self) -> int:
         cur = self.conn.execute(f"SELECT COUNT(*) AS c FROM {schema.TABLE_EXPERIMENTS}")
         return cur.fetchone()["c"]
+
+    # =====================================================================
+    # LIVE TRADES (migrated from signal_log.csv — see migrations.py
+    # migration_002_add_live_trades_table for the table definition).
+    #
+    # This is a pure storage-backend swap for the live BUY/SELL signal
+    # log that used to be signal_log.csv, read/written by three
+    # previously-independent places: the Streamlit app (signal_log.py),
+    # the outcome-checker GitHub Action (check_signals.py), and the
+    # weekly Telegram report (weekly_summary.py). All three now go
+    # through these methods instead of touching a CSV file directly.
+    #
+    # Column set and meaning are unchanged from signal_log.csv.
+    # =====================================================================
+
+    LIVE_TRADE_COLUMNS = [
+        "signal_id", "timestamp", "instrument", "instrument_key", "signal",
+        "trend", "confidence", "score", "entry_price", "sl", "t1", "t2",
+        "status", "closed_price", "closed_at", "pnl_pct",
+        "daily_trend_agree", "supertrend_agree", "market_trend_agree",
+        "adx", "conviction_pct", "expected_move_pct", "t2_hit_at",
+    ]
+
+    def insert_live_trade(self, record: dict) -> int:
+        """
+        Inserts a new OPEN live trade row. `record` should contain (at
+        minimum) the fields in LIVE_TRADE_COLUMNS other than status/
+        closed_price/closed_at/pnl_pct/t2_hit_at, which default to OPEN/
+        NULL as appropriate for a freshly-generated signal. Returns the
+        new row's surrogate id.
+        """
+        now = _now_iso()
+        cur = self.conn.execute(
+            f"""INSERT INTO {schema.TABLE_LIVE_TRADES}
+                (signal_id, timestamp, instrument, instrument_key, signal,
+                 trend, confidence, score, entry_price, sl, t1, t2,
+                 status, closed_price, closed_at, pnl_pct,
+                 daily_trend_agree, supertrend_agree, market_trend_agree,
+                 adx, conviction_pct, expected_move_pct, t2_hit_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                record["signal_id"], record["timestamp"], record["instrument"],
+                record.get("instrument_key"), record["signal"], record.get("trend"),
+                record.get("confidence"), record.get("score"), record.get("entry_price"),
+                record.get("sl"), record.get("t1"), record.get("t2"),
+                record.get("status", "OPEN"), record.get("closed_price"),
+                record.get("closed_at"), record.get("pnl_pct"),
+                record.get("daily_trend_agree"), record.get("supertrend_agree"),
+                record.get("market_trend_agree"), record.get("adx"),
+                record.get("conviction_pct"), record.get("expected_move_pct"),
+                record.get("t2_hit_at"), now,
+            ),
+        )
+        return cur.lastrowid
+
+    def get_open_live_trade(self, instrument: str, signal: str):
+        """
+        Returns the existing OPEN row for this instrument+direction, or
+        None. Used to avoid re-logging an unchanged open position — same
+        duplicate-guard signal_log.append_new_signals() always had.
+        """
+        cur = self.conn.execute(
+            f"""SELECT * FROM {schema.TABLE_LIVE_TRADES}
+                WHERE instrument = ? AND signal = ? AND status = 'OPEN'
+                LIMIT 1""",
+            (instrument, signal),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+    def get_all_live_trades(self) -> list:
+        """All trades, oldest first — matches load_signal_log()'s old
+        CSV read-order so downstream pandas analytics behave identically."""
+        cur = self.conn.execute(
+            f"SELECT * FROM {schema.TABLE_LIVE_TRADES} ORDER BY timestamp ASC"
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    def get_open_live_trades(self) -> list:
+        cur = self.conn.execute(
+            f"SELECT * FROM {schema.TABLE_LIVE_TRADES} WHERE status = 'OPEN' ORDER BY timestamp ASC"
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    def get_t2_candidate_trades(self) -> list:
+        """TARGET_HIT trades not yet observed for a T2 touch — mirrors
+        check_signals.py's old t2_candidates_mask exactly."""
+        cur = self.conn.execute(
+            f"""SELECT * FROM {schema.TABLE_LIVE_TRADES}
+                WHERE status = 'TARGET_HIT'
+                AND (t2_hit_at IS NULL OR t2_hit_at = '')
+                ORDER BY timestamp ASC"""
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    def update_live_trade_outcome(self, signal_id: str, status: str,
+                                   closed_price: float, closed_at: str, pnl_pct: float):
+        """The ONLY method that ever sets a trade's official outcome —
+        same rule check_signals.check_outcome() always enforced."""
+        self.conn.execute(
+            f"""UPDATE {schema.TABLE_LIVE_TRADES}
+                SET status = ?, closed_price = ?, closed_at = ?, pnl_pct = ?
+                WHERE signal_id = ?""",
+            (status, closed_price, closed_at, pnl_pct, signal_id),
+        )
+
+    def update_live_trade_t2_hit(self, signal_id: str, t2_hit_at: str):
+        """Purely observational — never touches status/closed_price/pnl_pct.
+        See check_signals.check_t2_touch()'s docstring for why."""
+        self.conn.execute(
+            f"UPDATE {schema.TABLE_LIVE_TRADES} SET t2_hit_at = ? WHERE signal_id = ?",
+            (t2_hit_at, signal_id),
+        )
+
+    def mark_live_trade_expired(self, signal_id: str):
+        self.conn.execute(
+            f"UPDATE {schema.TABLE_LIVE_TRADES} SET status = 'EXPIRED' WHERE signal_id = ?",
+            (signal_id,),
+        )

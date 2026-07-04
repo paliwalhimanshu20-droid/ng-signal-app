@@ -66,8 +66,51 @@ def migration_001_baseline(conn):
     pass  # no-op — schema.py already establishes the v1 tables
 
 
+# ---------------------------------------------------------------------------
+# Migration 2 — adds live_trades, migrating the live BUY/SELL signal log
+# off signal_log.csv and into the Research & Learning Database. Pure
+# storage-backend swap: same columns/meaning as the old CSV, just SQLite-
+# backed now so it benefits from the same GitHub-sync pattern as every
+# other table here instead of a separate ad-hoc CSV push mechanism.
+# ---------------------------------------------------------------------------
+def migration_002_add_live_trades_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS live_trades (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            signal_id           TEXT NOT NULL UNIQUE,
+            timestamp           TEXT NOT NULL,
+            instrument          TEXT NOT NULL,
+            instrument_key      TEXT,
+            signal              TEXT NOT NULL,
+            trend               TEXT,
+            confidence          TEXT,
+            score               REAL,
+            entry_price         REAL,
+            sl                  REAL,
+            t1                  REAL,
+            t2                  REAL,
+            status              TEXT NOT NULL DEFAULT 'OPEN',
+            closed_price        REAL,
+            closed_at           TEXT,
+            pnl_pct             REAL,
+            daily_trend_agree   TEXT,
+            supertrend_agree    TEXT,
+            market_trend_agree  TEXT,
+            adx                 REAL,
+            conviction_pct      REAL,
+            expected_move_pct   REAL,
+            t2_hit_at           TEXT,
+            created_at          TEXT NOT NULL
+        );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_live_trades_status ON live_trades (status);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_live_trades_instrument ON live_trades (instrument, status);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_live_trades_timestamp ON live_trades (timestamp);")
+
+
 MIGRATIONS = [
     (1, "baseline schema (9 research & learning tables)", migration_001_baseline),
+    (2, "add live_trades table (migrated from signal_log.csv)", migration_002_add_live_trades_table),
 ]
 
 
