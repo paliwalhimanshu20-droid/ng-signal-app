@@ -237,4 +237,104 @@ def style_signal_column(styler, signal_col="Signal"):
     if signal_col in styler.data.columns:
         return styler.map(_color, subset=[signal_col])
     return styler
+
+
+def _validation_status_pill_html(status):
+    """Small colored pill for a ValidationStatus — same visual language
+    (pill shape, bold weight) as signal_badge_html()/trade_quality_badge_html()
+    above, using inline styles so this doesn't require any dashboard.css
+    changes to work."""
+    label = status.value if hasattr(status, "value") else str(status)
+    colors = {
+        "PASS": ("#DCFCE7", "#166534"),
+        "WARNING": ("#FEF3C7", "#92400E"),
+        "FAIL": ("#FFE1E6", "#9F1239"),
+        "SKIPPED": ("#F3F1F7", "#6B7280"),
+    }
+    bg, fg = colors.get(label, ("#F3F1F7", "#6B7280"))
+    return (
+        f'<span style="background:{bg};color:{fg};font-weight:700;'
+        f'padding:2px 12px;border-radius:999px;font-size:0.8rem;'
+        f'display:inline-block;">{label}</span>'
+    )
+
+
+def render_validation_summary(summary):
+    """
+    Renders a validation.validation_models.ValidationSummary (the return
+    value of validation.run_validation()) as a full dashboard panel:
+    overall health score + readiness verdict, a per-category status strip,
+    and an expander per category with that validator's details/warnings/
+    failures/skipped items/metrics.
+
+    Purely a rendering function — matches the rest of this file's pattern
+    (e.g. render_risk_card() for risk_engine's output). It does not run
+    any checks itself and does not import from validation/ at module load
+    time, so ui_components.py stays usable even in contexts where the
+    validation package isn't relevant — the import happens lazily here,
+    only when this function is actually called.
+    """
+    from validation.validation_models import ValidationCategory
+    from validation.validation_report import build_report_text
+
+    _OVERALL_STYLE = {
+        "READY": ("✅", "#166534"),
+        "READY WITH WARNINGS": ("⚠️", "#92400E"),
+        "NOT READY": ("🛑", "#9F1239"),
+    }
+    icon, color = _OVERALL_STYLE.get(summary.overall_status.value, ("ℹ️", "#1C1B22"))
+
+    top1, top2 = st.columns([1, 2])
+    with top1:
+        st.metric("System Health", f"{summary.health_score.percent:.0f}%")
+    with top2:
+        st.markdown(
+            f'<div style="padding-top:14px;font-size:1.15rem;font-weight:700;color:{color};">'
+            f'{icon} {summary.overall_status.value}</div>',
+            unsafe_allow_html=True,
+        )
+
+    _CATEGORY_ORDER = [
+        ValidationCategory.APPLICATION,
+        ValidationCategory.DATABASE,
+        ValidationCategory.DASHBOARD,
+        ValidationCategory.CONFIGURATION,
+    ]
+
+    st.markdown("")
+    cat_cols = st.columns(len(_CATEGORY_ORDER))
+    for col, category in zip(cat_cols, _CATEGORY_ORDER):
+        result = summary.result_for(category)
+        with col:
+            st.markdown(f"**{category.value}**")
+            if result is None:
+                st.markdown(_validation_status_pill_html("SKIPPED"), unsafe_allow_html=True)
+                st.caption("Not run.")
+            else:
+                st.markdown(_validation_status_pill_html(result.status), unsafe_allow_html=True)
+                st.caption(result.summary)
+
+    st.markdown("---")
+
+    for category in _CATEGORY_ORDER:
+        result = summary.result_for(category)
+        if result is None:
+            continue
+        with st.expander(f"{category.value} — details"):
+            if result.details:
+                for d in result.details:
+                    st.markdown(f"✓ {d}")
+            for w in result.warnings:
+                st.warning(w)
+            for f in result.failures:
+                st.error(f)
+            for s in result.skipped:
+                st.info(f"Skipped: {s}")
+            if result.metrics:
+                st.json(result.metrics)
+            if not (result.details or result.warnings or result.failures or result.skipped or result.metrics):
+                st.caption("No additional detail reported.")
+
+    with st.expander("📄 Full text report (with recommendations)"):
+        st.code(build_report_text(summary), language=None)
     

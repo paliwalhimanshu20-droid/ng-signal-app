@@ -93,7 +93,12 @@ from ui_components import (
     render_risk_card,
     render_risk_unavailable_card,
     style_signal_column,
+    render_validation_summary,
 )
+
+# Validation Center (NGSP-003B.1) — single public entry point, per
+# validation/__init__.py's "only expose run_validation()" rule.
+from validation import run_validation
 
 # NOTE: all indicator math and signal-scoring logic lives in signal_logic.py,
 # NOT here — it's imported so this app and backtest.py (the offline threshold
@@ -727,6 +732,21 @@ with tab_admin:
 
         st.button("🧪 Run Backtest", disabled=True)
 
-        st.button("🔍 Diagnostics", disabled=True)
+        # -----------------------------
+        # DIAGNOSTICS — Validation Center (NGSP-003B.1)
+        # -----------------------------
+        if st.button("🔍 Diagnostics"):
+            with st.spinner("Running Validation Center checks (Application, Database, Dashboard, Configuration)..."):
+                st.session_state.validation_summary = run_validation()
 
         st.button("🗂️ Data Management", disabled=True)
+
+    # Validation results render full-width below both columns, not
+    # squeezed into col2, since there's a lot to show once it's run.
+    if "validation_summary" in st.session_state:
+        st.markdown("---")
+        st.markdown(
+            '<div class="section-eyebrow">🔍 Validation Center Report</div>',
+            unsafe_allow_html=True
+        )
+        render_validation_summary(st.session_state.validation_summary)
