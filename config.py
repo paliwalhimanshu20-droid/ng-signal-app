@@ -6,7 +6,7 @@ This is the ONLY file you should usually need to touch when:
   - adding a new MCX commodity to track          -> COMMODITY_DEFINITIONS
   - adding a new sector bucket / re-mapping a symbol -> SECTOR_MAP, SECTOR_ORDER
   - changing where the signal log lives or its columns -> SIGNAL_LOG_*
-  - rotating which Streamlit Secrets keys are read  -> the try/except + st.secrets.get() below
+  - rotating which Streamlit Secrets keys are read  -> the st.secrets.get() calls below
 
 Nothing in this module makes network calls or renders dashboard UI — it's
 pure constants/config, safe to import from anywhere. The one side effect is
@@ -24,10 +24,17 @@ from zoneinfo import ZoneInfo
 #
 # To set it up: app dashboard -> Settings -> Secrets -> paste:
 #   UPSTOX_ACCESS_TOKEN = "your_actual_token_here"
-try:
-    UPSTOX_ACCESS_TOKEN = st.secrets["UPSTOX_ACCESS_TOKEN"]
-except (KeyError, FileNotFoundError):
-    UPSTOX_ACCESS_TOKEN = ""
+#
+# FIX (previously used try/except around st.secrets[...]): newer Streamlit
+# versions can raise a secrets-not-found exception type that isn't
+# KeyError/FileNotFoundError, which slipped past the old except clause and
+# crashed this module mid-execution — leaving SIGNAL_LOG_PATH, IST,
+# GITHUB_TOKEN etc. undefined below and surfacing as a confusing ImportError
+# in any file that does `from config import (...)`. st.secrets.get() with a
+# default can never raise, so this can't happen again regardless of
+# Streamlit version or whether secrets.toml exists at all.
+UPSTOX_ACCESS_TOKEN = st.secrets.get("UPSTOX_ACCESS_TOKEN", "")
+if not UPSTOX_ACCESS_TOKEN:
     st.error(
         "⚠️ UPSTOX_ACCESS_TOKEN not found in Streamlit secrets. "
         "Go to your app's Settings → Secrets and add it. "
@@ -163,4 +170,3 @@ SECTOR_MAP = {
 
 # Display order for the sector accordion in the UI
 SECTOR_ORDER = ["Banking", "IT", "Auto", "Pharma", "FMCG", "Energy", "Metals", "Commodities", "Other"]
-
