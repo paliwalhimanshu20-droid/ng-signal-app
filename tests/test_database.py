@@ -27,7 +27,12 @@ def _fresh_db():
 def test_database_creation_and_migration():
     db = _fresh_db()
     v = migrations.current_version(db.conn)
-    assert v == 1, f"expected v1 baseline, got v{v}"
+    # A fresh DB now bootstraps straight to v2 (migration_002 added the
+    # live_trades table for the Performance-page SQLite migration). This
+    # test still had the pre-migration_002 baseline of v1, so it started
+    # failing the moment that migration shipped even though the DB itself
+    # is correct.
+    assert v == 2, f"expected v2 baseline, got v{v}"
     assert db.count_experiments() == 0
     report = validation.validate(db)
     assert report["passed"]
@@ -214,3 +219,4 @@ if __name__ == "__main__":
     test_search_and_ranking_injection_guards()
     test_query_performance_smoke()
     print("\nAll tests passed.")
+    
