@@ -22,18 +22,21 @@ from .database_validator import validate_database
 from .dashboard_validator import validate_dashboard
 from .configuration_validator import validate_configuration
 from .warehouse_validator import validate_warehouse
+from .instrument_master_validator import validate_instrument_master
 
 # Equal weighting across all v1+ validators. When future validators
 # (Trading, Security, Regression, Architecture, Risk, AI Governance —
 # see NGSP-003B.1's Future Compatibility section) are added, update this
 # list; the weight-per-category is always 100 / len(VALIDATOR_FUNCTIONS),
-# so no other code needs to change. WAREHOUSE (NGWH-003) added here.
+# so no other code needs to change. WAREHOUSE (NGWH-003) and
+# INSTRUMENT_MASTER added here.
 VALIDATOR_FUNCTIONS = [
     validate_application,
     validate_database,
     validate_dashboard,
     validate_configuration,
     validate_warehouse,
+    validate_instrument_master,
 ]
 
 # How much of a category's weight survives at each status level.

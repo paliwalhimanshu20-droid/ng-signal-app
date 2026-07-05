@@ -42,12 +42,20 @@ class ValidationCategory(str, Enum):
     Regression, Architecture, Risk, AI Governance) add new members here
     without touching existing ones. WAREHOUSE added by NGWH-003 (Warehouse
     Operations Center) — delegates to warehouse.bootstrap.WarehouseHealthChecker,
-    see validation/warehouse_validator.py."""
+    see validation/warehouse_validator.py. INSTRUMENT_MASTER added when the
+    Instrument Master's own severity-based rule framework
+    (instrument_master/validation.py) was wired into this Center — see
+    validation/instrument_master_validator.py. Anticipated future
+    additions following the same pattern: Market Context, Research
+    Database, Strategy, Data Quality, Corporate Action, Market DNA — each
+    should ship as its own delegating validator module, not be folded into
+    an existing category."""
     APPLICATION = "Application"
     DATABASE = "Database"
     DASHBOARD = "Dashboard"
     CONFIGURATION = "Configuration"
     WAREHOUSE = "Warehouse"
+    INSTRUMENT_MASTER = "Instrument Master"
 
 
 class OverallStatus(str, Enum):

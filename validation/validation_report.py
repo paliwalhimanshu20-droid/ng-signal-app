@@ -13,6 +13,8 @@ _CATEGORY_ORDER = [
     ValidationCategory.DATABASE,
     ValidationCategory.DASHBOARD,
     ValidationCategory.CONFIGURATION,
+    ValidationCategory.WAREHOUSE,
+    ValidationCategory.INSTRUMENT_MASTER,
 ]
 
 _DEPLOYMENT_STATUS_LABEL = {
