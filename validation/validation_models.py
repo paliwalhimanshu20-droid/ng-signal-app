@@ -37,14 +37,17 @@ class ValidationStatus(str, Enum):
 
 
 class ValidationCategory(str, Enum):
-    """The four validators this module ships with. New validators (per
+    """The validators this module ships with. New validators (per
     NGSP-003B.1's Future Compatibility section — Trading, Security,
     Regression, Architecture, Risk, AI Governance) add new members here
-    without touching existing ones."""
+    without touching existing ones. WAREHOUSE added by NGWH-003 (Warehouse
+    Operations Center) — delegates to warehouse.bootstrap.WarehouseHealthChecker,
+    see validation/warehouse_validator.py."""
     APPLICATION = "Application"
     DATABASE = "Database"
     DASHBOARD = "Dashboard"
     CONFIGURATION = "Configuration"
+    WAREHOUSE = "Warehouse"
 
 
 class OverallStatus(str, Enum):
