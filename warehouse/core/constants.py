@@ -193,9 +193,13 @@ PARQUET_FILE_EXTENSION = ".parquet"
 
 # Soft-reference field names expected on the existing Instrument Master
 # SQLite table. These are READ-ONLY expectations — the foundation never
-# writes to the instrument master DB. If the instrument master's schema
-# changes, only registry/instrument_registry.py needs updating.
-INSTRUMENT_MASTER_ID_FIELD = "instrument_id"
-INSTRUMENT_MASTER_SYMBOL_FIELD = "symbol"
+# writes to the instrument master DB. Verified against the live
+# instrument_master/schema.py in ng-signal-app (2026-07-05) — the real
+# primary key column is `instrument_key`, the symbol column is
+# `trading_symbol`, and activity is a TEXT enum column `active_status`
+# with values "ACTIVE"/"INACTIVE" (not a boolean flag).
+INSTRUMENT_MASTER_ID_FIELD = "instrument_key"
+INSTRUMENT_MASTER_SYMBOL_FIELD = "trading_symbol"
 INSTRUMENT_MASTER_ASSET_CLASS_FIELD = "asset_class"
-INSTRUMENT_MASTER_ACTIVE_FLAG_FIELD = "is_active"
+INSTRUMENT_MASTER_ACTIVE_FLAG_FIELD = "active_status"
+INSTRUMENT_MASTER_ACTIVE_VALUE = "ACTIVE"
