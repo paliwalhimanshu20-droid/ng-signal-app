@@ -3,4 +3,9 @@ requests>=2.31.0
 pandas>=2.0.0
 plotly
 openpyxl
-# No external dependencies required — uses Python's built-in sqlite3, json, uuid.
+
+# NGWH-001 Historical Intelligence Warehouse
+pydantic>=2.6,<3.0
+pyarrow>=14.0
+duckdb>=0.10
+PyYAML>=6.0
