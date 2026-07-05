@@ -1,0 +1,53 @@
+name: Update Instrument Master
+
+# Runs the Instrument Master sync (scripts/run_update.py), which downloads
+# Upstox's full instrument list, classifies every instrument (sector,
+# industry, commodity group, research priority), and writes the result to
+# data/instrument_master.db. Commits that DB back to the repo so the
+# Streamlit app and the Historical Intelligence Warehouse's downloader
+# (NGWH-002) can resolve the instrument universe without crashing.
+#
+# No API token needed — the Upstox instrument master file is a public
+# download.
+
+on:
+  schedule:
+    # Once daily, before NSE/MCX market open. Cron is UTC.
+    # 7:30 AM IST = 2:00 AM UTC.
+    - cron: "0 2 * * 1-5"
+  workflow_dispatch: {}   # lets you trigger it manually from the Actions tab too
+
+permissions:
+  contents: write   # needed so the workflow can commit data/instrument_master.db back
+
+jobs:
+  update-instrument-master:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run Instrument Master sync
+        run: python scripts/run_update.py
+
+      - name: Commit updated Instrument Master DB
+        run: |
+          git config --global user.name "instrument-master-bot"
+          git config --global user.email "actions@github.com"
+          if [ -f data/instrument_master.db ]; then
+            git add data/instrument_master.db
+            git diff --staged --quiet || git commit -m "Update Instrument Master [automated]"
+            git push
+          else
+            echo "data/instrument_master.db was not created — sync must have failed. Check the 'Run Instrument Master sync' step above."
+            exit 1
+          fi
