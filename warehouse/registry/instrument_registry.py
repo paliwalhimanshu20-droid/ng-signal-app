@@ -32,6 +32,7 @@ from typing import Optional
 
 from warehouse.core.constants import (
     INSTRUMENT_MASTER_ACTIVE_FLAG_FIELD,
+    INSTRUMENT_MASTER_ACTIVE_VALUE,
     INSTRUMENT_MASTER_ASSET_CLASS_FIELD,
     INSTRUMENT_MASTER_ID_FIELD,
     INSTRUMENT_MASTER_SYMBOL_FIELD,
@@ -104,11 +105,11 @@ class InstrumentRegistry:
         return _row_to_record(row)
 
     def list_active_instruments(self, asset_class: Optional[str] = None) -> list[InstrumentRecord]:
-        clause = f"WHERE {INSTRUMENT_MASTER_ACTIVE_FLAG_FIELD} = 1"
-        params: tuple = ()
+        clause = f"WHERE {INSTRUMENT_MASTER_ACTIVE_FLAG_FIELD} = ?"
+        params: tuple = (INSTRUMENT_MASTER_ACTIVE_VALUE,)
         if asset_class is not None:
             clause += f" AND {INSTRUMENT_MASTER_ASSET_CLASS_FIELD} = ?"
-            params = (asset_class,)
+            params = params + (asset_class,)
         with self._connect() as conn:
             rows = conn.execute(
                 f"SELECT {INSTRUMENT_MASTER_ID_FIELD}, {INSTRUMENT_MASTER_SYMBOL_FIELD}, "
@@ -131,5 +132,5 @@ def _row_to_record(row: sqlite3.Row) -> InstrumentRecord:
         instrument_id=row[INSTRUMENT_MASTER_ID_FIELD],
         symbol=row[INSTRUMENT_MASTER_SYMBOL_FIELD],
         asset_class=row[INSTRUMENT_MASTER_ASSET_CLASS_FIELD],
-        is_active=bool(row[INSTRUMENT_MASTER_ACTIVE_FLAG_FIELD]),
+        is_active=row[INSTRUMENT_MASTER_ACTIVE_FLAG_FIELD] == INSTRUMENT_MASTER_ACTIVE_VALUE,
     )
