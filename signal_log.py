@@ -44,6 +44,25 @@ def _open_db():
     return ResearchDatabase(research_settings.DB_PATH, journal_mode=research_settings.SQLITE_JOURNAL_MODE)
 
 
+# PERFORMANCE (audit finding): app.py previously called load_signal_log()
+# (directly, and indirectly via get_admin_kpis()) 3-4 separate times on
+# EVERY Streamlit rerun — each one opening its own ResearchDatabase
+# connection and re-running the schema/migration check. None of that data
+# changes between those calls within a single rerun, and it rarely changes
+# between reruns either (new rows only appear right after a live scan, or
+# via the separate check_signals.py GitHub Action process).
+#
+# ttl=15 means: at most one real DB read every 15 seconds of otherwise-
+# idle interaction (switching tabs, adjusting Settings widgets, etc.),
+# instead of one read per interaction. The Scanner tab's "run a scan then
+# immediately re-read the log to show the just-logged signals" sequence
+# (see app.py, right after append_new_signals()) explicitly calls
+# load_signal_log.clear() first, so that specific read-after-write path
+# is unaffected — it always sees fresh data, never a stale cache hit.
+# External writes (the GitHub Action outcome-checker) can be up to 15s
+# stale in a long-idle session, same order of staleness the dashboard
+# already tolerates between manual page refreshes.
+@st.cache_data(ttl=15, show_spinner=False)
 def load_signal_log():
     """
     Reads all live trades from research_db's live_trades table and returns

@@ -318,6 +318,10 @@ with tab_scanner:
     # Log any new actionable (BUY/SELL) signals from this scan to signal_log.csv.
     if run and not full_df.empty:
         append_new_signals(full_df)
+        # Must invalidate the cache added to load_signal_log() (see
+        # signal_log.py) right here — the very next line re-reads the log
+        # and has to see the signals just written, not a stale cache hit.
+        load_signal_log.clear()
 
     st.caption(f"Scans run: {st.session_state.scan_count} · Last scan: {st.session_state.last_scan}")
 
@@ -603,7 +607,6 @@ with tab_performance:
 # ADMIN CENTER
 # =========================================================================
 
-df = load_signal_log()
 kpis = get_admin_kpis()
 
 c1, c2, c3, c4 = st.columns(4)
