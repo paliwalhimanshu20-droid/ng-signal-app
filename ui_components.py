@@ -299,6 +299,7 @@ def render_validation_summary(summary):
         ValidationCategory.DATABASE,
         ValidationCategory.DASHBOARD,
         ValidationCategory.CONFIGURATION,
+        ValidationCategory.WAREHOUSE,
     ]
 
     st.markdown("")

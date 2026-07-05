@@ -100,6 +100,12 @@ from ui_components import (
 # validation/__init__.py's "only expose run_validation()" rule.
 from validation import run_validation
 
+# Warehouse Operations Center (NGWH-003) — single public entry point, per
+# warehouse_admin/__init__.py's "only expose render_warehouse_center()" rule.
+# Fully independent of Scanner/Performance/Settings — reads/writes only its
+# own warehouse data, never touches signal_log, watchlist, or scan state.
+from warehouse_admin import render_warehouse_center
+
 # NOTE: all indicator math and signal-scoring logic lives in signal_logic.py,
 # NOT here — it's imported so this app and backtest.py (the offline threshold
 # tester) always run the exact same scoring code. If you need to tune a
@@ -750,3 +756,13 @@ with tab_admin:
             unsafe_allow_html=True
         )
         render_validation_summary(st.session_state.validation_summary)
+
+    # =====================================================
+    # WAREHOUSE OPERATIONS CENTER (NGWH-003)
+    # =====================================================
+    # Fully self-contained — independent of Scanner/Performance/Settings
+    # state above. A failure here (e.g. warehouse not yet initialized)
+    # cannot affect the rest of the Admin Center or any other tab; see
+    # render_warehouse_center()'s own try/except around bootstrap.
+    st.markdown("---")
+    render_warehouse_center()
