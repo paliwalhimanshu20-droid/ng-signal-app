@@ -13,6 +13,7 @@ This is the only module that ties downloader/parser/classifier/database
 together — each of those stays independently testable.
 """
 
+import datetime as dt
 import logging
 
 from . import classifier as classifier_mod
@@ -22,6 +23,10 @@ from . import parser as parser_mod
 logger = logging.getLogger(__name__)
 
 
+def _now_iso() -> str:
+    return dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 class UpdateSummary:
     def __init__(self):
         self.new_count = 0
@@ -29,6 +34,10 @@ class UpdateSummary:
         self.unchanged_count = 0
         self.deactivated_count = 0
         self.total_source_records = 0
+        # Added for the Validation Intelligence Framework (validation_history) —
+        # "Upstox download timestamp" in a validation snapshot. Additive only;
+        # as_dict() still contains every pre-existing key unchanged.
+        self.download_started_at = None
 
     def as_dict(self):
         return {
@@ -37,17 +46,19 @@ class UpdateSummary:
             "updated": self.updated_count,
             "unchanged": self.unchanged_count,
             "deactivated": self.deactivated_count,
+            "download_started_at": self.download_started_at,
         }
 
     def print_report(self):
         print("\n=== Instrument Master Update Summary ===")
         for k, v in self.as_dict().items():
-            print(f"  {k:>22}: {v:,}")
+            print(f"  {k:>22}: {v:,}" if isinstance(v, int) else f"  {k:>22}: {v}")
         print("=========================================\n")
 
 
 def run_full_sync(db, rules: classifier_mod.ClassificationRules, settings) -> UpdateSummary:
     summary = UpdateSummary()
+    summary.download_started_at = _now_iso()
 
     raw_bytes = downloader.download_raw(
         settings.UPSTOX_INSTRUMENTS_URL, settings.DOWNLOAD_TIMEOUT_SECONDS
