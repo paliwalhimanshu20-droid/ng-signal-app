@@ -99,7 +99,7 @@ def run_scanner(commodity_contracts=None):
         time.sleep(0.2)
 
         try:
-            candles = get_candles(instrument_key)
+            candles = get_candles(instrument_key, label=f"{name} ({instrument_key})")
 
             if not candles:
                 continue
@@ -134,7 +134,7 @@ def run_scanner(commodity_contracts=None):
 
             # Higher-timeframe (daily) trend filter — cached, so this
             # doesn't multiply API calls on every scan within the same day.
-            daily_trend = get_daily_trend(instrument_key)
+            daily_trend = get_daily_trend(instrument_key, label=f"{name} ({instrument_key})")
 
             # NG SIGNAL ACCURACY FIX: instruments added via the MCX commodity
             # dropdown are named "<Display> (MCX)" (same convention
@@ -228,4 +228,4 @@ def run_scanner(commodity_contracts=None):
         top5_df = full_df
 
     return top5_df, full_df
-    
+
