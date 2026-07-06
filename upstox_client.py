@@ -274,6 +274,15 @@ def validate_watchlist_keys(watchlist):
     return mismatches
 
 
+@st.cache_data(ttl=3600)  # PERFORMANCE (audit finding): this made a live,
+# uncached, direct requests.get() call (bypassing safe_get() entirely, so
+# it had no diagnostic logging either) on EVERY rerun anywhere in the app
+# — tab_settings renders unconditionally regardless of active tab, same
+# as every other st.tabs()-body-always-executes case fixed this session.
+# Contracts don't change intraday (same reasoning get_daily_trend/
+# get_market_trend already use at this same ttl), so caching costs
+# nothing in freshness and removes a real, previously invisible network
+# call from every single interaction in the app.
 def get_commodity_contracts(name_filter, max_contracts=4):
     """
     Generic resolver for any MCX commodity (Natural Gas, Crude Oil, Gold, etc).
@@ -320,8 +329,16 @@ def get_commodity_contracts(name_filter, max_contracts=4):
         "records": 30          # API max per docs is 30
     }
 
+    request_start_perf = time.perf_counter()
+    request_start_iso = datetime.now(IST).isoformat()
+    logger.info(
+        "API_DIAGNOSTIC_REQUEST | label=COMMODITY_CONTRACTS (%s) | url=%s | request_start=%s",
+        name_filter, url, request_start_iso,
+    )
+
     try:
         r = requests.get(url, headers=headers, params=params, timeout=15)
+        elapsed_ms = round((time.perf_counter() - request_start_perf) * 1000, 1)
         if r.status_code != 200:
             # Upstox typically returns a JSON error body with details —
             # surface it so issues are diagnosable from the dashboard
@@ -331,9 +348,30 @@ def get_commodity_contracts(name_filter, max_contracts=4):
                 err_detail = err_body.get("errors", err_body)
             except Exception:
                 err_detail = r.text[:200]
+            logger.info(
+                "API_DIAGNOSTIC_RESPONSE | label=COMMODITY_CONTRACTS (%s) | url=%s | "
+                "request_start=%s | elapsed_ms=%.1f | returned=True | timed_out=False | "
+                "status_code=%s | headers=%s | body_snippet=%r",
+                name_filter, url, request_start_iso, elapsed_ms, r.status_code, dict(r.headers), r.text[:300],
+            )
             return {"error": f"Search API returned status {r.status_code}: {err_detail}", "contracts": []}
+        logger.info(
+            "API_DIAGNOSTIC_RESPONSE | label=COMMODITY_CONTRACTS (%s) | url=%s | "
+            "request_start=%s | elapsed_ms=%.1f | returned=True | timed_out=False | "
+            "status_code=%s | headers=%s | body_snippet=None",
+            name_filter, url, request_start_iso, elapsed_ms, r.status_code, dict(r.headers),
+        )
         payload = r.json()
     except Exception as e:
+        elapsed_ms = round((time.perf_counter() - request_start_perf) * 1000, 1)
+        timed_out = isinstance(e, requests.exceptions.Timeout)
+        logger.warning(
+            "API_DIAGNOSTIC_RESPONSE | label=COMMODITY_CONTRACTS (%s) | url=%s | "
+            "request_start=%s | elapsed_ms=%.1f | returned=False | timed_out=%s | "
+            "status_code=None | headers=None | body_snippet=None | exception=%s: %s",
+            name_filter, url, request_start_iso, elapsed_ms, timed_out, type(e).__name__, e,
+        )
+        # UNCHANGED message/behavior from before — only the logging above is new.
         return {"error": f"Search API request failed: {e}", "contracts": []}
 
     rows = payload.get("data", []) if isinstance(payload, dict) else []
