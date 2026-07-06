@@ -25,27 +25,82 @@ import streamlit as st
 import pandas as pd
 import gzip
 import json
+import logging
+import time
 from datetime import datetime
 
 from config import UPSTOX_ACCESS_TOKEN, IST, NIFTY50_INSTRUMENT_KEY
 from signal_logic import ema
 
+logger = logging.getLogger(__name__)
 
-def safe_get(url, headers=None):
-    # UPDATED: surfaces the real failure (status code + response body, or
-    # exception) instead of silently returning None. This is what exposed
-    # the 429 rate-limit issue — previously every failure looked identical
-    # ("no data"), with no way to tell auth/rate-limit/network apart.
+
+def safe_get(url, headers=None, label=None):
+    """
+    INVESTIGATION INSTRUMENTATION (Live Scan first-request diagnostic,
+    added this session — logging only, no behavior change): every Upstox
+    HTTP call in this app funnels through this one function (get_prices_bulk,
+    get_market_trend, get_candles, get_daily_trend all call safe_get()) —
+    so instrumenting it here, once, captures a complete chronological
+    request/response trace for a whole scan without touching any caller's
+    logic.
+
+    `label` is a new, OPTIONAL kwarg (default None) callers can pass for
+    a human-readable identifier in the log (e.g. "ITC (NSE_EQ|INE154A01025)")
+    — existing callers that don't pass it are completely unaffected; this
+    changes zero request/response/return behavior, only what gets logged.
+
+    Logs one line BEFORE the request (so a hang/never-returns case still
+    leaves a trace) and one line AFTER (success, non-200, timeout, or any
+    other exception), each with every field requested for this
+    investigation: label, url, request_start (ISO + perf_counter),
+    response_time, elapsed_ms, whether it timed out, whether it ever
+    returned at all, status_code, response headers, and — only on a
+    non-200 response — the first 300 chars of the response body.
+    """
+    request_start_perf = time.perf_counter()
+    request_start_iso = datetime.now(IST).isoformat()
+    logger.info(
+        "API_DIAGNOSTIC_REQUEST | label=%s | url=%s | request_start=%s",
+        label, url, request_start_iso,
+    )
+
     try:
         r = requests.get(url, headers=headers, timeout=10)
+        response_time_iso = datetime.now(IST).isoformat()
+        elapsed_ms = round((time.perf_counter() - request_start_perf) * 1000, 1)
 
         if r.status_code != 200:
+            logger.info(
+                "API_DIAGNOSTIC_RESPONSE | label=%s | url=%s | request_start=%s | "
+                "response_time=%s | elapsed_ms=%.1f | returned=True | timed_out=False | "
+                "status_code=%s | headers=%s | body_snippet=%r",
+                label, url, request_start_iso, response_time_iso, elapsed_ms,
+                r.status_code, dict(r.headers), r.text[:300],
+            )
             st.error(f"API failed ({r.status_code}) for {url}\n{r.text[:300]}")
             return None
 
+        logger.info(
+            "API_DIAGNOSTIC_RESPONSE | label=%s | url=%s | request_start=%s | "
+            "response_time=%s | elapsed_ms=%.1f | returned=True | timed_out=False | "
+            "status_code=%s | headers=%s | body_snippet=None",
+            label, url, request_start_iso, response_time_iso, elapsed_ms,
+            r.status_code, dict(r.headers),
+        )
         return r.json()
 
     except Exception as e:
+        elapsed_ms = round((time.perf_counter() - request_start_perf) * 1000, 1)
+        timed_out = isinstance(e, requests.exceptions.Timeout)
+        logger.warning(
+            "API_DIAGNOSTIC_RESPONSE | label=%s | url=%s | request_start=%s | "
+            "response_time=None | elapsed_ms=%.1f | returned=False | timed_out=%s | "
+            "status_code=None | headers=None | body_snippet=None | exception=%s: %s",
+            label, url, request_start_iso, elapsed_ms, timed_out, type(e).__name__, e,
+        )
+        # UNCHANGED from before this investigation — exact same message,
+        # exact same single except-block shape. Only the logging above is new.
         st.error(f"API exception for {url}\n{e}")
         return None
 
@@ -403,7 +458,7 @@ def get_prices_bulk(keys):
         "Api-Version": "2.0"
     }
 
-    data = safe_get(url, headers)
+    data = safe_get(url, headers, label=f"BULK_PRICES ({len(keys)} instruments)")
 
     if not data:
         return {}
@@ -421,15 +476,19 @@ def get_prices_bulk(keys):
     return prices
 
 
-def get_candles(key):
+def get_candles(key, label=None):
     # FIX: original code called .get() directly on safe_get()'s return value,
     # which crashes with AttributeError when safe_get returns None
     # (timeouts, holidays, no data, expired token, rate limits).
+    #
+    # `label` (new, optional, default None): passed through to safe_get()
+    # for the Live Scan investigation's diagnostic logging only — does not
+    # affect the request, response handling, or return value at all.
     today = datetime.now(IST).strftime("%Y-%m-%d")
 
     url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/{today}"
 
-    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}, label=label)
 
     if not data:
         return None
@@ -468,7 +527,7 @@ def get_candles_range(key, days_back=5):
 # this avoids re-fetching daily candles on every single scan click, which
 # would otherwise roughly double the API calls per scan (38 instruments x
 # 1 extra call each). Cache key includes the date implicitly via ttl reset.
-def get_daily_trend(key):
+def get_daily_trend(key, label=None):
     """
     Fetches recent DAILY candles (not 30-min) and computes EMA20/EMA50 on
     that higher timeframe, to check whether the broader trend agrees with
@@ -478,13 +537,21 @@ def get_daily_trend(key):
 
     Returns "Bullish", "Bearish", or None if not enough daily data exists
     (e.g. a newly-listed instrument, or fewer than 50 trading days available).
+
+    `label` (new, optional, default None): passed through to safe_get()
+    for the Live Scan investigation's diagnostic logging only. NOTE: this
+    function is @st.cache_data-decorated — adding a new parameter shifts
+    its cache key, so the first call after this change is a one-time cache
+    miss per instrument (identical to any other code change touching a
+    cached function's signature); it does not change what the function
+    returns or how long results stay cached afterward.
     """
     to_date = datetime.now(IST).strftime("%Y-%m-%d")
     from_date = (datetime.now(IST) - pd.Timedelta(days=120)).strftime("%Y-%m-%d")
 
     url = f"https://api.upstox.com/v2/historical-candle/{key}/day/{to_date}/{from_date}"
 
-    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}, label=label)
 
     if not data:
         return None
@@ -523,7 +590,7 @@ def get_market_trend():
     from_date = (datetime.now(IST) - pd.Timedelta(days=120)).strftime("%Y-%m-%d")
 
     url = f"https://api.upstox.com/v2/historical-candle/{NIFTY50_INSTRUMENT_KEY}/day/{to_date}/{from_date}"
-    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"}, label="MARKET_TREND (NIFTY50)")
 
     if not data:
         return None
