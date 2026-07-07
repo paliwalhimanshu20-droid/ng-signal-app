@@ -353,5 +353,4 @@ def render_historical_downloader(handles) -> None:
                 f"{result.total_rows_written:,} candle(s) written from the successful ones. "
                 "See the Progress Monitoring tab for details."
             )
-    )
             
