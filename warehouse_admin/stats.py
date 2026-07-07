@@ -131,6 +131,50 @@ def _pending_checkpoint_count(handles: WarehouseHandles) -> int:
     return int(row[0]) if row else 0
 
 
+def _covered_instrument_ids(handles: WarehouseHandles) -> set[str]:
+    """
+    PERFORMANCE FIX: distinct instrument_ids present in the catalog table,
+    via a single `SELECT DISTINCT` — not `handles.metadata_manager.list_entries()`
+    (which was being used here).
+
+    Measured against production scale: list_entries() with no filter runs
+    `SELECT * FROM warehouse_catalog ORDER BY instrument_id, timeframe,
+    year, month`, fetches every row (one per instrument x timeframe x
+    year x month partition ever downloaded), and constructs a full
+    CatalogEntry dataclass for each — then this call site immediately
+    threw all of that away except the instrument_id, to build a Python
+    set for a membership check. Confirmed via instrumented per-tab timing
+    logs (5 consecutive reruns, 23.6s-27.5s each) as the sole cause of a
+    2-3 minute perceived UI freeze: this function is called from the
+    Warehouse Statistics tab, which — like every Streamlit st.tabs()
+    body — re-executes on every single rerun of the entire app once its
+    15s cache TTL expires, regardless of which page or widget the user
+    actually interacted with.
+
+    This query asks the database for exactly what's needed (the distinct
+    set of covered instrument_ids) with no ORDER BY and no per-row Python
+    object construction. `missing_instruments` and `coverage_percent`
+    below are computed identically to before — same inputs, same
+    comparison, same output shape — only the source of `covered_ids`
+    changed.
+
+    NOTE: `warehouse.bootstrap.health_checker.py`'s `_check_catalog_consistency()`
+    also calls `list_entries()` unfiltered, for a different purpose
+    (sampling entries to verify their Parquet files exist on disk). That
+    is a separate call site, used by both the Dashboard and Statistics
+    tabs via WarehouseHealthChecker.run() — Dashboard stayed fast
+    (25-50ms) in every rerun of the diagnostic log, so it isn't currently
+    the active cost driver, but it is the same underlying query and
+    hasn't been touched here (out of scope for this fix — flagged for a
+    separate look if it ever shows up as slow).
+    """
+    from warehouse.core.constants import METADATA_CATALOG_TABLE
+
+    with handles.duckdb_manager.metadata_cursor() as con:
+        rows = con.execute(f"SELECT DISTINCT instrument_id FROM {METADATA_CATALOG_TABLE}").fetchall()
+    return {r[0] for r in rows}
+
+
 def _last_job_finished_at(handles: WarehouseHandles, job_type: JobType) -> Optional[datetime]:
     jobs = handles.job_manager.list_jobs(status=JobStatus.COMPLETED, job_type=job_type)
     finished = [j.finished_at_utc for j in jobs if j.finished_at_utc is not None]
@@ -187,8 +231,7 @@ def compute_warehouse_statistics(handles: WarehouseHandles) -> WarehouseStatisti
     missing_instruments: list = []
 
     if im_available and active_instruments:
-        entries = handles.metadata_manager.list_entries()
-        covered_ids = {e.instrument_id for e in entries}
+        covered_ids = _covered_instrument_ids(handles)
         db_path = handles.config.resolved_paths().instrument_master_db_path
         registry = InstrumentRegistry(db_path)
         active_records = registry.list_active_instruments()
