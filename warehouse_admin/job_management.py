@@ -29,18 +29,50 @@ mid-flight the way a Celery/RQ task queue could. So:
     provide. A true live-pause would require NGWH-002's BatchRunner loop
     itself to check a cooperative cancellation flag between chunks, which
     is NGWH-002 internals and out of scope for NGWH-003 (frozen).
+
+=== TEMPORARY TIMING INSTRUMENTATION (this session) ===
+list_job_history() and find_stale_running_jobs() are the two functions in
+this file with no caching decorator, called unconditionally on every
+render of the Jobs tab (i.e. every rerun of the entire app, per
+st.tabs()'s non-lazy execution). Both are wrapped with before/after
+timing around the actual handles.job_manager.* call — nothing about
+their logic, arguments, or return values is changed. Remove `_timed`/
+`import time`/`_now_iso` and the two `with _timed(...)` blocks once the
+slow stage is identified.
 """
 
 from __future__ import annotations
 
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from datetime import datetime as _dt
 from typing import Optional
 
 from warehouse.bootstrap.bootstrap import WarehouseHandles
 from warehouse.core.constants import CheckpointScope, JobStatus, JobType, Timeframe
 from warehouse.core.exceptions import InvalidJobStateTransitionError, JobNotFoundError
 from warehouse.metadata.job_manager import Job
+
+_SLOW_THRESHOLD_MS = 50.0
+
+
+def _now_iso() -> str:
+    return _dt.now().isoformat(timespec="milliseconds")
+
+
+@contextmanager
+def _timed(label: str):
+    t0 = time.perf_counter()
+    print(f"[TIMING BEFORE] {label:<55s} @ {_now_iso()}")
+    try:
+        yield
+    finally:
+        ms = (time.perf_counter() - t0) * 1000
+        flag = "  <<< SLOW (>50ms)" if ms > _SLOW_THRESHOLD_MS else ""
+        print(f"[TIMING AFTER]  {label:<55s} @ {_now_iso()}  {ms:9.2f} ms{flag}")
+
 
 # Job types this UI knows how to re-invoke on Resume/Restart. Any other
 # job_type (e.g. a future SCHEMA_MIGRATION job) is shown read-only in the
@@ -72,12 +104,15 @@ class ResumePlan:
 
 def list_job_history(handles: WarehouseHandles, *, limit: int = 100) -> list[Job]:
     """Every job, newest first, capped at `limit` for table rendering."""
-    jobs = handles.job_manager.list_jobs()
+    with _timed(f"job_management.list_job_history(): handles.job_manager.list_jobs()"):
+        jobs = handles.job_manager.list_jobs()
     return jobs[:limit]
 
 
 def pending_checkpoint_count_for_job(handles: WarehouseHandles, job_id: str) -> int:
-    return len(handles.checkpoint_manager.list_incomplete(job_id))
+    with _timed(f"job_management.pending_checkpoint_count_for_job(): checkpoint_manager.list_incomplete()"):
+        result = len(handles.checkpoint_manager.list_incomplete(job_id))
+    return result
 
 
 def build_resume_plan(handles: WarehouseHandles, job: Job) -> Optional[ResumePlan]:
@@ -140,7 +175,9 @@ def find_stale_running_jobs(handles: WarehouseHandles, *, stale_after_minutes: i
     (NGWH-001, already exists) rather than reimplementing the heartbeat
     check.
     """
-    return handles.job_manager.stale_running_jobs(stale_after_minutes * 60)
+    with _timed(f"job_management.find_stale_running_jobs(): handles.job_manager.stale_running_jobs()"):
+        result = handles.job_manager.stale_running_jobs(stale_after_minutes * 60)
+    return result
 
 
 def restart_failed_job_as_new(handles: WarehouseHandles, job: Job) -> tuple[Optional[str], JobActionResult]:
