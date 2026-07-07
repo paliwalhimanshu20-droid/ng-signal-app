@@ -16,11 +16,46 @@ all yet on this deployment — a warehouse that has simply never been
 initialized is not the same failure class as one that IS initialized but
 broken, mirroring this package's own SKIPPED semantics (see
 validation_models.py's ValidationStatus docstring).
+
+=== TEMPORARY TIMING INSTRUMENTATION (this session) ===
+This is the confirmed source of the "Bootstrapping warehouse -> Metadata
+DuckDB connection opened -> Warehouse bootstrap complete -> Metadata
+DuckDB connection closed -> Metadata DuckDB connection opened" sequence
+seen in the logs: WarehouseBootstrap(config).run() here is a second,
+independent, UNCACHED bootstrap (bypasses get_warehouse_handles()'s
+st.cache_resource entirely), followed by an explicit
+handles.duckdb_manager.close(), followed by handles.job_manager.list_jobs()
+calls that reopen the same connection. Every stage below is timed with
+before/after timestamps. No logic changed. Remove `_timed`/`import time`/
+`_now_iso` and the `with _timed(...)` blocks once done.
 """
 
 from __future__ import annotations
 
+import time
+from contextlib import contextmanager
+from datetime import datetime as _dt
+
 from .validation_models import ValidationCategory, ValidationResult, ValidationStatus
+
+_SLOW_THRESHOLD_MS = 50.0
+
+
+def _now_iso() -> str:
+    return _dt.now().isoformat(timespec="milliseconds")
+
+
+@contextmanager
+def _timed(label: str):
+    t0 = time.perf_counter()
+    print(f"[TIMING BEFORE] {label:<60s} @ {_now_iso()}")
+    try:
+        yield
+    finally:
+        ms = (time.perf_counter() - t0) * 1000
+        flag = "  <<< SLOW (>50ms)" if ms > _SLOW_THRESHOLD_MS else ""
+        print(f"[TIMING AFTER]  {label:<60s} @ {_now_iso()}  {ms:9.2f} ms{flag}")
+
 
 # HealthStatus (warehouse.core.constants) -> ValidationStatus mapping.
 # UNKNOWN maps to SKIPPED, not WARNING/FAIL — an UNKNOWN category result
@@ -36,6 +71,9 @@ _HEALTH_STATUS_MAP = {
 
 
 def validate_warehouse() -> ValidationResult:
+    _fn_t0 = time.perf_counter()
+    print(f"\n########## validate_warehouse() START @ {_now_iso()} ##########")
+
     details: list = []
     warnings: list = []
     failures: list = []
@@ -44,9 +82,11 @@ def validate_warehouse() -> ValidationResult:
 
     # ---- 1. Can the warehouse package even be imported/configured? ----
     try:
-        from warehouse import load_config
-        from warehouse.config.validation import validate_configuration
+        with _timed("import warehouse / warehouse.config.validation"):
+            from warehouse import load_config
+            from warehouse.config.validation import validate_configuration
     except Exception as e:
+        print(f"########## validate_warehouse() END (import failure) @ {_now_iso()} ##########\n")
         return ValidationResult(
             category=ValidationCategory.WAREHOUSE,
             status=ValidationStatus.FAIL,
@@ -55,9 +95,11 @@ def validate_warehouse() -> ValidationResult:
         )
 
     try:
-        config = load_config()
+        with _timed("load_config()"):
+            config = load_config()
         details.append(f"Warehouse configuration loaded (environment={config.environment}).")
     except Exception as e:
+        print(f"########## validate_warehouse() END (config failure) @ {_now_iso()} ##########\n")
         return ValidationResult(
             category=ValidationCategory.WAREHOUSE,
             status=ValidationStatus.FAIL,
@@ -67,7 +109,8 @@ def validate_warehouse() -> ValidationResult:
 
     # ---- 2. Pre-flight config validation (disk space, permissions) ----
     try:
-        report = validate_configuration(config)
+        with _timed("validate_configuration(config)"):
+            report = validate_configuration(config)
         for w in report.warnings:
             warnings.append(f"Configuration: {w.message}")
         for e in report.errors:
@@ -78,13 +121,16 @@ def validate_warehouse() -> ValidationResult:
         warnings.append(f"Could not run configuration pre-flight validation: {type(e).__name__}: {e}")
 
     # ---- 3. Warehouse initialized at all? ----
-    resolved_root = config.resolved_paths().root_dir
-    if not resolved_root.exists():
+    with _timed("config.resolved_paths().root_dir.exists() [filesystem]"):
+        resolved_root = config.resolved_paths().root_dir
+        root_exists = resolved_root.exists()
+    if not root_exists:
         skipped.append(
             f"Warehouse has not been bootstrapped yet at {resolved_root} — "
             "run WarehouseBootstrap.run() (e.g. via the Warehouse Dashboard's "
             "'Initialize Warehouse' action) before deeper checks apply."
         )
+        print(f"########## validate_warehouse() END (not bootstrapped) @ {_now_iso()} ##########\n")
         return ValidationResult(
             category=ValidationCategory.WAREHOUSE,
             status=ValidationStatus.SKIPPED,
@@ -100,10 +146,12 @@ def validate_warehouse() -> ValidationResult:
     try:
         from warehouse.bootstrap import WarehouseBootstrap, WarehouseHealthChecker
 
-        handles = WarehouseBootstrap(config).run()
+        with _timed("*** WarehouseBootstrap(config).run() [UNCACHED, independent of get_warehouse_handles()] ***"):
+            handles = WarehouseBootstrap(config).run()
         details.append("Warehouse bootstrap confirmed idempotent (safe re-run).")
     except Exception as e:
         failures.append(f"WarehouseBootstrap.run() failed: {type(e).__name__}: {e}")
+        print(f"########## validate_warehouse() END (bootstrap failure) @ {_now_iso()} ##########\n")
         return ValidationResult(
             category=ValidationCategory.WAREHOUSE,
             status=ValidationStatus.FAIL,
@@ -114,10 +162,12 @@ def validate_warehouse() -> ValidationResult:
         )
 
     try:
-        checker = WarehouseHealthChecker(handles.config, handles.duckdb_manager, handles.partition_manager)
-        health_report = checker.run()
+        with _timed("WarehouseHealthChecker(...).run()"):
+            checker = WarehouseHealthChecker(handles.config, handles.duckdb_manager, handles.partition_manager)
+            health_report = checker.run()
     except Exception as e:
         failures.append(f"WarehouseHealthChecker.run() raised {type(e).__name__}: {e}")
+        print(f"########## validate_warehouse() END (health check failure) @ {_now_iso()} ##########\n")
         return ValidationResult(
             category=ValidationCategory.WAREHOUSE,
             status=ValidationStatus.FAIL,
@@ -128,7 +178,8 @@ def validate_warehouse() -> ValidationResult:
         )
     finally:
         try:
-            handles.duckdb_manager.close()
+            with _timed("*** handles.duckdb_manager.close() [sets _metadata_conn = None] ***"):
+                handles.duckdb_manager.close()
         except Exception:
             pass
 
@@ -159,8 +210,10 @@ def validate_warehouse() -> ValidationResult:
     try:
         from warehouse.core.constants import JobStatus
 
-        running = handles.job_manager.list_jobs(status=JobStatus.RUNNING)
-        failed = handles.job_manager.list_jobs(status=JobStatus.FAILED)
+        with _timed("*** handles.job_manager.list_jobs(RUNNING) [reopens metadata connection] ***"):
+            running = handles.job_manager.list_jobs(status=JobStatus.RUNNING)
+        with _timed("handles.job_manager.list_jobs(FAILED)"):
+            failed = handles.job_manager.list_jobs(status=JobStatus.FAILED)
         metrics["jobs_running"] = len(running)
         metrics["jobs_failed"] = len(failed)
         if failed:
@@ -175,6 +228,10 @@ def validate_warehouse() -> ValidationResult:
         f"Warehouse health {health_report.health_score}% "
         f"({health_report.overall_status.value}) across {len(health_report.categories)} categories."
     )
+
+    _total_ms = (time.perf_counter() - _fn_t0) * 1000
+    flag = "  <<< SLOW" if _total_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"########## validate_warehouse() END @ {_now_iso()}  TOTAL={_total_ms:9.2f} ms{flag} ##########\n")
 
     return ValidationResult(
         category=ValidationCategory.WAREHOUSE,
