@@ -1,1 +1,26 @@
+# NGSP .gitignore
+# IMPORTANT: data/*.db is intentionally NOT ignored here.
+# check_signals.yml and update_instrument_master.yml commit those DB files
+# back to the repo on schedule — they are the persistence layer, since both
+# GitHub Actions and Streamlit Community Cloud use ephemeral filesystems.
+# Do not add data/*.db, data/*.json to this file.
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Dev-only local output (build_instruments.py's output — never committed)
+instruments.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Streamlit local secrets (never commit real secrets.toml)
+.streamlit/secrets.toml
