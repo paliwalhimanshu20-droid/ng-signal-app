@@ -27,6 +27,38 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+# ============================================================
+# TEMPORARY TIMING INSTRUMENTATION (this session) — covers the
+# Admin Center tab from get_admin_kpis() through render_warehouse_center(),
+# i.e. everything that is NOT already instrumented inside
+# warehouse_admin/render.py. No logic changed anywhere below; only
+# `with _timed(...)` wrappers and prints were added. Remove `_timed`,
+# `_now_iso`, `import time`, and every `with _timed(...)` block once the
+# slow stage is identified.
+# ============================================================
+import time as _time
+from contextlib import contextmanager as _contextmanager
+from datetime import datetime as _dt
+
+_SLOW_THRESHOLD_MS = 50.0
+
+
+def _now_iso():
+    return _dt.now().isoformat(timespec="milliseconds")
+
+
+@_contextmanager
+def _timed(label):
+    _t0 = _time.perf_counter()
+    print(f"[TIMING BEFORE] {label:<55s} @ {_now_iso()}")
+    try:
+        yield
+    finally:
+        _ms = (_time.perf_counter() - _t0) * 1000
+        _flag = "  <<< SLOW (>50ms)" if _ms > _SLOW_THRESHOLD_MS else ""
+        print(f"[TIMING AFTER]  {label:<55s} @ {_now_iso()}  {_ms:9.2f} ms{_flag}")
+
+
 # Admin
 from admin_tools import weekly_summary
 
@@ -607,21 +639,26 @@ with tab_performance:
 # ADMIN CENTER
 # =========================================================================
 
-kpis = get_admin_kpis()
+print(f"\n########## [app.py] ADMIN CENTER (post-tabs) block START @ {_now_iso()} ##########")
+_admin_block_t0 = _time.perf_counter()
 
-c1, c2, c3, c4 = st.columns(4)
+with _timed("get_admin_kpis() [cached load_signal_log(), local DB]"):
+    kpis = get_admin_kpis()
 
-with c1:
-    st.metric("Total Trades", kpis["total_trades"])
+with _timed("st.columns(4) + 4x st.metric() [admin KPI row]"):
+    c1, c2, c3, c4 = st.columns(4)
 
-with c2:
-    st.metric("Win Rate %", f"{kpis['win_rate']}%")
+    with c1:
+        st.metric("Total Trades", kpis["total_trades"])
 
-with c3:
-    st.metric("Avg P&L %", kpis["avg_pnl"])
+    with c2:
+        st.metric("Win Rate %", f"{kpis['win_rate']}%")
 
-with c4:
-    st.metric("Open Trades", kpis["open_trades"])
+    with c3:
+        st.metric("Avg P&L %", kpis["avg_pnl"])
+
+    with c4:
+        st.metric("Open Trades", kpis["open_trades"])
 
 
 with tab_admin:
@@ -746,19 +783,26 @@ with tab_admin:
         # -----------------------------
         if st.button("🔍 Diagnostics"):
             with st.spinner("Running Validation Center checks (Application, Database, Dashboard, Configuration)..."):
-                st.session_state.validation_summary = run_validation()
+                with _timed("*** run_validation() [click-triggered, includes validate_warehouse()] ***"):
+                    st.session_state.validation_summary = run_validation()
 
         st.button("🗂️ Data Management", disabled=True)
 
     # Validation results render full-width below both columns, not
     # squeezed into col2, since there's a lot to show once it's run.
-    if "validation_summary" in st.session_state:
+    with _timed("check: 'validation_summary' in st.session_state"):
+        _has_validation_summary = "validation_summary" in st.session_state
+    if _has_validation_summary:
+        print(f"[STATE]         validation_summary IS present in session_state -- re-rendering on THIS rerun too")
         st.markdown("---")
         st.markdown(
             '<div class="section-eyebrow">🔍 Validation Center Report</div>',
             unsafe_allow_html=True
         )
-        render_validation_summary(st.session_state.validation_summary)
+        with _timed("*** render_validation_summary() [re-renders on EVERY rerun if summary persists] ***"):
+            render_validation_summary(st.session_state.validation_summary)
+    else:
+        print(f"[STATE]         validation_summary NOT present in session_state -- Diagnostics was never clicked this session")
 
     # =====================================================
     # WAREHOUSE OPERATIONS CENTER (NGWH-003)
@@ -768,4 +812,9 @@ with tab_admin:
     # cannot affect the rest of the Admin Center or any other tab; see
     # render_warehouse_center()'s own try/except around bootstrap.
     st.markdown("---")
-    render_warehouse_center()
+    with _timed("*** render_warehouse_center() [instrumented internally in warehouse_admin/render.py] ***"):
+        render_warehouse_center()
+
+_admin_block_total_ms = (_time.perf_counter() - _admin_block_t0) * 1000
+_admin_flag = "  <<< SLOW" if _admin_block_total_ms > _SLOW_THRESHOLD_MS else ""
+print(f"########## [app.py] ADMIN CENTER (post-tabs) block END @ {_now_iso()}  TOTAL={_admin_block_total_ms:9.2f} ms{_admin_flag} ##########\n")
