@@ -16,12 +16,20 @@ the browser tab/session open for a long time — the "Pilot Backfill" mode
 exists specifically so that can be tried safely first, and
 `scripts/run_warehouse_backfill.py` exists as a CLI alternative that runs
 outside a Streamlit session entirely (recommended for the real full run).
+
+=== TEMPORARY TIMING INSTRUMENTATION (this session) ===
+time.perf_counter() calls and print() timing reports have been added to
+render_historical_downloader() and _count_instrument_selection() to
+diagnose a 2-3 minute UI freeze on selection-mode change. No business
+logic, SQL, widgets, caching, or return values were changed. Remove the
+`import time` and all timing blocks once the slow stage is identified.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import sqlite3
+import time  # added: needed for perf_counter timing only
 
 import streamlit as st
 
@@ -99,14 +107,63 @@ def _count_instrument_selection(_handles, mode: str, asset_class: str | None, cu
         clause += f" AND {INSTRUMENT_MASTER_ASSET_CLASS_FIELD} = ?"
         params = params + (effective_asset_class,)
 
+    _sql_text = f"SELECT COUNT(*) FROM instruments {clause}"
+
+    # Safe defaults so the timing/print block in `finally` can never raise
+    # NameError if an exception happens partway through — none of this
+    # affects the real control flow or return value.
+    _t_exec = _t_fetch = None
+    result = None
+
+    # ---- TIMING: Open SQLite connection ----
+    _t0 = time.perf_counter()
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    _t_open = time.perf_counter()
+
     try:
-        return conn.execute(f"SELECT COUNT(*) FROM instruments {clause}", params).fetchone()[0]
+        # ---- TIMING: Execute SQL ----
+        cur = conn.execute(_sql_text, params)
+        _t_exec = time.perf_counter()
+
+        # ---- TIMING: Fetch result ----
+        result = cur.fetchone()[0]
+        _t_fetch = time.perf_counter()
+
+        return result
     finally:
+        # ---- TIMING: Close connection ----
         conn.close()
+        _t_close = time.perf_counter()
+
+        _open_ms = (_t_open - _t0) * 1000
+        _exec_ms = ((_t_exec - _t_open) * 1000) if _t_exec is not None else float("nan")
+        _fetch_ms = ((_t_fetch - _t_exec) * 1000) if (_t_fetch is not None and _t_exec is not None) else float("nan")
+        _close_ms = (_t_close - (_t_fetch or _t_exec or _t_open)) * 1000
+        _total_ms = (_t_close - _t0) * 1000
+
+        print(
+            "================ COUNT TIMING ================\n"
+            f"selection mode:              {mode}\n"
+            f"asset class:                 {effective_asset_class}\n"
+            f"SQL query:                   {_sql_text}\n"
+            f"SQL params:                  {params}\n"
+            f"returned count:              {result}\n"
+            "\n"
+            f"Open SQLite connection      {_open_ms:7.1f} ms\n"
+            f"Execute SQL                 {_exec_ms:7.1f} ms\n"
+            f"Fetch result                {_fetch_ms:7.1f} ms\n"
+            f"Close connection            {_close_ms:7.1f} ms\n"
+            "\n"
+            f"TOTAL COUNT                 {_total_ms:7.1f} ms\n"
+            "=============================================="
+        )
 
 
 def render_historical_downloader(handles) -> None:
+    _page_t0 = time.perf_counter()
+
+    # ---------------- TIMING Step 1: Build page/header ----------------
+    _s1_t0 = time.perf_counter()
     st.markdown('<div class="section-eyebrow">⬇️ Historical Downloader</div>', unsafe_allow_html=True)
 
     if not UPSTOX_ACCESS_TOKEN:
@@ -115,7 +172,10 @@ def render_historical_downloader(handles) -> None:
             "The downloader cannot make requests until this is set."
         )
         return
+    _s1_ms = (time.perf_counter() - _s1_t0) * 1000
 
+    # ---------------- TIMING Step 2: Read Streamlit widget values ----------------
+    _s2_t0 = time.perf_counter()
     # ---- Instrument selection ----
     st.markdown("**1. Instrument Selection**")
     selection_mode = st.radio(
@@ -134,14 +194,20 @@ def render_historical_downloader(handles) -> None:
             placeholder="NSE_EQ|INE002A01018\nNSE_EQ|INE467B01029",
             height=100,
         )
+    _s2_ms = (time.perf_counter() - _s2_t0) * 1000
 
+    # ---------------- TIMING Step 3: _count_instrument_selection() ----------------
+    _s3_t0 = time.perf_counter()
     try:
         match_count = _count_instrument_selection(handles, selection_mode, asset_class, custom_text)
         st.caption(f"{match_count} instrument(s) currently match this selection.")
     except Exception as e:
         st.warning(f"Could not resolve instrument selection yet: {type(e).__name__}: {e}")
         match_count = 0
+    _s3_ms = (time.perf_counter() - _s3_t0) * 1000
 
+    # ---------------- TIMING Step 4: Build remaining widgets ----------------
+    _s4_t0 = time.perf_counter()
     # ---- Timeframes ----
     st.markdown("**2. Timeframes**")
     selected_timeframes = st.multiselect(
@@ -185,7 +251,10 @@ def render_historical_downloader(handles) -> None:
         st.slider("Max retries per request", min_value=0, max_value=10, value=5, key="wh_retry_max_retries")
         st.slider("Retry backoff base (seconds)", min_value=0.5, max_value=10.0, value=1.0, step=0.5, key="wh_retry_backoff_base")
         st.slider("Rate limit (requests/second)", min_value=0.5, max_value=10.0, value=2.0, step=0.5, key="wh_rate_limit_rps")
+    _s4_ms = (time.perf_counter() - _s4_t0) * 1000
 
+    # ---------------- TIMING Step 5: Asset class/custom processing ----------------
+    _s5_t0 = time.perf_counter()
     if mode == "Full Historical Backfill" and match_count > 20:
         st.warning(
             f"This selection covers {match_count} instruments. Running this from the browser will "
@@ -201,21 +270,42 @@ def render_historical_downloader(handles) -> None:
         "Full Historical Backfill": "🚀 Start Full Historical Backfill",
         "Incremental Daily Update": "🔄 Run Incremental Update",
     }[mode]
+    _s5_ms = (time.perf_counter() - _s5_t0) * 1000
 
-    if st.button(button_label, type="primary"):
+    # ---------------- TIMING Step 6: Final page render ----------------
+    _s6_t0 = time.perf_counter()
+    button_clicked = st.button(button_label, type="primary")
+    _s6_ms = (time.perf_counter() - _s6_t0) * 1000
+
+    _total_ms = (time.perf_counter() - _page_t0) * 1000
+
+    print(
+        "================ DOWNLOADER PAGE TIMING ================\n"
+        f"Step 1: Build page/header               {_s1_ms:7.1f} ms\n"
+        f"Step 2: Read Streamlit widget values     {_s2_ms:7.1f} ms\n"
+        f"Step 3: _count_instrument_selection()    {_s3_ms:7.1f} ms\n"
+        f"Step 4: Build remaining widgets          {_s4_ms:7.1f} ms\n"
+        f"Step 5: Asset class/custom processing    {_s5_ms:7.1f} ms\n"
+        f"Step 6: Final page render                {_s6_ms:7.1f} ms\n"
+        "\n"
+        f"TOTAL PAGE TIME                          {_total_ms:7.1f} ms\n"
+        "========================================================"
+    )
+
+    # PERFORMANCE (this session): the real, full instrument_ids list —
+    # via the exact same unmodified _resolve_instrument_selection() the
+    # old code called on every rerun — is now only computed right here,
+    # at actual button-click time, instead of on every single render.
+    # This is the ONLY place the full list is materialized; everything
+    # above (caption, >20 warning) uses the cheap cached count instead.
+    # Functionally identical to before: Streamlit reruns this whole
+    # script on the click anyway, so resolving the list here is exactly
+    # as fresh as resolving it eagerly at the top ever was.
+    if button_clicked:
         if not selected_timeframes:
             st.error("Select at least one timeframe.")
             return
 
-        # PERFORMANCE (this session): the real, full instrument_ids list —
-        # via the exact same unmodified _resolve_instrument_selection() the
-        # old code called on every rerun — is now only computed right here,
-        # at actual button-click time, instead of on every single render.
-        # This is the ONLY place the full list is materialized; everything
-        # above (caption, >20 warning) uses the cheap cached count instead.
-        # Functionally identical to before: Streamlit reruns this whole
-        # script on the click anyway, so resolving the list here is exactly
-        # as fresh as resolving it eagerly at the top ever was.
         try:
             preview_ids = _resolve_instrument_selection(handles, selection_mode, asset_class, custom_text)
         except Exception as e:
@@ -263,3 +353,5 @@ def render_historical_downloader(handles) -> None:
                 f"{result.total_rows_written:,} candle(s) written from the successful ones. "
                 "See the Progress Monitoring tab for details."
             )
+    )
+            
