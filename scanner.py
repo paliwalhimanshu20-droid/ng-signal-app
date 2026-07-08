@@ -5,9 +5,9 @@ dashboard renders. This is the piece that ties config + watchlist +
 upstox_client + signal_logic together for a single "Run Live Scan" click.
 """
 
+import logging
 import time
 import pandas as pd
-import streamlit as st
 
 from watchlist import get_watchlist, get_sector
 from upstox_client import (
@@ -18,6 +18,8 @@ from signal_logic import (
     calculate_supertrend, compute_adx, signal_engine, levels,
 )
 from config import COMMODITY_RISK_PARAMS
+
+logger = logging.getLogger(__name__)
 
 
 def volume_signal(candles):
@@ -211,7 +213,15 @@ def run_scanner(commodity_contracts=None):
             })
 
         except Exception as e:
-            st.error(f"{name} Error: {e}")
+            # Was st.error(...) — that made this module unusable outside a
+            # Streamlit session (see generate_signals.py, NGSP Phase 0).
+            # Same behavior otherwise: this instrument is skipped, nothing
+            # is appended to all_results, exactly as before. The Scanner
+            # tab's full_df table never included per-instrument error rows
+            # previously, so it still doesn't — only where the error is
+            # surfaced changed (app/Actions logs instead of an st.error
+            # toast on the page).
+            logger.warning("%s Error: %s", name, e)
             continue
 
     full_df = pd.DataFrame(all_results)
