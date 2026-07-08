@@ -1,19 +1,19 @@
 {
-  "generated_at": "2026-07-07T05:57:28Z",
-  "execution_seconds": 3.964,
+  "generated_at": "2026-07-08T04:56:59Z",
+  "execution_seconds": 4.079,
   "schema_version": 4,
   "sync": {
-    "total_source_records": 127353,
-    "new": 895,
-    "updated": 11,
-    "unchanged": 126447,
-    "deactivated": 186,
-    "download_started_at": "2026-07-07T05:57:24Z"
+    "total_source_records": 127831,
+    "new": 697,
+    "updated": 156,
+    "unchanged": 126978,
+    "deactivated": 405,
+    "download_started_at": "2026-07-08T04:56:55Z"
   },
-  "row_count_before": 126644,
-  "row_count_after": 127539,
+  "row_count_before": 127539,
+  "row_count_after": 128236,
   "validation": {
-    "total_rows": 127539,
+    "total_rows": 128236,
     "rules_run": 12,
     "info_count": 0,
     "warning_count": 26,
@@ -311,5 +311,13 @@
     ],
     "failures": []
   },
-  "anomalies": []
+  "anomalies": [
+    {
+      "metric": "deactivated_items",
+      "message": "Deactivated count (405) is more than 3x the 3-run baseline average (62.0) \u2014 a mass deactivation can mean the source feed had a partial outage that looked like 'these no longer exist' rather than a genuine delisting wave.",
+      "current_value": 405,
+      "baseline_value": 62.0,
+      "priority": "HIGH_PRIORITY"
+    }
+  ]
 }
