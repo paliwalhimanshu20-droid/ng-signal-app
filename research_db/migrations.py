@@ -108,9 +108,92 @@ def migration_002_add_live_trades_table(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_live_trades_timestamp ON live_trades (timestamp);")
 
 
+# ---------------------------------------------------------------------------
+# Migration 3 — adds scan_snapshots (NGSP Phase 0, PR 6a). Independent of
+# live_trades: this table holds the COMPLETE output of every background
+# scan run by generate_signals.py — every watchlist instrument, every
+# signal type (BUY/SELL/WATCH/HOLD), not just the ones that became a trade.
+# live_trades structurally cannot answer "what did the full scan see" —
+# only "what became a trade" — since it only ever receives rows that
+# already passed the actionable BUY/SELL gate. This table is what lets the
+# Scanner tab's "Full Scanned Universe" table and opportunity cards (PR 6b)
+# read from the database instead of recomputing, without losing any
+# information those views currently show.
+#
+# DESIGN — meant to evolve into Phase 1's Historical Data Warehouse feed,
+# not be a throwaway cache:
+#   - APPEND-ONLY, same convention as every other table in this DB except
+#     live_trades' mutable outcome fields (see schema.py's design notes).
+#     Every scan run adds a new batch of rows; nothing is ever updated or
+#     deleted here. One row per instrument per scan.
+#   - `scanned_at` is shared by every row in one scan batch (set once per
+#     generate_signals.py run, not per row) and is both the grouping key
+#     for "give me one full scan" and the ordering key for "give me the
+#     latest scan" — no separate run-id needed.
+#   - Every column here is a direct, unrenamed-in-meaning mapping from
+#     scanner.py's full_df row dict (see scanner.run_scanner()'s
+#     all_results.append({...}) block) — nothing invented, nothing
+#     recomputed differently. Column names are snake_case versions of the
+#     full_df keys (e.g. "Volume Ratio" -> volume_ratio, "Prob%" ->
+#     prob_pct) for SQL-friendliness, same convention live_trades already
+#     uses (e.g. full_df's "SL" -> live_trades.sl).
+#   - This table intentionally does NOT try to be the Phase 1 warehouse
+#     itself (that's Parquet+DuckDB per NGSP-003A.3, a different physical
+#     design for years of tick-level history). It's meant to be a clean,
+#     complete, queryable source Phase 1's ingestion can read from and
+#     backfill into that warehouse, rather than Phase 1 having to
+#     reconstruct scan history from scratch.
+#   - GROWTH NOTE for whoever revisits this: at ~40 instruments per scan,
+#     every 30 min in market hours, this is roughly 1,900 rows/trading day
+#     — fine for SQLite/git-sync at Phase 0's scale, but worth watching
+#     over months. Pruning/archiving strategy is explicitly a Phase 1
+#     concern (that's what the warehouse migration is for), not solved
+#     here.
+# ---------------------------------------------------------------------------
+def migration_003_add_scan_snapshots_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS scan_snapshots (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            scanned_at          TEXT NOT NULL,
+            instrument          TEXT NOT NULL,
+            instrument_key      TEXT,
+            sector              TEXT,
+            signal              TEXT NOT NULL,
+            confidence          TEXT,
+            trend               TEXT,
+            daily_trend         TEXT,
+            market_trend        TEXT,
+            supertrend          TEXT,
+            supertrend_value    REAL,
+            regime              TEXT,
+            adx                 REAL,
+            conviction_pct      REAL,
+            daily_trend_agree   TEXT,
+            supertrend_agree    TEXT,
+            market_trend_agree  TEXT,
+            score               REAL,
+            prob_pct            REAL,
+            rsi                 REAL,
+            volume_ratio        REAL,
+            volume_label        TEXT,
+            expected_move_pct   REAL,
+            rr                  REAL,
+            price               REAL,
+            sl                  REAL,
+            t1                  REAL,
+            t2                  REAL,
+            reason              TEXT,
+            created_at          TEXT NOT NULL
+        );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_snapshots_scanned_at ON scan_snapshots (scanned_at);")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_snapshots_instrument ON scan_snapshots (instrument, scanned_at);")
+
+
 MIGRATIONS = [
     (1, "baseline schema (9 research & learning tables)", migration_001_baseline),
     (2, "add live_trades table (migrated from signal_log.csv)", migration_002_add_live_trades_table),
+    (3, "add scan_snapshots table (NGSP Phase 0, PR 6a)", migration_003_add_scan_snapshots_table),
 ]
 
 
