@@ -123,6 +123,61 @@ def build_new_signal_record(row):
     }
 
 
+def _clean(value):
+    """
+    scan_snapshots columns are typed (REAL/TEXT); full_df fills gaps with
+    the string "N/A" (see scanner.py), which SQLite would happily store
+    into a REAL column as text rather than NULL. Converts "N/A" -> None so
+    numeric columns stay genuinely numeric-or-NULL, not "sometimes a
+    string." Text columns pass "N/A" through unchanged — that's a
+    meaningful value there (e.g. Supertrend "N/A" is a real, valid state).
+    """
+    return None if value == "N/A" else value
+
+
+def build_scan_snapshot_record(row, scanned_at):
+    """
+    NGSP Phase 0, PR 6a. One row per scanner.py full_df row, EVERY
+    instrument the scan returned — not filtered to BUY/SELL like
+    build_new_signal_record() above. Column names are the snake_case
+    scan_snapshots equivalents of full_df's keys (see
+    research_db/migrations.py's migration_003_add_scan_snapshots_table for
+    the full mapping rationale) — nothing recomputed, nothing renamed in
+    meaning, only in case/spacing for SQL.
+    """
+    return {
+        "scanned_at": scanned_at,
+        "instrument": row["Instrument"],
+        "instrument_key": row.get("InstrumentKey", ""),
+        "sector": row.get("Sector"),
+        "signal": row["Signal"],
+        "confidence": row.get("Confidence"),
+        "trend": row.get("Trend"),
+        "daily_trend": row.get("DailyTrend"),
+        "market_trend": row.get("MarketTrend"),
+        "supertrend": row.get("Supertrend"),
+        "supertrend_value": _clean(row.get("SupertrendValue")),
+        "regime": row.get("Regime"),
+        "adx": _clean(row.get("ADX")),
+        "conviction_pct": _clean(row.get("ConvictionPct")),
+        "daily_trend_agree": row.get("DailyTrendAgree"),
+        "supertrend_agree": row.get("SupertrendAgree"),
+        "market_trend_agree": row.get("MarketTrendAgree"),
+        "score": _clean(row.get("Score")),
+        "prob_pct": _clean(row.get("Prob%")),
+        "rsi": _clean(row.get("RSI")),
+        "volume_ratio": _clean(row.get("Volume Ratio")),
+        "volume_label": row.get("Volume"),
+        "expected_move_pct": _clean(row.get("ExpectedMove%")),
+        "rr": _clean(row.get("RR")),
+        "price": _clean(row.get("Price")),
+        "sl": _clean(row.get("SL")),
+        "t1": _clean(row.get("T1")),
+        "t2": _clean(row.get("T2")),
+        "reason": row.get("Reason"),
+    }
+
+
 def main():
     if not UPSTOX_ACCESS_TOKEN:
         print("UPSTOX_ACCESS_TOKEN not set — cannot fetch prices. Exiting.")
@@ -140,23 +195,47 @@ def main():
         print("No scan results — nothing to persist this run.")
         return
 
+    scanned_at = datetime.now(IST).strftime(TIMESTAMP_FORMAT)
+
     # Same filter append_new_signals() applies: only BUY/SELL rows are
-    # candidates. full_df, not top5_df — top5_df is a top-5-by-score
-    # display slice; a real BUY/SELL outside the top 5 would be silently
-    # dropped if we persisted from that instead (confirmed, NGSP Phase 0 Q2).
+    # candidates for live_trades. full_df, not top5_df — top5_df is a
+    # top-5-by-score display slice; a real BUY/SELL outside the top 5
+    # would be silently dropped if we persisted from that instead
+    # (confirmed, NGSP Phase 0 Q2). The scan_snapshots write below is
+    # separate and unconditional — every instrument, every signal type,
+    # not filtered to actionable ones (NGSP Phase 0, PR 6a).
     actionable = full_df[full_df["Signal"].isin(["BUY", "SELL"])]
 
-    if actionable.empty:
-        print("Scan complete — no actionable BUY/SELL signals this run.")
-        return
-
-    # Opened read-only-or-write depending on DRY_RUN, but always opened
-    # against the REAL research_learning.db — get_open_live_trades() below
-    # reads real current OPEN trades either way, so the dedupe check is
-    # accurate even in dry-run mode. Nothing is written in dry-run mode.
     db = ResearchDatabase(settings.DB_PATH, journal_mode=settings.SQLITE_JOURNAL_MODE)
 
     try:
+        # ---- scan_snapshots: the FULL scan, unconditionally ----
+        # Deliberately not gated behind "were there any actionable
+        # signals" (an earlier version of this function had that bug —
+        # traced here before shipping, not after: `actionable.empty`
+        # returning early meant a snapshot was never written on the
+        # (common) runs where nothing crossed the BUY/SELL threshold,
+        # even though "the whole watchlist scanned HOLD/WATCH this run"
+        # is exactly the kind of complete picture this table exists to
+        # capture for the Scanner tab and, later, Phase 1's warehouse.)
+        snapshot_records = [
+            build_scan_snapshot_record(row, scanned_at)
+            for _, row in full_df.iterrows()
+        ]
+
+        if DRY_RUN:
+            print(f"[DRY RUN] Would persist {len(snapshot_records)} scan_snapshots row(s) "
+                  f"(scanned_at={scanned_at}).")
+        else:
+            n = db.insert_scan_snapshot_rows(snapshot_records)
+            db.commit()
+            print(f"Persisted {n} scan_snapshots row(s) (scanned_at={scanned_at}).")
+
+        # ---- live_trades: only actionable, deduped, validated ----
+        if actionable.empty:
+            print("No actionable BUY/SELL signals this run — snapshot saved, nothing else to do.")
+            return
+
         # Same dedupe rule as append_new_signals(): skip if this exact
         # instrument+direction already has an OPEN trade.
         open_pairs = {
