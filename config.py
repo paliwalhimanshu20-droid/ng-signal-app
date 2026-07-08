@@ -14,16 +14,28 @@ reading st.secrets and emitting a single st.error() banner if the Upstox
 token is missing.
 """
 
+import os
 import streamlit as st
 from zoneinfo import ZoneInfo
 
 # ================= UPSTOX TOKEN =================
 # Token is read from Streamlit's Secrets manager (Settings -> Secrets on
-# share.streamlit.io), NOT hardcoded — this repo is public, so a hardcoded
-# token here would be visible to anyone who opens the file on GitHub.
+# share.streamlit.io) when running in the Streamlit app, NOT hardcoded —
+# this repo is public, so a hardcoded token here would be visible to
+# anyone who opens the file on GitHub.
 #
 # To set it up: app dashboard -> Settings -> Secrets -> paste:
 #   UPSTOX_ACCESS_TOKEN = "your_actual_token_here"
+#
+# FALLBACK (NGSP Phase 0, PR 1c): this file is also imported by scanner.py's
+# dependency chain when run headlessly by generate_signals.py under GitHub
+# Actions, which has no st.secrets (no secrets.toml, no Streamlit runtime)
+# — Actions exposes secrets as environment variables instead, the same way
+# check_signals.py already reads UPSTOX_ACCESS_TOKEN via os.environ.get().
+# st.secrets.get() with a default can never raise (see note below), so it's
+# always tried FIRST and wins whenever it has a value — the Streamlit app's
+# behavior is completely unchanged. The os.environ fallback only ever
+# applies when st.secrets has nothing to offer, i.e. outside Streamlit.
 #
 # FIX (previously used try/except around st.secrets[...]): newer Streamlit
 # versions can raise a secrets-not-found exception type that isn't
@@ -33,7 +45,7 @@ from zoneinfo import ZoneInfo
 # in any file that does `from config import (...)`. st.secrets.get() with a
 # default can never raise, so this can't happen again regardless of
 # Streamlit version or whether secrets.toml exists at all.
-UPSTOX_ACCESS_TOKEN = st.secrets.get("UPSTOX_ACCESS_TOKEN", "")
+UPSTOX_ACCESS_TOKEN = st.secrets.get("UPSTOX_ACCESS_TOKEN", "") or os.environ.get("UPSTOX_ACCESS_TOKEN", "")
 if not UPSTOX_ACCESS_TOKEN:
     st.error(
         "⚠️ UPSTOX_ACCESS_TOKEN not found in Streamlit secrets. "
