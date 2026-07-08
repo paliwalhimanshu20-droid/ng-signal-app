@@ -20,6 +20,10 @@ on:
 permissions:
   contents: write   # needed so the workflow can commit research_learning.db back
 
+concurrency:
+  group: research-db-writer   # SAME group name as generate_signals.yml — serializes the two workflows
+  cancel-in-progress: false   # never cancel a run that's already writing to the DB; queue instead
+
 jobs:
   check-signals:
     runs-on: ubuntu-latest
