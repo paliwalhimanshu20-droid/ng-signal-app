@@ -18,6 +18,34 @@ import os
 import streamlit as st
 from zoneinfo import ZoneInfo
 
+
+def _get_secret(key):
+    """
+    Reads a secret from st.secrets first (the normal Streamlit Cloud path),
+    falling back to os.environ when st.secrets itself is unavailable.
+
+    CORRECTED (NGSP Phase 0, PR 4 dry-run): the comment that used to sit on
+    UPSTOX_ACCESS_TOKEN below claimed "st.secrets.get() with a default can
+    never raise... regardless of whether secrets.toml exists at all." A
+    real dry run under GitHub Actions (no secrets.toml anywhere) proved
+    that claim wrong for this Streamlit version: st.secrets.get(key, "")
+    raises StreamlitSecretNotFoundError from inside the call itself, before
+    ever returning "" — so `st.secrets.get(...) or os.environ.get(...)`
+    (the original PR 1c fix) never reached the `or`, since the left side
+    raised instead of evaluating to a falsy value. A try/except is the only
+    thing that actually catches this. Wrapped as a helper so the same fix
+    covers UPSTOX_ACCESS_TOKEN, GITHUB_TOKEN, and GITHUB_REPO in one place
+    — config.py runs top-to-bottom on import regardless of which of these
+    names the importer actually asked for, so all three needed the same
+    treatment, not just the one that happened to crash first.
+    """
+    try:
+        value = st.secrets.get(key, "")
+    except Exception:
+        value = ""
+    return value or os.environ.get(key, "")
+
+
 # ================= UPSTOX TOKEN =================
 # Token is read from Streamlit's Secrets manager (Settings -> Secrets on
 # share.streamlit.io) when running in the Streamlit app, NOT hardcoded —
@@ -27,25 +55,16 @@ from zoneinfo import ZoneInfo
 # To set it up: app dashboard -> Settings -> Secrets -> paste:
 #   UPSTOX_ACCESS_TOKEN = "your_actual_token_here"
 #
-# FALLBACK (NGSP Phase 0, PR 1c): this file is also imported by scanner.py's
+# FALLBACK (NGSP Phase 0): this file is also imported by scanner.py's
 # dependency chain when run headlessly by generate_signals.py under GitHub
 # Actions, which has no st.secrets (no secrets.toml, no Streamlit runtime)
 # — Actions exposes secrets as environment variables instead, the same way
 # check_signals.py already reads UPSTOX_ACCESS_TOKEN via os.environ.get().
-# st.secrets.get() with a default can never raise (see note below), so it's
-# always tried FIRST and wins whenever it has a value — the Streamlit app's
-# behavior is completely unchanged. The os.environ fallback only ever
-# applies when st.secrets has nothing to offer, i.e. outside Streamlit.
-#
-# FIX (previously used try/except around st.secrets[...]): newer Streamlit
-# versions can raise a secrets-not-found exception type that isn't
-# KeyError/FileNotFoundError, which slipped past the old except clause and
-# crashed this module mid-execution — leaving SIGNAL_LOG_PATH, IST,
-# GITHUB_TOKEN etc. undefined below and surfacing as a confusing ImportError
-# in any file that does `from config import (...)`. st.secrets.get() with a
-# default can never raise, so this can't happen again regardless of
-# Streamlit version or whether secrets.toml exists at all.
-UPSTOX_ACCESS_TOKEN = st.secrets.get("UPSTOX_ACCESS_TOKEN", "") or os.environ.get("UPSTOX_ACCESS_TOKEN", "")
+# _get_secret() tries st.secrets FIRST and wins whenever it has a value —
+# the Streamlit app's behavior is completely unchanged. The os.environ
+# fallback only applies when st.secrets has nothing to offer or isn't
+# available at all, i.e. outside Streamlit.
+UPSTOX_ACCESS_TOKEN = _get_secret("UPSTOX_ACCESS_TOKEN")
 if not UPSTOX_ACCESS_TOKEN:
     st.error(
         "⚠️ UPSTOX_ACCESS_TOKEN not found in Streamlit secrets. "
@@ -93,8 +112,8 @@ SIGNAL_LOG_COLUMNS = [
 # Add to Streamlit Secrets (Settings -> Secrets):
 #   GITHUB_TOKEN = "ghp_your_fine_grained_PAT"   (Contents: Read & write on this repo)
 #   GITHUB_REPO  = "paliwalhimanshu20-droid/ng-signal-app"
-GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN", "")
-GITHUB_REPO = st.secrets.get("GITHUB_REPO", "")
+GITHUB_TOKEN = _get_secret("GITHUB_TOKEN")
+GITHUB_REPO = _get_secret("GITHUB_REPO")
 GITHUB_BRANCH = "main"
 
 # ================= INDEX KEY =================
