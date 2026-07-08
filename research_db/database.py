@@ -616,3 +616,73 @@ class ResearchDatabase:
             f"UPDATE {schema.TABLE_LIVE_TRADES} SET status = 'EXPIRED' WHERE signal_id = ?",
             (signal_id,),
         )
+
+    # ----------------------------------------------------------------
+    # scan_snapshots (NGSP Phase 0, PR 6a) — see migrations.py's
+    # migration_003_add_scan_snapshots_table for the full design notes.
+    # Append-only: no update/delete methods exist for this table by
+    # design, same as every other table here except live_trades.
+    # ----------------------------------------------------------------
+
+    def insert_scan_snapshot_rows(self, records: list) -> int:
+        """
+        Bulk-inserts one full scan batch (every instrument scanner.py's
+        full_df returned, not just actionable BUY/SELL rows). Each dict in
+        `records` should already be shaped with scan_snapshots' exact
+        column names (see build_scan_snapshot_record() in
+        generate_signals.py) — this method does no field mapping itself,
+        it only executes the insert. Returns the number of rows inserted.
+        """
+        if not records:
+            return 0
+
+        now = _now_iso()
+        rows = [
+            (
+                r["scanned_at"], r["instrument"], r.get("instrument_key"),
+                r.get("sector"), r["signal"], r.get("confidence"),
+                r.get("trend"), r.get("daily_trend"), r.get("market_trend"),
+                r.get("supertrend"), r.get("supertrend_value"), r.get("regime"),
+                r.get("adx"), r.get("conviction_pct"), r.get("daily_trend_agree"),
+                r.get("supertrend_agree"), r.get("market_trend_agree"),
+                r.get("score"), r.get("prob_pct"), r.get("rsi"),
+                r.get("volume_ratio"), r.get("volume_label"),
+                r.get("expected_move_pct"), r.get("rr"), r.get("price"),
+                r.get("sl"), r.get("t1"), r.get("t2"), r.get("reason"), now,
+            )
+            for r in records
+        ]
+
+        self.conn.executemany(
+         f"""INSERT INTO {schema.TABLE_SCAN_SNAPSHOTS}
+                (scanned_at, instrument, instrument_key, sector, signal,
+                 confidence, trend, daily_trend, market_trend, supertrend,
+                 supertrend_value, regime, adx, conviction_pct,
+                 daily_trend_agree, supertrend_agree, market_trend_agree,
+                 score, prob_pct, rsi, volume_ratio, volume_label,
+                 expected_move_pct, rr, price, sl, t1, t2, reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            rows,
+        )
+        return len(rows)
+
+    def get_latest_scan_snapshot(self) -> list:
+        """
+        Returns every row from the most recent scan batch (all instruments,
+        every signal type — the same shape scanner.run_scanner()'s full_df
+        had, just read back instead of recomputed). Empty list if no scan
+        has ever been persisted yet.
+        """
+        cur = self.conn.execute(
+            f"SELECT MAX(scanned_at) AS latest FROM {schema.TABLE_SCAN_SNAPSHOTS}"
+        )
+        latest = cur.fetchone()["latest"]
+        if latest is None:
+            return []
+
+        cur = self.conn.execute(
+            f"SELECT * FROM {schema.TABLE_SCAN_SNAPSHOTS} WHERE scanned_at = ? ORDER BY id ASC",
+            (latest,),
+        )
+        return [dict(r) for r in cur.fetchall()]
