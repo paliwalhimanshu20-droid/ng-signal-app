@@ -65,6 +65,19 @@ TABLE_EXPERIMENT_NOTES = "experiment_notes"
 # migration_002_add_live_trades_table for the actual DDL.
 TABLE_LIVE_TRADES = "live_trades"
 
+# Added via migration 3 (research_db/migrations.py) — NGSP Phase 0, PR 6a.
+# Independent of TABLE_LIVE_TRADES: live_trades only ever holds rows that
+# passed the actionable BUY/SELL gate; this table holds the COMPLETE output
+# of every background scan (every watchlist instrument, every signal type,
+# including HOLD/WATCH), append-only, one batch per scan run. This is what
+# the Scanner tab's "Full Scanned Universe" table and opportunity cards
+# actually need to read from instead of recomputing (PR 6b) — live_trades
+# alone can't answer "what did the whole scan see," only "what became a
+# trade." See migrations.py's migration_003_add_scan_snapshots_table for
+# the actual DDL and design notes on how this is meant to feed Phase 1's
+# Historical Data Warehouse rather than being a throwaway cache.
+TABLE_SCAN_SNAPSHOTS = "scan_snapshots"
+
 # ---------------------------------------------------------------------------
 # DDL — order matters (FK targets must exist before the tables that reference
 # them). Each entry is executed in sequence.
