@@ -49,6 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from research_config import settings
 from research_db.database import ResearchDatabase
+from telegram_notify import send_telegram_message
 
 IST = ZoneInfo("Asia/Kolkata")
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -64,26 +65,10 @@ T2_TRACKING_WINDOW_DAYS = 3
 OPEN_SIGNAL_EXPIRY_DAYS = 3
 
 UPSTOX_ACCESS_TOKEN = os.environ.get("UPSTOX_ACCESS_TOKEN", "")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-
-def send_telegram_message(text):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Telegram not configured — skipping notification.")
-        return
-
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    try:
-        r = requests.post(
-            url,
-            data={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"},
-            timeout=10
-        )
-        if r.status_code != 200:
-            print(f"Telegram send failed: {r.status_code} {r.text[:200]}")
-    except Exception as e:
-        print(f"Telegram send error: {e}")
+# send_telegram_message() moved to telegram_notify.py (NGSP Phase 0, PR 1b)
+# so generate_signals.py can reuse it without duplicating the function.
+# Same implementation, same env vars, only the import site changed.
 
 
 def get_current_price(instrument_key):
