@@ -1,1 +1,87 @@
+name: Generate Trading Signals
 
+# Runs a full scan + scoring pass headlessly (scanner.run_scanner(), via
+# generate_signals.py), persists any new actionable BUY/SELL signals to
+# the Research & Learning Database's live_trades table
+# (data/research_learning.db), commits the change back to the repo, and
+# sends a Telegram alert for each new signal.
+#
+# NGSP Phase 0: this is the piece that removes "signal generation only
+# happens when a user clicks Run Live Scan" — see docs/ARCHITECTURE.md
+# (Phase 0 section) for the full design.
+#
+# CRON DELIBERATELY NOT ENABLED YET. workflow_dispatch only, by design,
+# until a manual dry run has been validated against a same-conditions
+# manual "Run Live Scan" (NGSP Phase 0 PR 4 validation plan). Uncomment
+# the `schedule:` block below only after that validation passes — that's
+# PR 5, not this one.
+#
+# Shares data/research_learning.db with check_signals.yml (that workflow
+# updates outcomes on OPEN trades; this one adds new OPEN trades). The
+# `concurrency` group below is shared with check_signals.yml specifically
+# so GitHub Actions queues one behind the other instead of letting both
+# commit/push against the same file at once — once cron is enabled, the
+# 15/45 vs. 0/30 offset is a courtesy on top of that, not the actual fix.
+
+on:
+  # schedule:
+  #   - cron: "15,45 3-18 * * 1-5"   # every 30 min, IST 9:00-23:30, Mon-Fri, offset from check_signals.yml
+  #   ^ intentionally commented out — see note above. Re-enable in PR 5.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (no DB writes, no Telegram alerts) — uncheck only for a real persist"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: write   # needed so the workflow can commit research_learning.db back
+
+concurrency:
+  group: research-db-writer   # SAME group name as check_signals.yml — serializes the two workflows
+  cancel-in-progress: false   # never cancel a run that's already writing to the DB; queue instead
+
+jobs:
+  generate-signals:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        # Only what generate_signals.py's actual import chain needs
+        # (config.py/upstox_client.py -> streamlit; upstox_client.py/
+        # scanner.py -> pandas; upstox_client.py/telegram_notify.py ->
+        # requests). research_db is stdlib-only, same as check_signals.yml
+        # already relies on. Deliberately NOT `pip install -r requirements.txt`
+        # here — that also pulls in duckdb/pyarrow/pydantic/PyYAML/plotly/
+        # openpyxl for the Historical Warehouse and reports.py, none of
+        # which this script's code path ever imports.
+        run: pip install streamlit pandas requests
+
+      - name: Run signal generator
+        env:
+          UPSTOX_ACCESS_TOKEN: ${{ secrets.UPSTOX_ACCESS_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python generate_signals.py
+
+      - name: Commit updated database
+        run: |
+          git config --global user.name "signal-bot"
+          git config --global user.email "actions@github.com"
+          if [ -f data/research_learning.db ]; then
+            git add data/research_learning.db
+            git diff --staged --quiet || git commit -m "Add new signals [automated]"
+            git push
+          else
+            echo "data/research_learning.db does not exist yet — nothing to commit."
+          fi
