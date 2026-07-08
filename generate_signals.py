@@ -56,6 +56,15 @@ from telegram_notify import send_telegram_message
 IST = ZoneInfo("Asia/Kolkata")
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+# DRY_RUN (NGSP Phase 0 validation): when true, runs the full scan +
+# scoring + dedupe path against the REAL live_trades table (read-only —
+# needed so the dedupe check reflects actual current OPEN trades, not an
+# empty test DB) but skips every state-changing action: no
+# insert_live_trade(), no db.commit(), no Telegram send. Set via the
+# workflow's `dry_run` workflow_dispatch input (defaults to true — safe
+# by default, has to be deliberately unchecked to actually persist).
+DRY_RUN = os.environ.get("DRY_RUN", "true").strip().lower() == "true"
+
 
 def resolve_front_month_contracts():
     """
@@ -119,6 +128,9 @@ def main():
         print("UPSTOX_ACCESS_TOKEN not set — cannot fetch prices. Exiting.")
         return
 
+    if DRY_RUN:
+        print("=== DRY RUN — no database writes, no Telegram alerts will be sent ===")
+
     commodity_contracts = resolve_front_month_contracts()
 
     print("Running scan...")
@@ -138,6 +150,10 @@ def main():
         print("Scan complete — no actionable BUY/SELL signals this run.")
         return
 
+    # Opened read-only-or-write depending on DRY_RUN, but always opened
+    # against the REAL research_learning.db — get_open_live_trades() below
+    # reads real current OPEN trades either way, so the dedupe check is
+    # accurate even in dry-run mode. Nothing is written in dry-run mode.
     db = ResearchDatabase(settings.DB_PATH, journal_mode=settings.SQLITE_JOURNAL_MODE)
 
     try:
@@ -159,14 +175,26 @@ def main():
             print("Scan complete — all actionable signals already OPEN or invalid (SL/T1 N/A).")
             return
 
-        for record in new_records:
-            db.insert_live_trade(record)
-
-        db.commit()
-        print(f"Persisted {len(new_records)} new signal(s) to live_trades.")
+        if DRY_RUN:
+            print(f"[DRY RUN] Would persist {len(new_records)} new signal(s):")
+            for r in new_records:
+                print(
+                    f"  {r['signal']} {r['instrument']} | entry={r['entry_price']} "
+                    f"sl={r['sl']} t1={r['t1']} t2={r['t2']} | "
+                    f"confidence={r['confidence']} score={r['score']}"
+                )
+        else:
+            for record in new_records:
+                db.insert_live_trade(record)
+            db.commit()
+            print(f"Persisted {len(new_records)} new signal(s) to live_trades.")
 
     finally:
         db.close()
+
+    if DRY_RUN:
+        print(f"[DRY RUN] Would send {len(new_records)} Telegram alert(s) — skipped.")
+        return
 
     for record in new_records:
         msg = (
