@@ -65,13 +65,13 @@ def _now_iso() -> str:
 @contextmanager
 def _timed(label: str):
     t0 = time.perf_counter()
-    print(f"[TIMING BEFORE] {label:<55s} @ {_now_iso()}")
+    print(f"[TIMING START] {label} @ {_now_iso()}")
     try:
         yield
     finally:
         ms = (time.perf_counter() - t0) * 1000
         flag = "  <<< SLOW (>50ms)" if ms > _SLOW_THRESHOLD_MS else ""
-        print(f"[TIMING AFTER]  {label:<55s} @ {_now_iso()}  {ms:9.2f} ms{flag}")
+        print(f"[TIMING END] {label} = {ms:.2f} ms{flag} @ {_now_iso()}")
 
 
 # Job types this UI knows how to re-invoke on Resume/Restart. Any other

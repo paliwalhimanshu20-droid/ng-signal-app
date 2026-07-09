@@ -76,14 +76,14 @@ def _timed(label: str, bucket: list):
     it wraps.
     """
     t0 = time.perf_counter()
-    print(f"[TIMING BEFORE] {label:<45s} @ {_now_iso()}")
+    print(f"[TIMING START] {label} @ {_now_iso()}")
     try:
         yield
     finally:
         elapsed_ms = (time.perf_counter() - t0) * 1000
         bucket.append((label, elapsed_ms))
         flag = "  <<< SLOW (>50ms)" if elapsed_ms > _SLOW_THRESHOLD_MS else ""
-        print(f"[TIMING AFTER]  {label:<45s} @ {_now_iso()}  {elapsed_ms:9.2f} ms{flag}")
+        print(f"[TIMING END] {label} = {elapsed_ms:.2f} ms{flag} @ {_now_iso()}")
 
 
 def _print_timing_summary(title: str, bucket: list, total_ms: float) -> None:
