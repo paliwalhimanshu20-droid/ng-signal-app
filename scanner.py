@@ -21,6 +21,38 @@ from config import COMMODITY_RISK_PARAMS
 
 logger = logging.getLogger(__name__)
 
+# ============================================================
+# TEMPORARY TIMING INSTRUMENTATION (PR 7B — production profiling)
+# Same self-contained pattern as app.py / warehouse_admin/render.py: no
+# logic changed anywhere in run_scanner() below, only timing prints were
+# added. Per-instrument calls (candle download, indicators, signal engine)
+# are accumulated across the loop and printed ONCE as a total after the
+# loop — printing per-instrument (x34 every scan) would flood the log
+# without adding anything a sum doesn't already tell you. Remove
+# `_timed`, `_now_iso`, `_contextmanager`, and every timing line below
+# once the Watcher has reviewed real measurements from PR 7B.
+# ============================================================
+from contextlib import contextmanager as _contextmanager
+from datetime import datetime as _dt
+
+_SLOW_THRESHOLD_MS = 250.0
+
+
+def _now_iso():
+    return _dt.now().isoformat(timespec="milliseconds")
+
+
+@_contextmanager
+def _timed(label):
+    _t0 = time.perf_counter()
+    print(f"[TIMING START] {label} @ {_now_iso()}")
+    try:
+        yield
+    finally:
+        _ms = (time.perf_counter() - _t0) * 1000
+        _flag = "  <<< SLOW (>250ms)" if _ms > _SLOW_THRESHOLD_MS else ""
+        print(f"[TIMING END] {label} = {_ms:.2f} ms{_flag} @ {_now_iso()}")
+
 
 def volume_signal(candles):
     # NEW: compares the latest candle's volume to the average volume of the
@@ -72,18 +104,37 @@ def run_scanner(commodity_contracts=None):
     commodity_contracts: dict of display_name -> instrument_key, built from
     the dashboard's expiry dropdowns. Passed straight through to get_watchlist().
     """
+    _scan_t0 = time.perf_counter()
+    print(f"\n########## [scanner.py] run_scanner() START @ {_now_iso()} ##########")
 
-    watchlist = get_watchlist(commodity_contracts)
+    with _timed("SCANNER: get_watchlist() [instrument lookup]"):
+        watchlist = get_watchlist(commodity_contracts)
     all_results = []
 
     # Fetch all LTPs in ONE bulk call instead of one call per instrument
     # inside the loop below (see get_prices_bulk() in upstox_client.py for why).
-    price_lookup = get_prices_bulk([key for key in watchlist.values() if key])
+    with _timed("SCANNER: get_prices_bulk() [bulk LTP fetch]"):
+        price_lookup = get_prices_bulk([key for key in watchlist.values() if key])
 
     # NEW: broad-market (Nifty 50) regime — fetched ONCE for the whole
     # scan, not per instrument (it's cached 1h anyway, but no reason to
     # even attempt it 39 times).
-    market_trend = get_market_trend()
+    with _timed("SCANNER: get_market_trend() [not in PR 7B's original list, added for visibility]"):
+        market_trend = get_market_trend()
+
+    # Cumulative accumulators for the per-instrument loop below — see
+    # module docstring note on why these print once, after the loop,
+    # instead of once per instrument.
+    _t_candles_ms = 0.0
+    _t_daily_trend_ms = 0.0
+    _t_indicators_ms = 0.0
+    _t_signal_engine_ms = 0.0
+    _n_scanned = 0
+
+    print(f"[TIMING START] SCANNER: get_candles() cumulative [historical candle download] @ {_now_iso()}")
+    print(f"[TIMING START] SCANNER: get_daily_trend() cumulative [not in PR 7B's original list, added for visibility] @ {_now_iso()}")
+    print(f"[TIMING START] SCANNER: indicator calculations cumulative [ema/atr/rsi/volume/supertrend/adx] @ {_now_iso()}")
+    print(f"[TIMING START] SCANNER: signal_engine() cumulative @ {_now_iso()}")
 
     for name, key in watchlist.items():
 
@@ -101,7 +152,9 @@ def run_scanner(commodity_contracts=None):
         time.sleep(0.2)
 
         try:
+            _t0 = time.perf_counter()
             candles = get_candles(instrument_key, label=f"{name} ({instrument_key})")
+            _t_candles_ms += (time.perf_counter() - _t0) * 1000
 
             if not candles:
                 continue
@@ -116,6 +169,7 @@ def run_scanner(commodity_contracts=None):
             if not price:
                continue
 
+            _t0 = time.perf_counter()
             ema20 = ema(closes, 20)
             ema50 = ema(closes, 50)
             atr_val = atr(candles)
@@ -133,10 +187,13 @@ def run_scanner(commodity_contracts=None):
             # NEW: ADX(14) — trend STRENGTH, off the same candles, no
             # extra API call.
             adx_val = compute_adx(candles)
+            _t_indicators_ms += (time.perf_counter() - _t0) * 1000
 
             # Higher-timeframe (daily) trend filter — cached, so this
             # doesn't multiply API calls on every scan within the same day.
+            _t0 = time.perf_counter()
             daily_trend = get_daily_trend(instrument_key, label=f"{name} ({instrument_key})")
+            _t_daily_trend_ms += (time.perf_counter() - _t0) * 1000
 
             # NG SIGNAL ACCURACY FIX: instruments added via the MCX commodity
             # dropdown are named "<Display> (MCX)" (same convention
@@ -149,6 +206,7 @@ def run_scanner(commodity_contracts=None):
             is_commodity = "(MCX)" in name
             risk_overrides = COMMODITY_RISK_PARAMS if is_commodity else {}
 
+            _t0 = time.perf_counter()
             signal, score, prob, trend, regime, expected_move, reasons, conviction_pct = signal_engine(
                 price,
                 ema20,
@@ -160,6 +218,8 @@ def run_scanner(commodity_contracts=None):
                 adx_val,
                 **risk_overrides
             )
+            _t_signal_engine_ms += (time.perf_counter() - _t0) * 1000
+            _n_scanned += 1
 
             sl, t1, t2 = levels(price, atr_val, signal, trend, regime)
 
@@ -224,18 +284,35 @@ def run_scanner(commodity_contracts=None):
             logger.warning("%s Error: %s", name, e)
             continue
 
-    full_df = pd.DataFrame(all_results)
+    _candles_flag = "  <<< SLOW (>250ms)" if _t_candles_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"[TIMING END] SCANNER: get_candles() cumulative [historical candle download, {_n_scanned}/{len(watchlist)} instruments] = {_t_candles_ms:.2f} ms{_candles_flag} @ {_now_iso()}")
 
-    if not full_df.empty:
-        full_df = full_df.sort_values(["Score", "Prob%"], ascending=False)
+    _daily_trend_flag = "  <<< SLOW (>250ms)" if _t_daily_trend_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"[TIMING END] SCANNER: get_daily_trend() cumulative [not in PR 7B's original list, added for visibility] = {_t_daily_trend_ms:.2f} ms{_daily_trend_flag} @ {_now_iso()}")
 
-    # Top 5 strong setups only (same filter logic as before: score >= 7, actionable signal)
-    if not full_df.empty:
-        top5_df = full_df[
-            (full_df["Score"] >= 7) & (full_df["Signal"].isin(["BUY", "SELL", "WATCH"]))
-        ].head(5)
-    else:
-        top5_df = full_df
+    _indicators_flag = "  <<< SLOW (>250ms)" if _t_indicators_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"[TIMING END] SCANNER: indicator calculations cumulative [ema/atr/rsi/volume/supertrend/adx, {_n_scanned} instruments] = {_t_indicators_ms:.2f} ms{_indicators_flag} @ {_now_iso()}")
+
+    _signal_engine_flag = "  <<< SLOW (>250ms)" if _t_signal_engine_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"[TIMING END] SCANNER: signal_engine() cumulative = {_t_signal_engine_ms:.2f} ms{_signal_engine_flag} @ {_now_iso()}")
+
+    with _timed("SCANNER: DataFrame creation [full_df + top5_df build]"):
+        full_df = pd.DataFrame(all_results)
+
+        if not full_df.empty:
+            full_df = full_df.sort_values(["Score", "Prob%"], ascending=False)
+
+        # Top 5 strong setups only (same filter logic as before: score >= 7, actionable signal)
+        if not full_df.empty:
+            top5_df = full_df[
+                (full_df["Score"] >= 7) & (full_df["Signal"].isin(["BUY", "SELL", "WATCH"]))
+            ].head(5)
+        else:
+            top5_df = full_df
+
+    _scan_total_ms = (time.perf_counter() - _scan_t0) * 1000
+    _scan_flag = "  <<< SLOW" if _scan_total_ms > 1000 else ""
+    print(f"########## [scanner.py] run_scanner() END @ {_now_iso()}  TOTAL={_scan_total_ms:.2f} ms{_scan_flag} ##########\n")
 
     return top5_df, full_df
 

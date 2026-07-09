@@ -42,6 +42,8 @@ from datetime import datetime as _dt
 
 _SLOW_THRESHOLD_MS = 50.0
 
+_APP_RERUN_T0 = _time.perf_counter()
+
 
 def _now_iso():
     return _dt.now().isoformat(timespec="milliseconds")
@@ -50,13 +52,18 @@ def _now_iso():
 @_contextmanager
 def _timed(label):
     _t0 = _time.perf_counter()
-    print(f"[TIMING BEFORE] {label:<55s} @ {_now_iso()}")
+    print(f"[TIMING START] {label} @ {_now_iso()}")
     try:
         yield
     finally:
         _ms = (_time.perf_counter() - _t0) * 1000
         _flag = "  <<< SLOW (>50ms)" if _ms > _SLOW_THRESHOLD_MS else ""
-        print(f"[TIMING AFTER]  {label:<55s} @ {_now_iso()}  {_ms:9.2f} ms{_flag}")
+        print(f"[TIMING END] {label} = {_ms:.2f} ms{_flag} @ {_now_iso()}")
+
+
+print(f"\n########## [app.py] TOTAL APP RERUN START @ {_now_iso()} ##########")
+print(f"[TIMING START] APP: app initialization (imports + session_state defaults) @ {_now_iso()}")
+_APP_INIT_T0 = _time.perf_counter()
 
 
 # Admin
@@ -155,6 +162,10 @@ if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
 if "last_scan" not in st.session_state:
     st.session_state.last_scan = "Never"
+
+_app_init_ms = (_time.perf_counter() - _APP_INIT_T0) * 1000
+_app_init_flag = "  <<< SLOW (>50ms)" if _app_init_ms > _SLOW_THRESHOLD_MS else ""
+print(f"[TIMING END] APP: app initialization (imports + session_state defaults) = {_app_init_ms:.2f} ms{_app_init_flag} @ {_now_iso()}")
 
 tab_scanner, tab_performance, tab_settings, tab_admin = st.tabs([
     "📡 Scanner",
@@ -328,6 +339,8 @@ section (Performance tab) against real outcomes.
 # =========================================================================
 
 with tab_scanner:
+    _scanner_tab_t0 = _time.perf_counter()
+    print(f"[TIMING START] APP: Scanner tab render @ {_now_iso()}")
 
     run = st.button("🚀 Run Live Scan")
 
@@ -353,7 +366,10 @@ with tab_scanner:
         st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
         st.session_state.scan_source = "live"
         with st.spinner("Scanning..."):
-            st.session_state.scan_top5_df, st.session_state.scan_full_df = run_scanner(commodity_contracts)
+            with _timed("APP: run_scanner() call [see scanner.py's own internal breakdown in the same log for composition]"):
+                _scan_top5, _scan_full = run_scanner(commodity_contracts)
+            with _timed("APP: session state update [scan_top5_df/scan_full_df assignment]"):
+                st.session_state.scan_top5_df, st.session_state.scan_full_df = _scan_top5, _scan_full
 
     df = st.session_state.scan_top5_df
     full_df = st.session_state.scan_full_df
@@ -545,11 +561,17 @@ with tab_scanner:
                     else:
                         st.info(f"Not enough candle history yet to chart {selected_name}.")
 
+    _scanner_tab_ms = (_time.perf_counter() - _scanner_tab_t0) * 1000
+    _scanner_tab_flag = "  <<< SLOW (>50ms)" if _scanner_tab_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"[TIMING END] APP: Scanner tab render = {_scanner_tab_ms:.2f} ms{_scanner_tab_flag} @ {_now_iso()}")
+
 # =========================================================================
 # PERFORMANCE TAB
 # =========================================================================
 
 with tab_performance:
+    _performance_tab_t0 = _time.perf_counter()
+    print(f"[TIMING START] APP: Performance tab render @ {_now_iso()}")
 
     st.markdown('<div class="section-eyebrow">📈 Signal Performance (Historical)</div>', unsafe_allow_html=True)
 
@@ -653,6 +675,10 @@ with tab_performance:
                 use_container_width=True,
                 hide_index=True
             )
+
+    _performance_tab_ms = (_time.perf_counter() - _performance_tab_t0) * 1000
+    _performance_tab_flag = "  <<< SLOW (>50ms)" if _performance_tab_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"[TIMING END] APP: Performance tab render = {_performance_tab_ms:.2f} ms{_performance_tab_flag} @ {_now_iso()}")
     # =========================================================================
 # ADMIN CENTER
 # =========================================================================
@@ -680,6 +706,8 @@ with _timed("st.columns(4) + 4x st.metric() [admin KPI row]"):
 
 
 with tab_admin:
+    _admin_tab_t0 = _time.perf_counter()
+    print(f"[TIMING START] APP: Admin tab render @ {_now_iso()}")
 
     st.markdown(
         '<div class="section-eyebrow">🛠️ Signal Pro Admin Center</div>',
@@ -833,6 +861,15 @@ with tab_admin:
     with _timed("*** render_warehouse_center() [instrumented internally in warehouse_admin/render.py] ***"):
         render_warehouse_center()
 
+    _admin_tab_ms = (_time.perf_counter() - _admin_tab_t0) * 1000
+    _admin_tab_flag = "  <<< SLOW (>50ms)" if _admin_tab_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"[TIMING END] APP: Admin tab render = {_admin_tab_ms:.2f} ms{_admin_tab_flag} @ {_now_iso()}")
+
 _admin_block_total_ms = (_time.perf_counter() - _admin_block_t0) * 1000
 _admin_flag = "  <<< SLOW" if _admin_block_total_ms > _SLOW_THRESHOLD_MS else ""
 print(f"########## [app.py] ADMIN CENTER (post-tabs) block END @ {_now_iso()}  TOTAL={_admin_block_total_ms:9.2f} ms{_admin_flag} ##########\n")
+
+_app_rerun_total_ms = (_time.perf_counter() - _APP_RERUN_T0) * 1000
+_app_rerun_flag = "  <<< SLOW (>1000ms)" if _app_rerun_total_ms > 1000 else ""
+print(f"[TIMING END] APP: total app rerun = {_app_rerun_total_ms:.2f} ms{_app_rerun_flag} @ {_now_iso()}")
+print(f"########## [app.py] TOTAL APP RERUN END @ {_now_iso()} ##########\n")
