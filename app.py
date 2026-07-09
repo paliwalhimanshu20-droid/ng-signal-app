@@ -112,6 +112,7 @@ from upstox_client import (
 
 # Scanner
 from scanner import run_scanner
+from scan_snapshot_reader import load_latest_scan_snapshot
 
 # Charts
 from charts import build_instrument_chart
@@ -330,6 +331,19 @@ with tab_scanner:
 
     run = st.button("🚀 Run Live Scan")
 
+    # First load this session (no live scan clicked yet): read the last
+    # background-generated batch (generate_signals.py, PR 6a) instead of
+    # calling run_scanner() ourselves — this is the read path PR 6b adds.
+    # This block only ever fills an empty session_state; it never runs
+    # again once scan_top5_df/scan_full_df exist, so it can't clobber a
+    # live scan result from later in the same session.
+    if not run and "scan_full_df" not in st.session_state:
+        snap_top5, snap_full, snap_scanned_at = load_latest_scan_snapshot()
+        st.session_state.scan_top5_df = snap_top5
+        st.session_state.scan_full_df = snap_full
+        st.session_state.scan_source = "background" if snap_scanned_at else None
+        st.session_state.last_scan = snap_scanned_at or "—"
+
     # Results are cached in st.session_state and reused across reruns
     # until the next deliberate "Run Live Scan" click — switching tabs,
     # filters, or the commodity dropdown does NOT silently re-trigger a
@@ -337,14 +351,11 @@ with tab_scanner:
     if run:
         st.session_state.scan_count += 1
         st.session_state.last_scan = datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S")
+        st.session_state.scan_source = "live"
         with st.spinner("Scanning..."):
-            st.session_state.scan_df, st.session_state.scan_full_df = run_scanner(commodity_contracts)
+            st.session_state.scan_top5_df, st.session_state.scan_full_df = run_scanner(commodity_contracts)
 
-    if "scan_full_df" not in st.session_state:
-        st.session_state.scan_df = pd.DataFrame()
-        st.session_state.scan_full_df = pd.DataFrame()
-
-    df = st.session_state.scan_df
+    df = st.session_state.scan_top5_df
     full_df = st.session_state.scan_full_df
 
     # Log any new actionable (BUY/SELL) signals from this scan to signal_log.csv.
@@ -355,7 +366,14 @@ with tab_scanner:
         # and has to see the signals just written, not a stale cache hit.
         load_signal_log.clear()
 
-    st.caption(f"Scans run: {st.session_state.scan_count} · Last scan: {st.session_state.last_scan}")
+    _source_label = {
+        "live": "Live Scan",
+        "background": "Background Snapshot",
+    }.get(st.session_state.get("scan_source"), "No scan yet")
+    st.caption(
+        f"Scans run: {st.session_state.scan_count} · Last scan: {st.session_state.last_scan} "
+        f"· Source: {_source_label}"
+    )
 
     if full_df.empty:
         st.warning("No data returned from scanner. Click 'Run Live Scan' above, or check the API error banners if one was just attempted.")
