@@ -857,9 +857,23 @@ with tab_admin:
     # state above. A failure here (e.g. warehouse not yet initialized)
     # cannot affect the rest of the Admin Center or any other tab; see
     # render_warehouse_center()'s own try/except around bootstrap.
+    #
+    # PR 7E: gated behind explicit user action. render_warehouse_center()
+    # used to run unconditionally on every single Streamlit rerun — including
+    # ones triggered by clicking "Run Live Scan" in the Scanner tab, since
+    # st.tabs() executes every tab's body regardless of which tab is visible
+    # (see PR 7A/7D). PR 7D's production logs showed ~44s+ of dead time
+    # starting inside get_warehouse_handles() on exactly such a rerun. Gating
+    # this behind a checkbox means Warehouse code — bootstrap, DuckDB, all 5
+    # sub-tabs — only executes when someone deliberately opens this section,
+    # never as a side effect of using the Scanner.
     st.markdown("---")
-    with _timed("*** render_warehouse_center() [instrumented internally in warehouse_admin/render.py] ***"):
-        render_warehouse_center()
+    _load_warehouse = st.checkbox("🏛️ Load Warehouse Operations Center", key="load_warehouse_center")
+    if _load_warehouse:
+        with _timed("*** render_warehouse_center() [instrumented internally in warehouse_admin/render.py] ***"):
+            render_warehouse_center()
+    else:
+        st.caption("Warehouse Operations Center is not loaded. Check the box above to initialize it.")
 
     _admin_tab_ms = (_time.perf_counter() - _admin_tab_t0) * 1000
     _admin_tab_flag = "  <<< SLOW (>50ms)" if _admin_tab_ms > _SLOW_THRESHOLD_MS else ""
