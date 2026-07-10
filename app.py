@@ -120,6 +120,7 @@ from upstox_client import (
 # Scanner
 from scanner import run_scanner
 from scan_snapshot_reader import load_latest_scan_snapshot
+from research_snapshot_reader import get_research_contract, get_full_research_profile
 
 # Charts
 from charts import build_instrument_chart
@@ -167,9 +168,10 @@ _app_init_ms = (_time.perf_counter() - _APP_INIT_T0) * 1000
 _app_init_flag = "  <<< SLOW (>50ms)" if _app_init_ms > _SLOW_THRESHOLD_MS else ""
 print(f"[TIMING END] APP: app initialization (imports + session_state defaults) = {_app_init_ms:.2f} ms{_app_init_flag} @ {_now_iso()}")
 
-tab_scanner, tab_performance, tab_settings, tab_admin = st.tabs([
+tab_scanner, tab_performance, tab_research, tab_settings, tab_admin = st.tabs([
     "📡 Scanner",
     "📈 Performance",
+    "🔬 Research",
     "⚙️ Settings",
     "🛠️ Admin Center"
 ])
@@ -679,6 +681,129 @@ with tab_performance:
     _performance_tab_ms = (_time.perf_counter() - _performance_tab_t0) * 1000
     _performance_tab_flag = "  <<< SLOW (>50ms)" if _performance_tab_ms > _SLOW_THRESHOLD_MS else ""
     print(f"[TIMING END] APP: Performance tab render = {_performance_tab_ms:.2f} ms{_performance_tab_flag} @ {_now_iso()}")
+
+# =========================================================================
+# RESEARCH TAB (PR 8, Part 7)
+# =========================================================================
+# Strictly read-only. Every value below comes from a single call to
+# research_snapshot_reader.get_research_contract() — no pandas, no
+# backtesting, no indicator math happens in this block. If that ever
+# stops being true, this tab has drifted from PR 8's frontend contract.
+
+with tab_research:
+    _research_tab_t0 = _time.perf_counter()
+    print(f"[TIMING START] APP: Research tab render @ {_now_iso()}")
+
+    st.markdown('<div class="section-eyebrow">🔬 Instrument Research</div>', unsafe_allow_html=True)
+    st.caption(
+        "Historical strategy research, generated in the background by "
+        "generate_research.py — nothing on this tab is computed live."
+    )
+
+    _research_watchlist = get_watchlist(None)
+    _research_instrument_name = st.selectbox(
+        "Instrument", options=list(_research_watchlist.keys()), key="research_instrument_select"
+    )
+    _research_instrument_key = _research_watchlist.get(_research_instrument_name)
+
+    if not _research_instrument_key:
+        st.info("No instrument key available for this selection.")
+    else:
+        profile = get_full_research_profile(_research_instrument_key)
+
+        if not profile.get("research_available"):
+            st.info(
+                f"No background research has been generated yet for {_research_instrument_name}. "
+                "This fills in automatically once generate_research.py has run for this instrument "
+                "(see .github/workflows/generate_research.yml)."
+            )
+        else:
+            score = profile.get("research_score")
+            if score:
+                st.metric("Research Score", f"{score['score']} / 100")
+                with st.expander("How this score is calculated"):
+                    st.caption(
+                        "Every component's weight lives in strategy_lab/scoring_config.py — "
+                        "change a weight there, nothing here needs to change."
+                    )
+                    for label, comp in score["breakdown"].items():
+                        st.write(
+                            f"**{label.replace('_', ' ').title()}**: raw={comp['raw']}, "
+                            f"weight={comp['weight']}, contributed {comp['contribution']} pts"
+                        )
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Best Strategy", profile["best_strategy"] or "N/A")
+                st.metric("Historical Win Rate", f"{profile['historical_win_rate']}%" if profile["historical_win_rate"] is not None else "N/A")
+                st.metric("Backtested Trades", profile["backtested_trades"] if profile["backtested_trades"] is not None else "N/A")
+            with col2:
+                st.metric("Expected Holding (min)", profile["expected_holding"] if profile["expected_holding"] is not None else "N/A")
+                st.metric("Market Regime", profile["market_regime"] or "N/A")
+                st.metric("Strategy Rank", profile["strategy_rank"] if profile["strategy_rank"] is not None else "N/A")
+            with col3:
+                st.metric("Average Return", f"{profile['average_return']}%" if profile["average_return"] is not None else "N/A")
+                st.metric("Average Drawdown", f"{profile['average_drawdown']}%" if profile["average_drawdown"] is not None else "N/A")
+                st.metric("Indicator Success Frequency", f"{profile['indicator_success_frequency']}%" if profile["indicator_success_frequency"] is not None else "N/A")
+
+            st.markdown(f"**Confidence Source:** {profile['confidence_source'] or 'N/A'}")
+            st.markdown(f"**Last Updated:** {profile['last_updated'] or 'N/A'}")
+            st.markdown("**Research Explanation:**")
+            st.write(profile["research_explanation"] or "N/A")
+
+            st.markdown("---")
+            st.markdown('<div class="section-eyebrow">🧬 Instrument DNA</div>', unsafe_allow_html=True)
+            dna = profile.get("instrument_dna") or {}
+            if dna:
+                dcol1, dcol2, dcol3 = st.columns(3)
+                with dcol1:
+                    st.metric("Strategy Family", dna.get("strategy_family") or "N/A")
+                    st.metric("Volatility Profile", dna.get("volatility_profile") or "N/A")
+                with dcol2:
+                    st.metric("Momentum Strength", dna.get("momentum_strength") or "N/A")
+                    st.metric("Preferred Holding (days)", dna.get("preferred_holding_days") if dna.get("preferred_holding_days") is not None else "N/A")
+                with dcol3:
+                    st.metric("Trend Win Rate", f"{dna['trend_preference_win_rate']}%" if dna.get("trend_preference_win_rate") is not None else "N/A")
+                    st.metric("Range Win Rate", f"{dna['mean_reversion_preference_win_rate']}%" if dna.get("mean_reversion_preference_win_rate") is not None else "N/A")
+
+                regime_dist = dna.get("historical_regime_distribution") or {}
+                if regime_dist:
+                    st.caption("Historical Regime Distribution (% of all analyzed bars):")
+                    st.dataframe(
+                        pd.DataFrame(
+                            [{"Regime": k, "% of History": v} for k, v in regime_dist.items()]
+                        ),
+                        use_container_width=True, hide_index=True,
+                    )
+            else:
+                st.caption("Instrument DNA not available for this record.")
+
+            st.markdown("---")
+            st.markdown('<div class="section-eyebrow">📊 Indicator Reliability</div>', unsafe_allow_html=True)
+            reliability = profile.get("indicator_reliability") or {}
+            if reliability:
+                rows = []
+                for name, r in reliability.items():
+                    if r.get("applicable") is False:
+                        rows.append({"Indicator": name, "Win Rate": "N/A", "Sample Size": "N/A",
+                                      "Avg Return": "N/A", "Avg Drawdown": "N/A", "Note": r.get("reason", "")})
+                    else:
+                        rows.append({
+                            "Indicator": name,
+                            "Win Rate": f"{r.get('win_rate', 0)}%",
+                            "Sample Size": r.get("sample_size", 0),
+                            "Avg Return": r.get("average_return", 0),
+                            "Avg Drawdown": r.get("average_drawdown", 0),
+                            "Note": "",
+                        })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            else:
+                st.caption("Indicator reliability data not available for this record.")
+
+    _research_tab_ms = (_time.perf_counter() - _research_tab_t0) * 1000
+    _research_tab_flag = "  <<< SLOW (>50ms)" if _research_tab_ms > _SLOW_THRESHOLD_MS else ""
+    print(f"[TIMING END] APP: Research tab render = {_research_tab_ms:.2f} ms{_research_tab_flag} @ {_now_iso()}")
+
     # =========================================================================
 # ADMIN CENTER
 # =========================================================================
