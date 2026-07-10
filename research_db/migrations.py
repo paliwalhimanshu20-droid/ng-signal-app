@@ -190,10 +190,27 @@ def migration_003_add_scan_snapshots_table(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_snapshots_instrument ON scan_snapshots (instrument, scanned_at);")
 
 
+def migration_004_add_confidence_source_column(conn):
+    """
+    PR 8, Part 4 — the ONE schema change this integration needs.
+    strategy_test_results already has strategy_name/entry_rules/exit_rules/
+    stop_loss_model/target_model — everything the Research Contract's
+    "Best Strategy" field needs. "Confidence Source" has no existing home
+    anywhere in the schema (checked research_experiments,
+    strategy_test_results, performance_metrics — none of them), so this
+    adds one nullable TEXT column rather than a new table. The value is
+    also written into performance_metrics.extra_metrics (JSON) as a
+    fallback by strategy_lab/research_bridge.py, so this column is a
+    read-performance convenience, not the only place the data lives.
+    """
+    _add_column_if_missing(conn, "strategy_test_results", "confidence_source", "TEXT")
+
+
 MIGRATIONS = [
     (1, "baseline schema (9 research & learning tables)", migration_001_baseline),
     (2, "add live_trades table (migrated from signal_log.csv)", migration_002_add_live_trades_table),
     (3, "add scan_snapshots table (NGSP Phase 0, PR 6a)", migration_003_add_scan_snapshots_table),
+    (4, "add strategy_test_results.confidence_source column (PR 8, Part 4)", migration_004_add_confidence_source_column),
 ]
 
 

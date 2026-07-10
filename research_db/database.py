@@ -686,3 +686,70 @@ class ResearchDatabase:
             (latest,),
         )
         return [dict(r) for r in cur.fetchall()]
+
+    def get_latest_research_summary(self, instrument_key: str) -> dict:
+        """
+        PR 8, Part 3 support. Returns the most recent COMPLETED STRATEGY
+        experiment for an instrument, joined with its strategy_results,
+        best-ranked performance_metrics row, regime breakdown, and notes —
+        everything research_snapshot_reader.py needs in one call, so that
+        module (like scan_snapshot_reader.py before it) stays a thin
+        reshape layer rather than a second place that knows the schema.
+
+        Returns {} if no completed research exists yet for this instrument
+        — a real, valid "nothing yet" state, not an error.
+        """
+        cur = self.conn.execute(
+            f"""SELECT * FROM {schema.TABLE_EXPERIMENTS}
+                WHERE instrument_key = ? AND research_type = 'STRATEGY'
+                  AND research_status = 'COMPLETED'
+                ORDER BY timestamp DESC, id DESC LIMIT 1""",
+            (instrument_key,),
+        )
+        experiment = cur.fetchone()
+        if not experiment:
+            return {}
+        experiment = dict(experiment)
+        experiment_row_id = experiment["id"]
+
+        cur = self.conn.execute(
+            f"""SELECT * FROM {schema.TABLE_STRATEGY_RESULTS}
+                WHERE experiment_row_id = ? ORDER BY result_id ASC""",
+            (experiment_row_id,),
+        )
+        strategy_rows = [dict(r) for r in cur.fetchall()]
+
+        cur = self.conn.execute(
+            f"""SELECT * FROM {schema.TABLE_PERFORMANCE_METRICS}
+                WHERE experiment_row_id = ? AND regime_id IS NULL
+                ORDER BY win_rate DESC, total_trades DESC""",
+            (experiment_row_id,),
+        )
+        metrics_rows = [dict(r) for r in cur.fetchall()]
+
+        cur = self.conn.execute(
+            f"""SELECT r.regime_type, r.notes AS regime_notes, m.*
+                FROM {schema.TABLE_REGIME_RESULTS} r
+                JOIN {schema.TABLE_PERFORMANCE_METRICS} m ON m.regime_id = r.regime_id
+                WHERE r.experiment_row_id = ?""",
+            (experiment_row_id,),
+        )
+        regime_rows = [dict(r) for r in cur.fetchall()]
+
+        notes = self.get_experiment_notes(experiment["experiment_id"])
+
+        cur = self.conn.execute(
+            f"""SELECT * FROM {schema.TABLE_INDICATOR_RESULTS}
+                WHERE experiment_row_id = ? ORDER BY result_id ASC""",
+            (experiment_row_id,),
+        )
+        indicator_rows = [dict(r) for r in cur.fetchall()]
+
+        return {
+            "experiment": experiment,
+            "strategy_results": strategy_rows,
+            "overall_metrics": metrics_rows,
+            "regime_metrics": regime_rows,
+            "indicator_results": indicator_rows,
+            "notes": notes,
+        }
