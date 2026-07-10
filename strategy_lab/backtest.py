@@ -102,7 +102,13 @@ def run_backtest(instrument_name, instrument_key):
 
     return {
         "summary": summary,
-        "data": df
+        "data": df,
+        # PR 8 addition: the candle series used to generate these signals,
+        # needed by strategy_lab.trade_simulator / research_engine to walk
+        # forward and check SL/T1/T2 without re-fetching from Upstox. Purely
+        # additive — existing callers (run_backtest.py, test_backtest.py)
+        # only read result["data"], so this doesn't change their behavior.
+        "candles": candles,
     }
 
 
