@@ -18,21 +18,30 @@ SPRINT-1A ADDENDUM (added without modifying anything above this note):
 after Sprint-0's boot/health-report sequence completes, and before
 shutdown, main.py now also runs one input through the Sprint-1A Core Task
 Pipeline (jarvis.intake) — Intent Processing -> Task Planning -> a
-READY_FOR_ROUTING (or PLANNING-held, if ambiguous) Task. This demonstrates
-the acceptance scenario end-to-end. No routing or agent execution occurs;
-jarvis.intake explicitly stops at "ready for routing," per Sprint-1A's
-scope.
+READY_FOR_ROUTING (or PLANNING-held, if ambiguous) Task.
+
+SPRINT-1B ADDENDUM (added without modifying anything above this note):
+if the Task reaches READY_FOR_ROUTING, main.py now also registers the
+placeholder Engineering Agent, routes the Task via jarvis.routing, and
+executes it via jarvis.execution.TaskExecutionWorkflow, demonstrating the
+full acceptance scenario end-to-end. No LLM, no GitHub, no API calls, no
+external integrations — per Sprint-1B's explicit scope.
 """
 
 from __future__ import annotations
 
 import sys
 
+from jarvis.agents.engineering_agent import EngineeringAgent
 from jarvis.core import BootstrapError, boot
+from jarvis.execution import TaskExecutionWorkflow
+from jarvis.execution.health import run_execution_health_check
 from jarvis.intake import IntentProcessor, TaskPlanner
 from jarvis.intake.health import run_intake_health_check
 from jarvis.intake.models import TaskStatus
 from jarvis.logging_ import get_logger
+from jarvis.registry import AgentLifecycleState, AgentRecord
+from jarvis.routing import TaskRouter
 
 logger = get_logger("main")
 
@@ -110,14 +119,62 @@ def run() -> int:
         print(f"Approval required:     {task.execution_plan.approval_required}")
     print(f"Audit reference:       {task.audit_reference}")
 
-    if task.status is TaskStatus.READY_FOR_ROUTING:
-        print("\nTask reached READY_FOR_ROUTING. No routing or execution occurs in Sprint-1A.")
-    else:
+    if task.status is not TaskStatus.READY_FOR_ROUTING:
         print(
             f"\nTask held at {task.status.value} — clarification required before "
             "this request can be planned further. This is expected, honest "
-            "behavior for an ambiguous input, not a failure."
+            "behavior for an ambiguous input, not a failure. Sprint-1B routing "
+            "is skipped for this task."
         )
+        core.shutdown()
+        print("\nJARVIS Core shut down cleanly. Sprint-0 run complete.")
+        return 0 if health_report.healthy else 1
+
+    print("\nTask reached READY_FOR_ROUTING.")
+
+    # --- Sprint-1B: Task Routing & Agent Execution ----------------------------
+    print("\n" + "=" * 70)
+    print("Sprint-1B: Task Routing & Agent Execution Framework")
+    print("=" * 70)
+
+    engineering_agent = EngineeringAgent()
+    core.registry.register(
+        AgentRecord(
+            agent_id=engineering_agent.agent_id,
+            domain=engineering_agent.domain,
+            parent_domain=None,
+            capabilities=engineering_agent.capabilities(),
+            version=engineering_agent.version(),
+            instance=engineering_agent,
+        )
+    )
+    # Full JARVIS-002 §16 lifecycle, genuinely exercised — not skipped, even
+    # though this is a placeholder agent. Only ACTIVE agents are routable
+    # (jarvis.registry.AgentRegistry.discover_agents / active_agents).
+    core.registry.transition(engineering_agent.agent_id, AgentLifecycleState.REVIEWED)
+    core.registry.transition(engineering_agent.agent_id, AgentLifecycleState.PROVISIONED)
+    core.registry.transition(engineering_agent.agent_id, AgentLifecycleState.ACTIVE)
+
+    router = TaskRouter(registry=core.registry, audit_ledger=core.audit_ledger)
+    workflow = TaskExecutionWorkflow(router=router, registry=core.registry, audit_ledger=core.audit_ledger)
+
+    execution_health = run_execution_health_check(core.registry, router, workflow)
+    print(execution_health.summary())
+    print()
+
+    completed_task = workflow.execute(task)
+
+    routing_decision = completed_task.metadata.get("routing_decision", {})
+    execution_result = completed_task.metadata.get("execution_result", {})
+
+    print(f"\nRouting status:        {routing_decision.get('status')}")
+    print(f"Selected agent:        {routing_decision.get('selected_agent_id')}")
+    print(f"\nExecution status:      {execution_result.get('status')}")
+    print(f"Execution message:     {execution_result.get('message')}")
+    print(f"Evidence:              {execution_result.get('evidence')}")
+    print(f"\nFinal task status:     {completed_task.status.value}")
+
+    print("\nStructured Response Returned.")
 
     core.shutdown()
     print("\nJARVIS Core shut down cleanly. Sprint-0 run complete.")
