@@ -67,18 +67,24 @@ class IntentType(str, Enum):
 
 class TaskStatus(str, Enum):
     """
-    Task lifecycle states for Sprint-1A.
+    Task lifecycle states.
 
-    Exactly the three states this sprint's brief specifies — no more.
-    Later sprints (routing, execution, approval) will extend this, but
-    that extension is explicitly out of scope here; adding states this
-    sprint doesn't need would be scope creep this document series has
-    repeatedly warned against (JARVIS-004 §51, Refactoring Policy).
+    The first three (CREATED, PLANNING, READY_FOR_ROUTING) are exactly
+    Sprint-1A's original three states, unchanged in name or string value —
+    every existing Sprint-1A test comparing against these still passes
+    unmodified. ROUTING, EXECUTING, COMPLETED, and FAILED are SPRINT-1B
+    ADDITIONS, extending the lifecycle now that routing and execution
+    exist. This is purely additive: no prior status was renamed, removed,
+    or given a different string value.
     """
 
     CREATED = "created"
     PLANNING = "planning"
     READY_FOR_ROUTING = "ready_for_routing"
+    ROUTING = "routing"
+    EXECUTING = "executing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class TaskPriority(str, Enum):
