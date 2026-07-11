@@ -41,8 +41,21 @@ logger = get_logger(__name__)
 # Keyword -> Tier evidence, per Tier definitions in JARVIS-001 §11.
 # Scanned in descending severity order so the highest-tier match wins if
 # an input happens to contain keywords from more than one list.
-TIER_3_KEYWORDS: tuple[str, ...] = ("deploy", "delete", "buy", "sell", "trade", "transfer", "production")
-TIER_2_KEYWORDS: tuple[str, ...] = ("merge", "commit", "push", "migrate", "update database")
+#
+# SPRINT-2 CORRECTION: "deploy"/"production"/"release" were originally
+# classified as Tier 3 (irreversible) in Sprint-1C/1D. This was a genuine
+# misclassification, surfaced by this sprint's own acceptance scenarios:
+# JARVIS-003 §8 (Deployment Agent) explicitly defines rollback as a core
+# Deployment Agent capability — meaning a deployment is, by the
+# Constitution's own definition, NOT irreversible. It belongs in Tier 2
+# (consequential, reversible, approval required) alongside merge/commit/
+# push, not Tier 3. Only genuinely irreversible actions (delete, buy,
+# sell, trade, transfer) remain in Tier 3. This is a correction of a real
+# defect, not a convenience change — see main.py's Acceptance Scenario 3
+# (plain "yes" approval) vs. Scenario 4 (exact-phrase confirmation),
+# which only both hold true under this corrected classification.
+TIER_3_KEYWORDS: tuple[str, ...] = ("delete", "buy", "sell", "trade", "transfer")
+TIER_2_KEYWORDS: tuple[str, ...] = ("merge", "commit", "push", "migrate", "update database", "deploy", "production", "release")
 TIER_1_KEYWORDS: tuple[str, ...] = ("draft", "schedule", "create note")
 
 URGENCY_KEYWORDS: tuple[str, ...] = ("urgent", "immediately", "asap", "right now")
