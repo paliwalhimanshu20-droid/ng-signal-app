@@ -1,13 +1,14 @@
 """
 Tests for jarvis.agents.engineering_agent.EngineeringAgent: successful
-execution and unsupported-task handling.
+execution, unsupported-task handling, and — SPRINT-1C/1D — refusal to
+execute without governance clearance.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from jarvis.agents.engineering_agent import EngineeringAgent
+from jarvis.agents.engineering_agent import EngineeringAgent, GovernanceViolationError
 from jarvis.agents.models import ExecutionStatus
 from jarvis.audit import AuditLedger
 from jarvis.intake import IntentProcessor, TaskPlanner
@@ -20,9 +21,25 @@ def pipeline(tmp_path):
     return IntentProcessor(audit_ledger=ledger), TaskPlanner(audit_ledger=ledger)
 
 
-def test_successful_execution_on_matching_task(pipeline):
+def _cleared(task):
+    """Test helper: mark a task as governance-cleared, exactly as only
+    TaskExecutionWorkflow is meant to do in production."""
+    task.metadata["governance_cleared"] = True
+    return task
+
+
+def test_direct_execution_without_clearance_raises(pipeline):
     intent_processor, task_planner = pipeline
     task = task_planner.plan(intent_processor.process("Analyze GitHub repository"))
+
+    agent = EngineeringAgent()
+    with pytest.raises(GovernanceViolationError):
+        agent.execute(task)  # no governance_cleared marker set — must fail
+
+
+def test_successful_execution_on_matching_task_when_cleared(pipeline):
+    intent_processor, task_planner = pipeline
+    task = _cleared(task_planner.plan(intent_processor.process("Analyze GitHub repository")))
 
     agent = EngineeringAgent()
     result = agent.execute(task)
@@ -36,11 +53,9 @@ def test_successful_execution_on_matching_task(pipeline):
     assert result.errors == ()
 
 
-def test_unsupported_task_returns_failed_result(pipeline):
+def test_unsupported_task_returns_failed_result_when_cleared(pipeline):
     intent_processor, task_planner = pipeline
-    # "research recent market signals" hints at the research/trading domain,
-    # not engineering — Engineering Agent must honestly decline it.
-    task = task_planner.plan(intent_processor.process("research recent market signals"))
+    task = _cleared(task_planner.plan(intent_processor.process("research recent market signals")))
 
     agent = EngineeringAgent()
     result = agent.execute(task)
@@ -49,12 +64,23 @@ def test_unsupported_task_returns_failed_result(pipeline):
     assert "capability_mismatch" in result.errors
 
 
-def test_can_execute_false_for_task_with_no_execution_plan():
+def test_unsupported_task_without_clearance_raises_governance_error_first(pipeline):
+    """
+    Governance clearance is checked BEFORE capability matching — an
+    uncleared, unsupported task must still raise GovernanceViolationError,
+    not a capability-mismatch FAILED result, since the bypass attempt
+    itself is the more serious violation.
+    """
+    intent_processor, task_planner = pipeline
+    task = task_planner.plan(intent_processor.process("research recent market signals"))
+
     agent = EngineeringAgent()
-    # A bare, unplanned task-like object with no execution_plan attribute
-    # set is out of scope to construct fully here — covered instead via
-    # the real pipeline in test_unsupported_task_returns_failed_result.
-    # This test instead confirms metadata/capabilities/version reporting.
+    with pytest.raises(GovernanceViolationError):
+        agent.execute(task)
+
+
+def test_capabilities_metadata_version_reporting():
+    agent = EngineeringAgent()
     assert agent.capabilities() == ("engineering", "repository-analysis", "code-review")
     assert agent.version() == "0.1.0"
     meta = agent.metadata()
