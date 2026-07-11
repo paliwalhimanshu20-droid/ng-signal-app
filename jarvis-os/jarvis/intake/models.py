@@ -69,12 +69,11 @@ class TaskStatus(str, Enum):
     """
     Task lifecycle states.
 
-    The first three (CREATED, PLANNING, READY_FOR_ROUTING) are exactly
-    Sprint-1A's original three states, unchanged in name or string value —
-    every existing Sprint-1A test comparing against these still passes
-    unmodified. ROUTING, EXECUTING, COMPLETED, and FAILED are SPRINT-1B
-    ADDITIONS, extending the lifecycle now that routing and execution
-    exist. This is purely additive: no prior status was renamed, removed,
+    CREATED, PLANNING, READY_FOR_ROUTING (Sprint-1A) and ROUTING,
+    EXECUTING, COMPLETED, FAILED (Sprint-1B) are unchanged in name and
+    string value. PERMISSION_CHECK, WAITING_APPROVAL, and APPROVED are
+    SPRINT-1C/1D ADDITIONS, extending the lifecycle now that governance
+    gating exists. Purely additive — no prior status was renamed, removed,
     or given a different string value.
     """
 
@@ -82,6 +81,9 @@ class TaskStatus(str, Enum):
     PLANNING = "planning"
     READY_FOR_ROUTING = "ready_for_routing"
     ROUTING = "routing"
+    PERMISSION_CHECK = "permission_check"
+    WAITING_APPROVAL = "waiting_approval"
+    APPROVED = "approved"
     EXECUTING = "executing"
     COMPLETED = "completed"
     FAILED = "failed"
