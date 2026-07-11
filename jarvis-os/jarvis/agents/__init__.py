@@ -10,7 +10,7 @@ AgentHealthStatus) and the first concrete agent, EngineeringAgent.
 """
 
 from jarvis.agents.base import BaseAgent
-from jarvis.agents.engineering_agent import EngineeringAgent
+from jarvis.agents.engineering_agent import EngineeringAgent, GovernanceViolationError
 from jarvis.agents.models import AgentHealthStatus, ExecutionResult, ExecutionStatus
 
 __all__ = [
@@ -19,4 +19,5 @@ __all__ = [
     "EngineeringAgent",
     "ExecutionResult",
     "ExecutionStatus",
+    "GovernanceViolationError",
 ]
