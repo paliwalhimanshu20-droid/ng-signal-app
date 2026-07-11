@@ -35,72 +35,170 @@ from signal_logic import ema
 logger = logging.getLogger(__name__)
 
 
+def _mask_token(headers):
+    """
+    DIAGNOSTIC-ONLY helper (PR 8 final diagnostic patch). Returns a copy of
+    `headers` with the Authorization value masked to
+    "Bearer eyJh...bcd1" (first 4 / last 4 chars of the token visible) so
+    logs never contain a usable credential. Does not touch the real
+    `headers` dict used for the actual request — read-only, for printing.
+    """
+    if not headers:
+        return headers
+    masked = dict(headers)
+    auth = masked.get("Authorization")
+    if isinstance(auth, str) and auth.lower().startswith("bearer "):
+        token = auth[7:]
+        if len(token) > 10:
+            masked["Authorization"] = f"Bearer {token[:4]}...{token[-4:]}"
+        elif token:
+            masked["Authorization"] = "Bearer ***(short/empty-looking token)***"
+        else:
+            masked["Authorization"] = "Bearer <EMPTY>"
+    return masked
+
+
+def _parse_candle_url(url):
+    """
+    DIAGNOSTIC-ONLY, best-effort, read-only parse of a
+    /historical-candle/{key}/{interval}/... URL for logging purposes.
+    Returns (instrument_key, interval) or (None, None) if the URL doesn't
+    match that shape (e.g. price/market-trend endpoints) — never raises,
+    never affects the actual request.
+    """
+    try:
+        if "/historical-candle/" not in url:
+            return None, None
+        tail = url.split("/historical-candle/", 1)[1]
+        parts = tail.split("/")
+        instrument_key = parts[0] if len(parts) > 0 else None
+        interval = parts[1] if len(parts) > 1 else None
+        return instrument_key, interval
+    except Exception:
+        return None, None
+
+
+_HTTP_STATUS_LABELS = {
+    400: "400 Bad Request (malformed request)",
+    401: "401 Unauthorized (invalid/expired/missing token)",
+    403: "403 Forbidden (token lacks permission for this resource)",
+    404: "404 Not Found (endpoint or instrument key not found)",
+    429: "429 Too Many Requests (rate limited)",
+    500: "500 Internal Server Error (Upstox-side)",
+    502: "502 Bad Gateway (Upstox-side)",
+    503: "503 Service Unavailable (Upstox-side)",
+}
+
+
 def safe_get(url, headers=None, label=None):
     """
-    INVESTIGATION INSTRUMENTATION (Live Scan first-request diagnostic,
-    added this session — logging only, no behavior change): every Upstox
-    HTTP call in this app funnels through this one function (get_prices_bulk,
-    get_market_trend, get_candles, get_daily_trend all call safe_get()) —
-    so instrumenting it here, once, captures a complete chronological
-    request/response trace for a whole scan without touching any caller's
-    logic.
+    INVESTIGATION INSTRUMENTATION (PR 8 final diagnostic patch — logging
+    only, NO behavior change): every Upstox HTTP call in this app funnels
+    through this one function, so instrumenting it here, once, captures a
+    complete request/response trace for every call without touching any
+    caller's logic, the request itself, or the return value.
 
-    `label` is a new, OPTIONAL kwarg (default None) callers can pass for
-    a human-readable identifier in the log (e.g. "ITC (NSE_EQ|INE154A01025)")
-    — existing callers that don't pass it are completely unaffected; this
-    changes zero request/response/return behavior, only what gets logged.
+    IMPORTANT: this patch replaces the previous `logger.info()`/
+    `logger.warning()` diagnostic calls with plain `print()` calls.
+    `logger.info()` was proven (prior investigation session) to be
+    silently dropped in generate_research.py's execution context because
+    nothing in that call chain configures a logging handler — the lines
+    were being computed but never actually appearing anywhere. `print()`
+    goes straight to stdout, which GitHub Actions always captures in the
+    step log with zero configuration required, in Streamlit, in a plain
+    script, or anywhere else Python runs. This is the only way to
+    guarantee these diagnostics are "always visible" as required.
 
-    Logs one line BEFORE the request (so a hang/never-returns case still
-    leaves a trace) and one line AFTER (success, non-200, timeout, or any
-    other exception), each with every field requested for this
-    investigation: label, url, request_start (ISO + perf_counter),
-    response_time, elapsed_ms, whether it timed out, whether it ever
-    returned at all, status_code, response headers, and — only on a
-    non-200 response — the first 300 chars of the response body.
+    The actual network call (`requests.get(url, headers=headers,
+    timeout=10)`), the success/failure branching, the `st.error()` calls,
+    and the return values (`r.json()` on success, `None` on failure) are
+    unchanged from before this patch. Only what gets printed is
+    new/expanded.
     """
     request_start_perf = time.perf_counter()
     request_start_iso = datetime.now(IST).isoformat()
-    logger.info(
-        "API_DIAGNOSTIC_REQUEST | label=%s | url=%s | request_start=%s",
-        label, url, request_start_iso,
-    )
+    instrument_key, interval = _parse_candle_url(url)
+    masked_headers = _mask_token(headers)
+
+    print(flush=True)
+    print("=" * 70, flush=True)
+    print("REQUEST", flush=True)
+    print("=" * 70, flush=True)
+    print(f"label            : {label}", flush=True)
+    print(f"url              : {url}", flush=True)
+    print(f"http_method      : GET", flush=True)
+    print(f"instrument_key   : {instrument_key}", flush=True)
+    print(f"interval         : {interval}", flush=True)
+    print(f"headers          : {masked_headers}", flush=True)
+    print(f"request_start    : {request_start_iso}", flush=True)
 
     try:
         r = requests.get(url, headers=headers, timeout=10)
-        response_time_iso = datetime.now(IST).isoformat()
         elapsed_ms = round((time.perf_counter() - request_start_perf) * 1000, 1)
 
+        parsed_json = None
+        try:
+            parsed_json = r.json()
+        except Exception:
+            parsed_json = None
+
+        print("-" * 70, flush=True)
+        print("RESPONSE", flush=True)
+        print("-" * 70, flush=True)
+        print(f"status_code      : {r.status_code}"
+              + (f"  -> {_HTTP_STATUS_LABELS[r.status_code]}" if r.status_code in _HTTP_STATUS_LABELS else ""),
+              flush=True)
+        print(f"response_headers : {dict(r.headers)}", flush=True)
+        print(f"elapsed_ms       : {elapsed_ms}", flush=True)
+        print(f"body_first_1000  : {r.text[:1000]!r}", flush=True)
+        print(f"body_json        : {parsed_json if parsed_json is not None else '(not valid JSON)'}", flush=True)
+
         if r.status_code != 200:
-            logger.info(
-                "API_DIAGNOSTIC_RESPONSE | label=%s | url=%s | request_start=%s | "
-                "response_time=%s | elapsed_ms=%.1f | returned=True | timed_out=False | "
-                "status_code=%s | headers=%s | body_snippet=%r",
-                label, url, request_start_iso, response_time_iso, elapsed_ms,
-                r.status_code, dict(r.headers), r.text[:300],
-            )
+            print(f"RESULT           : REQUEST FAILED — non-200 status {r.status_code}", flush=True)
+            print("=" * 70, flush=True)
             st.error(f"API failed ({r.status_code}) for {url}\n{r.text[:300]}")
             return None
 
-        logger.info(
-            "API_DIAGNOSTIC_RESPONSE | label=%s | url=%s | request_start=%s | "
-            "response_time=%s | elapsed_ms=%.1f | returned=True | timed_out=False | "
-            "status_code=%s | headers=%s | body_snippet=None",
-            label, url, request_start_iso, response_time_iso, elapsed_ms,
-            r.status_code, dict(r.headers),
-        )
-        return r.json()
+        candles = None
+        if isinstance(parsed_json, dict):
+            candles = parsed_json.get("data", {}).get("candles", None)
+
+        if candles is not None:
+            print(f"candle_count     : {len(candles)}", flush=True)
+            if len(candles) == 0:
+                print("RESULT           : REQUEST SUCCEEDED (HTTP 200) but candles list is EMPTY", flush=True)
+            else:
+                # Upstox returns candles newest-first; labeled plainly as
+                # "first/last in returned array" rather than asserting
+                # chronological order here.
+                print(f"first_candle_in_array (typically most recent) : {candles[0][0]}", flush=True)
+                print(f"last_candle_in_array (typically oldest)       : {candles[-1][0]}", flush=True)
+                print("RESULT           : REQUEST SUCCEEDED with data", flush=True)
+        else:
+            print("RESULT           : REQUEST SUCCEEDED (HTTP 200) but response has no 'candles' key "
+                  "(not a candle endpoint, or unexpected response shape)", flush=True)
+
+        print("=" * 70, flush=True)
+        return parsed_json
 
     except Exception as e:
         elapsed_ms = round((time.perf_counter() - request_start_perf) * 1000, 1)
         timed_out = isinstance(e, requests.exceptions.Timeout)
-        logger.warning(
-            "API_DIAGNOSTIC_RESPONSE | label=%s | url=%s | request_start=%s | "
-            "response_time=None | elapsed_ms=%.1f | returned=False | timed_out=%s | "
-            "status_code=None | headers=None | body_snippet=None | exception=%s: %s",
-            label, url, request_start_iso, elapsed_ms, timed_out, type(e).__name__, e,
-        )
+        connection_error = isinstance(e, requests.exceptions.ConnectionError)
+
+        print("-" * 70, flush=True)
+        print("RESPONSE", flush=True)
+        print("-" * 70, flush=True)
+        print(f"RESULT           : REQUEST FAILED — no HTTP response received", flush=True)
+        print(f"exception_type   : {type(e).__name__}", flush=True)
+        print(f"exception_detail : {e}", flush=True)
+        print(f"timed_out        : {timed_out}", flush=True)
+        print(f"connection_error : {connection_error}", flush=True)
+        print(f"elapsed_ms       : {elapsed_ms}", flush=True)
+        print("=" * 70, flush=True)
+
         # UNCHANGED from before this investigation — exact same message,
-        # exact same single except-block shape. Only the logging above is new.
+        # exact same single except-block shape. Only the printing above is new.
         st.error(f"API exception for {url}\n{e}")
         return None
 
