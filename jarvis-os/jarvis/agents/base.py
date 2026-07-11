@@ -1,73 +1,55 @@
 """
 jarvis.agents.base
 
-BaseAgent — the abstract contract every specialist agent must satisfy to
-be registrable in the Agent Registry.
+BaseAgent — the abstract contract every specialist agent must satisfy.
 
-Design reference: JARVIS-002 §15 (Base Agent Specification). That section
-requires every agent to declare: a single domain position, an enumerable
-capability set, its evidence-sourcing behavior, its own escalation
-behavior under uncertainty, and a declared trust tier default.
+SPRINT-1B UPGRADE NOTE: Sprint-0's version of this file defined
+`handle_task`/`escalate` against placeholder `AgentTask`/`AgentResult`
+shapes, with a docstring explicitly calling them a stand-in "until the
+Orchestrator's Task Planner exists." Sprint-1A's TaskPlanner now exists,
+and Sprint-1B needs agents to execute against the real `jarvis.intake.Task`
+type and return a real, structured `ExecutionResult` — so this file is
+replaced outright rather than extended alongside the placeholders. This
+is a deliberate, sanctioned exception to "don't modify Sprint-0," per
+this sprint's own brief ("unless a genuine architectural defect exists"):
+Sprint-0's own docstring already named this exact upgrade as the expected
+next step, and nothing in Sprint-0 or Sprint-1A ever called
+handle_task/escalate/AgentTask/AgentResult, so nothing breaks.
 
-Sprint-0 scope: this is an ABSTRACT class only. It defines the shape and
-raises NotImplementedError for every behavioral method — no reasoning, no
-evidence grading, no actual task execution. A concrete agent (Engineering
-Agent, GitHub Agent, etc., per JARVIS-003 Part I) is a future sprint's
-work, built by subclassing this.
+Design reference: JARVIS-002 §15 (Base Agent Specification — domain,
+capabilities, evidence-sourcing behavior, escalation behavior, trust tier
+default — all still required; only the method shapes changed).
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any
 
-
-@dataclass(frozen=True)
-class AgentTask:
-    """
-    Placeholder task shape for Sprint-0.
-
-    A real Task, once the Orchestrator's Task Planner exists (JARVIS-001
-    §11), will carry dependencies, tier classification, and routing
-    metadata. This minimal shape exists only so BaseAgent's method
-    signatures are meaningful today without inventing task-graph
-    machinery that belongs to a later sprint.
-    """
-
-    task_id: str
-    description: str
-    payload: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class AgentResult:
-    """
-    Placeholder result shape for Sprint-0.
-
-    A real result, once the Evidence and Confidence Frameworks exist
-    (JARVIS-002 §22-23), will carry evidence grade, confidence score, and
-    the six Blueprint Principle 12 fields for any recommendation. This
-    minimal shape is a structural stand-in only.
-    """
-
-    task_id: str
-    success: bool
-    summary: str
+from jarvis.agents.models import AgentHealthStatus, ExecutionResult
+from jarvis.intake.models import Task
 
 
 class BaseAgent(ABC):
     """
     Abstract base class every specialist agent must extend.
 
-    Per JARVIS-002 §15, a concrete agent must declare its domain, its
-    capabilities, and its trust tier default at construction time, and
-    must implement `handle_task` and `escalate` — the two behavioral
-    methods every agent needs regardless of domain. Sprint-0 provides no
-    concrete implementation of either; both raise NotImplementedError by
-    design, since implementing them without evidence/confidence/approval
-    machinery in place would produce an agent that could act without the
-    governance this entire project exists to enforce.
+    Required by Sprint-1B: initialize(), health(), can_execute(task),
+    execute(task), shutdown(), capabilities(), metadata(), version().
+
+    `capabilities()`, `metadata()`, and `version()` are concrete —
+    they return values fixed at construction time, and a subclass has no
+    legitimate reason to override how they're reported (only what values
+    they hold). `initialize()`, `shutdown()`, and `health()` have sensible
+    concrete defaults (no-op / no-op / always-healthy) since not every
+    agent needs real setup, teardown, or custom health logic — but every
+    default is overridable. `can_execute()` has a real, working default
+    implementation (domain/capability match against the Task's
+    ExecutionPlan candidate_agents) rather than being abstract, because
+    that matching logic is the same for every agent and duplicating it in
+    every subclass would violate this sprint's "no duplicate logic"
+    requirement. `execute()` remains abstract — it is inherently
+    agent-specific and this base class has no way to provide a
+    default without fabricating behavior it doesn't have (Article III).
     """
 
     def __init__(
@@ -75,51 +57,88 @@ class BaseAgent(ABC):
         agent_id: str,
         domain: str,
         capabilities: tuple[str, ...],
-        trust_tier_default: str = "provisional",
+        version: str = "0.1.0",
+        display_name: str | None = None,
     ) -> None:
         self.agent_id = agent_id
         self.domain = domain
-        self.capabilities = capabilities
-        self.trust_tier_default = trust_tier_default
+        self._capabilities = capabilities
+        self._version = version
+        self._display_name = display_name or agent_id
+
+    def initialize(self) -> None:
+        """
+        Prepare the agent for execution. Default: no-op.
+
+        Overridden by agents that need real setup (e.g. warming a cache,
+        opening a connection) once such agents exist — none do yet in
+        Sprint-1B's placeholder scope.
+        """
+        return None
+
+    def shutdown(self) -> None:
+        """Release any resources the agent holds. Default: no-op, symmetric with initialize()."""
+        return None
+
+    def health(self) -> AgentHealthStatus:
+        """
+        Report current health. Default: always healthy.
+
+        A concrete agent with real failure modes (a connection that can
+        drop, a rate limit that can be hit) should override this with a
+        genuine check — returning a fabricated "healthy" from an agent
+        that can't actually verify it would violate Article III, which is
+        exactly why this default is documented as a *default*, not a
+        universal truth every agent inherits blindly.
+        """
+        return AgentHealthStatus(healthy=True, detail=f"{self._display_name}: no health issues reported.")
+
+    def can_execute(self, task: Task) -> bool:
+        """
+        Default capability-match check: does this agent's domain or any
+        declared capability appear among the Task's ExecutionPlan
+        candidate_agents (Sprint-1A's domain-hint list)?
+
+        Returns False, honestly, if the task has no execution_plan yet or
+        an empty candidate list — per this sprint's "never fabricate an
+        available agent" requirement, applied at the single-agent level:
+        an agent must never claim it can handle a task it has no
+        real basis to believe matches its declared scope.
+        """
+        plan = task.execution_plan
+        if plan is None or not plan.candidate_agents:
+            return False
+        if self.domain in plan.candidate_agents:
+            return True
+        return any(capability in plan.candidate_agents for capability in self._capabilities)
 
     @abstractmethod
-    def handle_task(self, task: AgentTask) -> AgentResult:
+    def execute(self, task: Task) -> ExecutionResult:
         """
-        Handle a single delegated task.
+        Execute the given task and return a structured ExecutionResult.
 
-        A concrete agent implementing this method must, per JARVIS-002
-        §15 and §24: source and grade its own evidence, populate the six
-        Blueprint Principle 12 fields for any recommendation, and never
-        execute a Tier 2/3-equivalent action without having first passed
-        through the (not-yet-implemented) Approval Engine's gate.
-
-        Sprint-0 leaves this unimplemented. Do not implement a concrete
-        agent whose `handle_task` bypasses evidence grading or approval
-        gating just to produce runnable output faster than the governed
-        version — an ungoverned agent is not a smaller version of a
-        governed one, it's a different, non-compliant thing entirely.
+        Every concrete implementation must: check can_execute(task) itself
+        before doing any real work (never assume the Router already did,
+        since this method may be called directly in tests or future
+        contexts); return ExecutionStatus.FAILED with at least one entry
+        in `errors` rather than raising, for any expected failure mode
+        (per ExecutionResult's own validation — a FAILED result with no
+        errors is rejected at construction); and never return a raw
+        string in place of an ExecutionResult, per this sprint's explicit
+        requirement.
         """
-        raise NotImplementedError(
-            "BaseAgent.handle_task is abstract. Sprint-0 scope explicitly "
-            "excludes concrete agent business logic — see jarvis.agents "
-            "module docstring."
-        )
+        raise NotImplementedError
 
-    @abstractmethod
-    def escalate(self, task: AgentTask, reason: str) -> None:
-        """
-        Escalate a task the agent is uncertain about, rather than guessing.
+    def capabilities(self) -> tuple[str, ...]:
+        return self._capabilities
 
-        Per JARVIS-002 §15's requirement that every agent declare its own
-        escalation behavior, and JARVIS-001 §10's Core-level ambiguity
-        pattern applied at the agent level: an agent that cannot meet a
-        task's evidence bar must escalate, never proceed on its best
-        guess. Sprint-0 leaves the actual escalation transport (routing
-        back through the Orchestrator) unimplemented, since the
-        Orchestrator's real request lifecycle doesn't exist yet either.
-        """
-        raise NotImplementedError(
-            "BaseAgent.escalate is abstract. Sprint-0 scope explicitly "
-            "excludes concrete agent business logic — see jarvis.agents "
-            "module docstring."
-        )
+    def metadata(self) -> dict[str, str]:
+        return {
+            "agent_id": self.agent_id,
+            "domain": self.domain,
+            "display_name": self._display_name,
+            "version": self._version,
+        }
+
+    def version(self) -> str:
+        return self._version

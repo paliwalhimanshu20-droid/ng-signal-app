@@ -1,16 +1,22 @@
 """
 jarvis.agents
 
-Base Agent Specification per JARVIS-002 §15.
+Base Agent Specification (JARVIS-002 §15) and concrete specialist agents.
 
-Sprint-0 scope: this package defines the abstract contract every future
-specialist agent (Engineering, GitHub, Research, Trading, ... per
-JARVIS-003 Part I) must satisfy to be registrable at all. It contains NO
-concrete agents — implementing an actual specialist agent is explicitly
-out of scope for the Foundation Bootstrap sprint. What Sprint-0 delivers
-is the shape every future agent will be built against.
+SPRINT-1B UPGRADE: BaseAgent's method contract changed (see base.py's
+module docstring for the full reasoning) — this package now also exports
+the execution-result models (ExecutionResult, ExecutionStatus,
+AgentHealthStatus) and the first concrete agent, EngineeringAgent.
 """
 
 from jarvis.agents.base import BaseAgent
+from jarvis.agents.engineering_agent import EngineeringAgent
+from jarvis.agents.models import AgentHealthStatus, ExecutionResult, ExecutionStatus
 
-__all__ = ["BaseAgent"]
+__all__ = [
+    "AgentHealthStatus",
+    "BaseAgent",
+    "EngineeringAgent",
+    "ExecutionResult",
+    "ExecutionStatus",
+]
