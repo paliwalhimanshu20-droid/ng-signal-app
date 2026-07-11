@@ -1,0 +1,8 @@
+# JARVIS Sprint-0 — Foundation Bootstrap
+#
+# Deliberately minimal, per JARVIS-001 §3 Principle 2 ("boring technology")
+# and JARVIS-004 §12 (Dependency Management — trust-tiered, reviewed on
+# update). Sprint-0 uses only Python's standard library for all runtime
+# code; pytest is a development/test-only dependency.
+
+pytest>=7.4,<9
