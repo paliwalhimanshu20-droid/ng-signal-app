@@ -632,6 +632,44 @@ def get_candles(key, label=None):
     return data.get("data", {}).get("candles", None)
 
 
+# PR 8 FIX — module-level cache of the date range Upstox's V2 endpoint is
+# CURRENTLY actually honoring (confirmed via production evidence: Upstox
+# returns HTTP 400 / errorCode UDAPI1148 "Invalid date range" for a
+# 120-day request, even though the endpoint's documentation states a
+# 1-year allowance — the live behavior overrides the stale doc). Reset
+# every time this module is freshly imported, i.e. once per workflow run
+# — never persisted across separate GitHub Actions executions, so a
+# future Upstox-side change is automatically re-discovered next run
+# rather than being stuck on a stale cached value forever.
+_DISCOVERED_MAX_LOOKBACK_DAYS = None
+
+# Ladder of candidate day-counts to try, largest first, when the caller's
+# requested range is rejected. Matches the sequence used during
+# investigation (120/90/60/45/30/21/14/7). Capped at 7 rungs total so a
+# single instrument can never trigger more than 7 requests while probing.
+_LOOKBACK_LADDER_DAYS = [120, 90, 60, 45, 30, 21, 14, 7]
+
+
+def _fetch_candle_range(key, days_back):
+    """
+    Single, unmodified request for one specific day count — this is
+    exactly the original get_candles_range() request/response logic,
+    extracted unchanged so the retry loop below can call it repeatedly
+    without duplicating the URL-construction or response-parsing code.
+    """
+    to_date = datetime.now(IST).strftime("%Y-%m-%d")
+    from_date = (datetime.now(IST) - pd.Timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+    url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/{to_date}/{from_date}"
+
+    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+
+    if not data:
+        return None
+
+    return data.get("data", {}).get("candles", None)
+
+
 def get_candles_range(key, days_back=5):
     """
     Fetches multiple days of 30-minute candles for the chart view, using
@@ -645,18 +683,60 @@ def get_candles_range(key, days_back=5):
     days_back: calendar days to look back (weekends/holidays included in
     the count, so 5 calendar days back generally covers ~3-4 trading days,
     not 5 full trading days. Increase if you want strictly more sessions.)
+
+    PR 8 FIX (confirmed production evidence: Upstox V2 currently rejects
+    a 120-day request for the 30minute interval with HTTP 400 / UDAPI1148
+    "Invalid date range" — contradicting its own documented 1-year
+    allowance). Behavior added, nothing removed:
+
+      1. If a previous call THIS PROCESS already discovered a working
+         day count, every subsequent call reuses it directly — no
+         re-probing per instrument, exactly as required. The function
+         still respects the caller's own `days_back` as a ceiling (it
+         will never request MORE than the caller asked for, only less).
+
+      2. Otherwise, try the caller's requested `days_back`, then fall
+         through a fixed ladder of smaller day-counts (max 7 attempts
+         total) until one succeeds. The first day-count that returns a
+         non-None result (HTTP 200) is cached for the rest of this
+         process and returned immediately.
+
+      3. If every attempt fails, return None — the exact same outcome,
+         via the exact same downstream "no data available, skipped"
+         path, as today. No new failure mode is introduced.
+
+    Every attempt still goes through the existing, unmodified safe_get()
+    — so the full request/response diagnostic logging from the prior
+    patch fires on every single attempt, exactly as before.
     """
-    to_date = datetime.now(IST).strftime("%Y-%m-%d")
-    from_date = (datetime.now(IST) - pd.Timedelta(days=days_back)).strftime("%Y-%m-%d")
+    global _DISCOVERED_MAX_LOOKBACK_DAYS
 
-    url = f"https://api.upstox.com/v2/historical-candle/{key}/30minute/{to_date}/{from_date}"
+    if _DISCOVERED_MAX_LOOKBACK_DAYS is not None:
+        effective_days_back = min(days_back, _DISCOVERED_MAX_LOOKBACK_DAYS)
+        return _fetch_candle_range(key, effective_days_back)
 
-    data = safe_get(url, {"Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}"})
+    candidates = sorted(
+        {d for d in _LOOKBACK_LADDER_DAYS if d <= days_back} | {days_back},
+        reverse=True,
+    )[:7]
 
-    if not data:
-        return None
+    for attempt_days in candidates:
+        print(f"[get_candles_range] {key}: trying {attempt_days} days...", flush=True)
+        candles = _fetch_candle_range(key, attempt_days)
 
-    return data.get("data", {}).get("candles", None)
+        if candles is not None:
+            print(
+                f"[get_candles_range] {key}: succeeded at {attempt_days} days. "
+                f"Caching {attempt_days} as the max lookback for the rest of this run.",
+                flush=True,
+            )
+            _DISCOVERED_MAX_LOOKBACK_DAYS = attempt_days
+            return candles
+
+        print(f"[get_candles_range] {key}: {attempt_days} days failed. Trying a smaller range...", flush=True)
+
+    print(f"[get_candles_range] {key}: all {len(candidates)} attempts failed. Skipping, as before.", flush=True)
+    return None
 
 
 @st.cache_data(ttl=3600)  # cached for 1 hour — daily trend doesn't change intraday,
