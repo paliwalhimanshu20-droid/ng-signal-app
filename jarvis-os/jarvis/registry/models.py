@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class AgentLifecycleState(str, Enum):
@@ -65,6 +66,19 @@ class AgentRecord:
     a later sprint should tighten these once the Capability Framework
     (JARVIS-002 §18) and full domain tree (JARVIS-001 §13) are
     implemented beyond Sprint-0's scaffolding.
+
+    SPRINT-1B ADDITION: `instance`, an optional reference to the live
+    jarvis.agents.base.BaseAgent object this record describes. Sprint-0
+    deliberately had nothing here — no concrete agent existed yet. Now
+    that one does (jarvis.agents.engineering_agent.EngineeringAgent),
+    routing needs a live object to call .can_execute()/.execute()/.health()
+    on, not just metadata about it. Defaulting to None keeps every
+    Sprint-0 construction of AgentRecord (including existing tests)
+    unaffected — this is purely additive.
+
+    Typed as `Any` rather than `BaseAgent` to keep jarvis.registry from
+    taking a hard dependency on jarvis.agents at import time; the actual
+    object stored is always expected to be a BaseAgent in practice.
     """
 
     agent_id: str
@@ -75,3 +89,4 @@ class AgentRecord:
     version: str = "0.0.0"
     trust_tier: str = "provisional"  # provisional | standard | elevated — JARVIS-002 §20
     notes: str = field(default="")
+    instance: Any = None

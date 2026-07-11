@@ -121,3 +121,89 @@ class AgentRegistry:
 
     def __len__(self) -> int:
         return len(self._agents)
+
+    # =========================================================================
+    # SPRINT-1B ADDITIONS BELOW — all additive. Every method above this line
+    # is unchanged from Sprint-0, byte-for-byte, and every Sprint-0 test
+    # continues to pass unmodified against it.
+    # =========================================================================
+
+    def unregister(self, agent_id: str) -> None:
+        """
+        Remove an agent from the Registry entirely.
+
+        Distinct from transition(..., DEPRECATED): deprecation (JARVIS-002
+        §16) is the formal governance end-state and preserves the record
+        (and its audit history) in place. unregister() is a lower-level
+        operation that removes the entry outright — the mechanism this
+        sprint's required "hot-swapping" support is built on (unregister
+        the old instance, register a replacement under the same or a new
+        agent_id). Raises RegistryError if the agent isn't registered, for
+        the same fail-closed reasoning as every other lookup in this class.
+        """
+        if agent_id not in self._agents:
+            raise RegistryError(f"Cannot unregister: no agent registered with id '{agent_id}'.")
+        del self._agents[agent_id]
+        logger.info("Agent unregistered: id=%s", agent_id)
+
+    def discover_agents(self) -> tuple[AgentRecord, ...]:
+        """
+        Return every currently ACTIVE, routable agent.
+
+        Deliberately an alias over active_agents() rather than a
+        reimplementation — "discovery" and "what's routable" are the same
+        question from the Router's point of view (JARVIS-002 §17), and
+        this sprint's brief names both "Discover Agents" and the existing
+        Sprint-0 active_agents() separately only because Sprint-0 didn't
+        yet have a Router that needed the discovery framing. Keeping one
+        implementation avoids the two ever silently drifting apart.
+        """
+        return self.active_agents()
+
+    def lookup_by_capability(self, capability: str) -> tuple[AgentRecord, ...]:
+        """
+        Return every ACTIVE agent that declares the given capability.
+
+        Per JARVIS-002 §18, capability declarations are a static ceiling
+        checked at registration — this method reads that declaration, it
+        does not (and must not) infer or expand capabilities dynamically.
+        """
+        return tuple(
+            record for record in self.active_agents() if capability in record.capabilities
+        )
+
+    def health_status(self, agent_id: str) -> "AgentHealthStatus":
+        """
+        Query an agent's live health, per JARVIS-001 §22's per-agent health
+        concept, delegated to the agent's own BaseAgent.health().
+
+        Returns an unhealthy status (rather than raising) if the record has
+        no live `instance` attached — a registered-but-instance-less record
+        is a real, representable state (e.g. mid-provisioning), not an
+        error condition this method should refuse to answer about.
+        """
+        from jarvis.agents.models import AgentHealthStatus  # local import: avoids a hard,
+
+        # module-load-time dependency from jarvis.registry on jarvis.agents;
+        # only needed inside this one method's return path.
+        record = self.get(agent_id)
+        if record.instance is None:
+            return AgentHealthStatus(
+                healthy=False,
+                detail=f"Agent '{agent_id}' has no live instance attached to its Registry record.",
+            )
+        return record.instance.health()
+
+    def is_available(self, agent_id: str) -> bool:
+        """
+        An agent is "available" iff it is ACTIVE and reports healthy.
+
+        This is the single predicate the Router (jarvis.routing) uses to
+        decide whether a candidate is even worth evaluating for
+        capability match — combining lifecycle state and live health into
+        one clear, testable question.
+        """
+        record = self.get(agent_id)
+        if record.lifecycle_state is not AgentLifecycleState.ACTIVE:
+            return False
+        return self.health_status(agent_id).healthy
