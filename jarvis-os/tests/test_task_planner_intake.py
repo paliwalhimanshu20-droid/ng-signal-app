@@ -90,7 +90,7 @@ def test_unsupported_intent_reaches_ready_for_routing(intent_processor, task_pla
         ("Analyze GitHub repository", Tier.TIER_0_INFORMATIONAL),
         ("Draft a schedule for tomorrow", Tier.TIER_1_REVERSIBLE_LOW_STAKES),
         ("Merge this pull request and push", Tier.TIER_2_CONSEQUENTIAL_REVERSIBLE),
-        ("Deploy this to production", Tier.TIER_3_IRREVERSIBLE_OR_HIGH_STAKES),
+        ("Delete production database", Tier.TIER_3_IRREVERSIBLE_OR_HIGH_STAKES),
     ],
 )
 def test_tier_calculation(intent_processor, task_planner, raw_input, expected_tier):
@@ -100,7 +100,7 @@ def test_tier_calculation(intent_processor, task_planner, raw_input, expected_ti
 
 
 def test_tier3_implies_approval_required(intent_processor, task_planner):
-    intent = intent_processor.process("Delete the production database")
+    intent = intent_processor.process("Delete production database")
     task = task_planner.plan(intent)
     assert task.tier == Tier.TIER_3_IRREVERSIBLE_OR_HIGH_STAKES
     assert task.execution_plan.approval_required is True

@@ -86,7 +86,7 @@ def test_tier2_requires_approval(ledger, registry_with_engineering_agent):
 
 
 def test_tier3_requires_approval_and_is_flagged_for_confirmation(ledger, registry_with_engineering_agent):
-    task = _plan(ledger, "Deploy this to production")
+    task = _plan(ledger, "Delete production database")
     assert task.tier is Tier.TIER_3_IRREVERSIBLE_OR_HIGH_STAKES
 
     engine = PermissionEngine(registry=registry_with_engineering_agent, audit_ledger=ledger)

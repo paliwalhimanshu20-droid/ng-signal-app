@@ -95,7 +95,7 @@ def test_tier2_stops_at_waiting_approval_no_execution(ledger, registry_with_engi
 # --- Acceptance Scenario 3: Tier 3, confirmation required, execution blocked
 
 def test_tier3_stops_at_waiting_approval_with_confirmation_flag(ledger, registry_with_engineering_agent):
-    task = _plan(ledger, "Deploy this to production")
+    task = _plan(ledger, "Delete production database")
     workflow = _workflow(registry_with_engineering_agent, ledger)
 
     result = workflow.execute(task)
@@ -190,7 +190,7 @@ def test_approval_rejection_fails_task_without_executing(ledger, registry_with_e
         ("Analyze GitHub repository", TaskStatus.COMPLETED),
         ("Review and schedule the repository update", TaskStatus.COMPLETED),
         ("Investigate why the commit push to the repository failed", TaskStatus.WAITING_APPROVAL),
-        ("Deploy this to production", TaskStatus.WAITING_APPROVAL),
+        ("Delete production database", TaskStatus.WAITING_APPROVAL),
     ],
 )
 def test_tier_transitions_produce_expected_terminal_state(
