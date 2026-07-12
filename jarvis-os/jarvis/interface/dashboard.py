@@ -36,6 +36,8 @@ class DashboardSnapshot:
     memory_detail: str
     intelligence_healthy: bool
     intelligence_detail: str
+    ai_coordination_healthy: bool
+    ai_coordination_detail: str
     overall_healthy: bool
 
 
@@ -46,6 +48,7 @@ class SystemDashboard:
         session = session_manager.current
         memory_health = core.memory.health_check()
         intelligence_health = core.intelligence.health_check()
+        ai_coordination_health = core.ai_coordination.health_check()
 
         overall_healthy = (
             core_health.healthy
@@ -53,6 +56,7 @@ class SystemDashboard:
             and interface_health.healthy
             and memory_health.healthy
             and intelligence_health.healthy
+            and ai_coordination_health.healthy
         )
 
         return DashboardSnapshot(
@@ -67,6 +71,8 @@ class SystemDashboard:
             memory_detail=f"{sum(memory_health.checks.values())}/{len(memory_health.checks)} checks OK",
             intelligence_healthy=intelligence_health.healthy,
             intelligence_detail=f"{sum(intelligence_health.checks.values())}/{len(intelligence_health.checks)} checks OK",
+            ai_coordination_healthy=ai_coordination_health.healthy,
+            ai_coordination_detail=f"{sum(ai_coordination_health.checks.values())}/{len(ai_coordination_health.checks)} checks OK",
             overall_healthy=overall_healthy,
         )
 
@@ -85,6 +91,7 @@ class SystemDashboard:
             f"Engineering Agent:  {'HEALTHY' if snapshot.kernel_health.execution.checks.get('engineering_agent_healthy') else 'UNHEALTHY'}",
             f"Memory:             {'HEALTHY' if snapshot.memory_healthy else 'UNHEALTHY'} ({snapshot.memory_detail})",
             f"Intelligence:       {'HEALTHY' if snapshot.intelligence_healthy else 'UNHEALTHY'} ({snapshot.intelligence_detail})",
+            f"AI Coordination:    {'HEALTHY' if snapshot.ai_coordination_healthy else 'UNHEALTHY'} ({snapshot.ai_coordination_detail})",
             f"Session:            {snapshot.session_id or '(none)'} [{snapshot.session_status or 'closed'}]",
             "-" * 70,
             f"OVERALL STATUS:     {'HEALTHY' if snapshot.overall_healthy else 'UNHEALTHY'}",
