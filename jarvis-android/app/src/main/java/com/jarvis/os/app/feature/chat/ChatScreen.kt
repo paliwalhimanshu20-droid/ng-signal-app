@@ -2,6 +2,7 @@ package com.jarvis.os.app.feature.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,6 +23,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -80,47 +83,56 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(JarvisSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(JarvisSpacing.sm),
-        ) {
-            items(messages, key = { it.messageId }) { message -> MessageBubble(message) }
-            if (isTyping) item { TypingIndicator() }
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(JarvisSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(JarvisSpacing.sm),
+            ) {
+                items(messages, key = { it.messageId }) { message -> MessageBubble(message) }
+                if (isTyping) item { TypingIndicator() }
+            }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(JarvisSpacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(JarvisSpacing.sm),
-        ) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Message JARVIS…") },
-                keyboardActions = KeyboardActions(onSend = {
-                    scope.launch { viewModel.send(input); input = "" }
-                }),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            )
-            // Voice interaction UI only, per Sprint-7 scope — no
-            // speech-to-text or wake-word wiring exists behind this
-            // button yet (wake-word is explicitly deferred).
-            IconButton(onClick = { /* voice capture: Sprint-8+ */ }) {
-                Icon(Icons.Filled.Mic, contentDescription = "Voice input (not yet wired)")
-            }
-            IconButton(onClick = { scope.launch { viewModel.send(input); input = "" } }) {
-                Icon(Icons.Filled.Send, contentDescription = "Send")
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(JarvisSpacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(JarvisSpacing.sm),
+            ) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Message JARVIS…") },
+                    keyboardActions = KeyboardActions(onSend = {
+                        scope.launch { viewModel.send(input); input = "" }
+                    }),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                )
+                // Voice interaction UI only, per Sprint-7 scope — no
+                // speech-to-text or wake-word wiring exists behind this
+                // button yet (wake-word is explicitly deferred). The tap
+                // itself must still do something observable rather than
+                // nothing (Sprint-7.1 UX polish) — it surfaces an honest
+                // status message instead of pretending to listen.
+                IconButton(onClick = {
+                    scope.launch { snackbarHostState.showSnackbar("Voice input will be enabled in a future sprint.") }
+                }) {
+                    Icon(Icons.Filled.Mic, contentDescription = "Voice input (not yet available)")
+                }
+                IconButton(onClick = { scope.launch { viewModel.send(input); input = "" } }) {
+                    Icon(Icons.Filled.Send, contentDescription = "Send")
+                }
             }
         }
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
