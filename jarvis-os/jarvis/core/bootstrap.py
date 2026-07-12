@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Optional
 
 from jarvis.audit import AuditLedger, AuditLedgerError
+from jarvis.ai_coordination import AICoordinator
 from jarvis.config import JarvisSettings, load_settings
 from jarvis.constitution import Constitution, ConstitutionValidationError, load_constitution
 from jarvis.health import CoreHealthReport, run_core_health_check
@@ -81,6 +82,7 @@ class JarvisCore:
     orchestrator: Orchestrator
     memory: MemoryManager
     intelligence: IntelligenceEngine
+    ai_coordination: AICoordinator
     recovery_report: Optional[RecoveryReport] = None
     ready: bool = False
 
@@ -93,6 +95,7 @@ class JarvisCore:
             orchestrator=self.orchestrator,
             memory=self.memory,
             intelligence=self.intelligence,
+            ai_coordination=self.ai_coordination,
         )
 
     def shutdown(self) -> None:
@@ -252,6 +255,22 @@ def boot() -> JarvisCore:
     )
     logger.info("Bootstrap Step 4.6 complete: Intelligence Layer constructed.")
 
+    # --- Step 4.7 (SPRINT-5): AI Coordination Layer -----------------------------
+    # Constructed after Intelligence, same non-fatal-on-failure treatment
+    # Sprint-4 established: this layer only prepares provider-neutral
+    # requests and reasons about metadata — nothing before or after it in
+    # Bootstrap structurally depends on it the way Constitution/Audit
+    # Ledger/Memory are depended upon. No real provider is ever
+    # integrated here (Sprint-5 scope), so there is nothing here that
+    # could fail on network/credentials the way a real integration
+    # eventually might.
+    ai_coordination = AICoordinator(audit_ledger=audit_ledger)
+    audit_ledger.record(
+        event_type="core.bootstrap.ai_coordination_constructed",
+        message="AI Coordination Layer constructed.",
+    )
+    logger.info("Bootstrap Step 4.7 complete: AI Coordination Layer constructed.")
+
     # --- Step 5: Self-health check ------------------------------------------------
     health_report = run_core_health_check(
         constitution=constitution,
@@ -260,6 +279,7 @@ def boot() -> JarvisCore:
         orchestrator=orchestrator,
         memory=memory,
         intelligence=intelligence,
+        ai_coordination=ai_coordination,
     )
     logger.info("Bootstrap Step 5 self-health check:\n%s", health_report.summary())
 
@@ -283,6 +303,7 @@ def boot() -> JarvisCore:
         orchestrator=orchestrator,
         memory=memory,
         intelligence=intelligence,
+        ai_coordination=ai_coordination,
         recovery_report=recovery_report,
         ready=True,
     )
