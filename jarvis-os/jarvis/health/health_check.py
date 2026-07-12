@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jarvis.audit import AuditLedger
+from jarvis.ai_coordination import AICoordinator
 from jarvis.constitution import Constitution
 from jarvis.intelligence import IntelligenceEngine
 from jarvis.memory import MemoryManager
@@ -45,6 +46,7 @@ def run_core_health_check(
     orchestrator: Orchestrator,
     memory: "MemoryManager | None" = None,
     intelligence: "IntelligenceEngine | None" = None,
+    ai_coordination: "AICoordinator | None" = None,
 ) -> CoreHealthReport:
     """
     Run every Sprint-0 health check and aggregate the result.
@@ -103,6 +105,13 @@ def run_core_health_check(
         intelligence_health = intelligence.health_check()
         checks["intelligence_layer_healthy"] = intelligence_health.healthy
         detail["intelligence_layer_healthy"] = intelligence_health.summary()
+
+    # SPRINT-5 ADDITION: AI Coordination Layer health, same optional-param
+    # pattern Sprint-3/4 used for Memory/Intelligence.
+    if ai_coordination is not None:
+        ai_coordination_health = ai_coordination.health_check()
+        checks["ai_coordination_layer_healthy"] = ai_coordination_health.healthy
+        detail["ai_coordination_layer_healthy"] = ai_coordination_health.summary()
 
     overall_healthy = all(checks.values())
     return CoreHealthReport(healthy=overall_healthy, checks=checks, detail=detail)
