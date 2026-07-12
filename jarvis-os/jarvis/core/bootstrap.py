@@ -42,6 +42,7 @@ from typing import Optional
 from jarvis.audit import AuditLedger, AuditLedgerError
 from jarvis.ai_coordination import AICoordinator
 from jarvis.config import JarvisSettings, load_settings
+from jarvis.connections import ConnectionSystem
 from jarvis.constitution import Constitution, ConstitutionValidationError, load_constitution
 from jarvis.health import CoreHealthReport, run_core_health_check
 from jarvis.intelligence import IntelligenceEngine
@@ -83,6 +84,7 @@ class JarvisCore:
     memory: MemoryManager
     intelligence: IntelligenceEngine
     ai_coordination: AICoordinator
+    connections: ConnectionSystem
     recovery_report: Optional[RecoveryReport] = None
     ready: bool = False
 
@@ -96,6 +98,7 @@ class JarvisCore:
             memory=self.memory,
             intelligence=self.intelligence,
             ai_coordination=self.ai_coordination,
+            connections=self.connections,
         )
 
     def shutdown(self) -> None:
@@ -271,6 +274,20 @@ def boot() -> JarvisCore:
     )
     logger.info("Bootstrap Step 4.7 complete: AI Coordination Layer constructed.")
 
+    # --- Step 4.8 (SPRINT-6): Connection Management Framework -------------------
+    # Constructed after AI Coordination, same non-fatal-on-failure
+    # treatment: this system starts with zero connections (nothing is
+    # ever auto-approved or auto-connected at Bootstrap, per Owner
+    # Sovereignty, Part 3) and no adapter is ever exercised against a
+    # real network during boot — ProviderRegistry only registers adapter
+    # FACTORIES here, it does not call connect() on anything.
+    connections = ConnectionSystem(audit_ledger=audit_ledger)
+    audit_ledger.record(
+        event_type="core.bootstrap.connections_constructed",
+        message="Connection Management Framework constructed. Zero connections exist yet.",
+    )
+    logger.info("Bootstrap Step 4.8 complete: Connection Management Framework constructed.")
+
     # --- Step 5: Self-health check ------------------------------------------------
     health_report = run_core_health_check(
         constitution=constitution,
@@ -280,6 +297,7 @@ def boot() -> JarvisCore:
         memory=memory,
         intelligence=intelligence,
         ai_coordination=ai_coordination,
+        connections=connections,
     )
     logger.info("Bootstrap Step 5 self-health check:\n%s", health_report.summary())
 
@@ -304,6 +322,7 @@ def boot() -> JarvisCore:
         memory=memory,
         intelligence=intelligence,
         ai_coordination=ai_coordination,
+        connections=connections,
         recovery_report=recovery_report,
         ready=True,
     )
