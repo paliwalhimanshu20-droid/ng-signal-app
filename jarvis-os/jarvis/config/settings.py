@@ -61,10 +61,18 @@ class StructuralConfig:
 
     registry_state_path: Path = field(default_factory=lambda: Path("data/registry_state.json"))
 
+    # SPRINT-3 ADDITION: where the Memory Foundation's PersistenceLayer
+    # stores Session/Conversation/Preference/Knowledge snapshots. Kept in
+    # StructuralConfig (Tier 2, reviewed) rather than Operational — like
+    # registry_state_path, this is "where persistent state lives," not a
+    # freely-tunable runtime knob.
+    memory_storage_path: Path = field(default_factory=lambda: Path("data/memory"))
+
     @classmethod
     def from_env(cls) -> "StructuralConfig":
         raw_path = os.environ.get("JARVIS_REGISTRY_STATE_PATH", "data/registry_state.json")
-        return cls(registry_state_path=Path(raw_path))
+        raw_memory_path = os.environ.get("JARVIS_MEMORY_STORAGE_PATH", "data/memory")
+        return cls(registry_state_path=Path(raw_path), memory_storage_path=Path(raw_memory_path))
 
 
 @dataclass(frozen=True)
