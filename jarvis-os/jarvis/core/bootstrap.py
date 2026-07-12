@@ -43,6 +43,7 @@ from jarvis.audit import AuditLedger, AuditLedgerError
 from jarvis.config import JarvisSettings, load_settings
 from jarvis.constitution import Constitution, ConstitutionValidationError, load_constitution
 from jarvis.health import CoreHealthReport, run_core_health_check
+from jarvis.intelligence import IntelligenceEngine
 from jarvis.logging_ import configure_logging, get_logger
 from jarvis.memory import MemoryManager, PersistenceError, RecoveryReport
 from jarvis.orchestrator import Orchestrator
@@ -79,6 +80,7 @@ class JarvisCore:
     registry: AgentRegistry
     orchestrator: Orchestrator
     memory: MemoryManager
+    intelligence: IntelligenceEngine
     recovery_report: Optional[RecoveryReport] = None
     ready: bool = False
 
@@ -90,6 +92,7 @@ class JarvisCore:
             registry=self.registry,
             orchestrator=self.orchestrator,
             memory=self.memory,
+            intelligence=self.intelligence,
         )
 
     def shutdown(self) -> None:
@@ -229,6 +232,26 @@ def boot() -> JarvisCore:
     recovery_report = memory.recover()
     logger.info("Bootstrap Step 4.5 recovery: %s", recovery_report.summary())
 
+    # --- Step 4.6 (SPRINT-4): Intelligence Layer -------------------------------
+    # Constructed after Memory (it depends on MemoryManager for Context
+    # Building) and before the self-health check, same placement logic
+    # Sprint-3 used for Memory itself: nothing should be able to call
+    # IntelligenceEngine.analyze() before its own health has been
+    # verified. Unlike Memory, a failed Intelligence construction is NOT
+    # treated as fatal to Bootstrap — the Intelligence Layer is advisory
+    # reasoning on top of an already-working Core (per this sprint's own
+    # "coordinate specialists... before any AI model is consulted"
+    # framing), not a subsystem later steps structurally depend on the
+    # way Bootstrap depends on the Constitution or Audit Ledger. A failed
+    # Intelligence health check surfaces in the Step 5 report and
+    # Core.health_check() thereafter, exactly like any other subsystem.
+    intelligence = IntelligenceEngine(memory_manager=memory, audit_ledger=audit_ledger)
+    audit_ledger.record(
+        event_type="core.bootstrap.intelligence_constructed",
+        message="Intelligence Layer constructed.",
+    )
+    logger.info("Bootstrap Step 4.6 complete: Intelligence Layer constructed.")
+
     # --- Step 5: Self-health check ------------------------------------------------
     health_report = run_core_health_check(
         constitution=constitution,
@@ -236,6 +259,7 @@ def boot() -> JarvisCore:
         registry=registry,
         orchestrator=orchestrator,
         memory=memory,
+        intelligence=intelligence,
     )
     logger.info("Bootstrap Step 5 self-health check:\n%s", health_report.summary())
 
@@ -258,6 +282,7 @@ def boot() -> JarvisCore:
         registry=registry,
         orchestrator=orchestrator,
         memory=memory,
+        intelligence=intelligence,
         recovery_report=recovery_report,
         ready=True,
     )
