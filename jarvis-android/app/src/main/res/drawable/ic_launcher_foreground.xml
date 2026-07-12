@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Minimal geometric mark (a bracketed "J") — a real icon designer's pass belongs in a later sprint (see Sprint-8 recommendations); this exists so the build produces a real, valid launcher icon rather than a missing-resource build failure. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/vector"
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
     <path
