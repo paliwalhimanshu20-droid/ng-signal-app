@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,13 +19,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,12 +42,16 @@ import com.jarvis.os.app.designsystem.JarvisFontFamily
 import com.jarvis.os.app.designsystem.JarvisFontScale
 import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.components.JarvisCard
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val appearance by viewModel.appearance.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    LazyColumn(contentPadding = PaddingValues(JarvisSpacing.md)) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(contentPadding = PaddingValues(JarvisSpacing.md)) {
         item { SectionHeader("Appearance") }
 
         item {
@@ -114,15 +124,58 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         item { SectionHeader("Other settings") }
         item {
             JarvisCard(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Voice, AI, Connections, Notifications, and Privacy settings are " +
-                        "navigable sections in the full build — kept out of this sprint's " +
-                        "delivered screenshot set to keep the Appearance section (the one " +
-                        "with a real acceptance test) unambiguous. See delivery notes.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Column {
+                    ComingSoonSettingsRow("Voice") {
+                        scope.launch { snackbarHostState.showSnackbar("Voice settings will be enabled in a future sprint.") }
+                    }
+                    ComingSoonSettingsRow("AI") {
+                        scope.launch { snackbarHostState.showSnackbar("AI settings require a connected JARVIS Core backend.") }
+                    }
+                    ComingSoonSettingsRow("Connections") {
+                        scope.launch { snackbarHostState.showSnackbar("Manage connections from the Connections tab; deeper settings are a future sprint.") }
+                    }
+                    ComingSoonSettingsRow("Notifications", showDivider = true) {
+                        scope.launch { snackbarHostState.showSnackbar("Notification settings will be enabled once push is wired in a future sprint.") }
+                    }
+                    ComingSoonSettingsRow("Privacy", showDivider = false) {
+                        scope.launch { snackbarHostState.showSnackbar("Privacy settings are under development.") }
+                    }
+                }
             }
+        }
+        }
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+/**
+ * Sprint-7.1 UX polish: each of these five areas used to be a single
+ * paragraph of prose explaining they weren't built yet. That's honest
+ * but not actionable — a tap now gives a specific, per-area status
+ * message instead of nothing, matching every other "mock functional or
+ * backend-pending" affordance in this app (Connections' View Audit,
+ * Chat's voice button). No new settings screens are added — tapping a
+ * row surfaces its status, it does not navigate anywhere.
+ */
+@Composable
+private fun ComingSoonSettingsRow(label: String, showDivider: Boolean = true, onClick: () -> Unit) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = JarvisSpacing.sm),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "Coming soon",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (showDivider) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
         }
     }
 }
