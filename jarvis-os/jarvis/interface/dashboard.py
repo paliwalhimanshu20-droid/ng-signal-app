@@ -38,6 +38,8 @@ class DashboardSnapshot:
     intelligence_detail: str
     ai_coordination_healthy: bool
     ai_coordination_detail: str
+    connections_healthy: bool
+    connections_detail: str
     overall_healthy: bool
 
 
@@ -49,6 +51,7 @@ class SystemDashboard:
         memory_health = core.memory.health_check()
         intelligence_health = core.intelligence.health_check()
         ai_coordination_health = core.ai_coordination.health_check()
+        connections_health = core.connections.health_check()
 
         overall_healthy = (
             core_health.healthy
@@ -57,6 +60,7 @@ class SystemDashboard:
             and memory_health.healthy
             and intelligence_health.healthy
             and ai_coordination_health.healthy
+            and connections_health.healthy
         )
 
         return DashboardSnapshot(
@@ -73,6 +77,8 @@ class SystemDashboard:
             intelligence_detail=f"{sum(intelligence_health.checks.values())}/{len(intelligence_health.checks)} checks OK",
             ai_coordination_healthy=ai_coordination_health.healthy,
             ai_coordination_detail=f"{sum(ai_coordination_health.checks.values())}/{len(ai_coordination_health.checks)} checks OK",
+            connections_healthy=connections_health.healthy,
+            connections_detail=f"{sum(connections_health.checks.values())}/{len(connections_health.checks)} checks OK, {len(core.connections.connection_manager)} connection(s)",
             overall_healthy=overall_healthy,
         )
 
@@ -92,6 +98,7 @@ class SystemDashboard:
             f"Memory:             {'HEALTHY' if snapshot.memory_healthy else 'UNHEALTHY'} ({snapshot.memory_detail})",
             f"Intelligence:       {'HEALTHY' if snapshot.intelligence_healthy else 'UNHEALTHY'} ({snapshot.intelligence_detail})",
             f"AI Coordination:    {'HEALTHY' if snapshot.ai_coordination_healthy else 'UNHEALTHY'} ({snapshot.ai_coordination_detail})",
+            f"Connections:        {'HEALTHY' if snapshot.connections_healthy else 'UNHEALTHY'} ({snapshot.connections_detail})",
             f"Session:            {snapshot.session_id or '(none)'} [{snapshot.session_status or 'closed'}]",
             "-" * 70,
             f"OVERALL STATUS:     {'HEALTHY' if snapshot.overall_healthy else 'UNHEALTHY'}",
