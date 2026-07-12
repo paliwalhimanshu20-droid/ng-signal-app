@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Tune
@@ -63,7 +65,7 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
         ModalBottomSheet(onDismissRequest = { showCustomizeSheet = false }) {
             Column(modifier = Modifier.padding(JarvisSpacing.md)) {
                 Text("Customize Dashboard", style = MaterialTheme.typography.titleLarge)
-                Column(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                Column(modifier = Modifier.padding(top = JarvisSpacing.sm).verticalScroll(rememberScrollState())) {
                     state.layout.cards.forEach { card ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = JarvisSpacing.xs),
