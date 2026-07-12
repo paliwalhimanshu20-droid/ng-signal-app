@@ -128,13 +128,45 @@ class ExecutiveKernel:
 
     def resume(self, task: Task, approval_id: str, approved: bool, approved_by: str) -> Task:
         """
-        Resume a task the Workflow left at WAITING_APPROVAL. Thin
-        pass-through to TaskExecutionWorkflow.resume() — per this
+        Thin pass-through to TaskExecutionWorkflow.resume() — per this
         sprint's explicit "use existing ApprovalEngine.confirm(), resume
         existing Workflow, never create a new Task, never restart
-        execution" requirement, this method adds no logic of its own.
+        execution" requirement, this method adds no logic of its own,
+        EXCEPT — SPRINT-3 — rehydrating the ApprovalEngine's record of
+        this approval_id first, if this Kernel instance never saw it
+        created (the task was restored from Session Memory after a
+        restart, not routed through this process's own approval_engine.evaluate()).
+        Without this, a restart-restored WAITING_APPROVAL task could
+        never actually be confirmed, defeating Sprint-3's Acceptance
+        Scenario 2.
         """
+        self._rehydrate_approval_if_needed(task, approval_id)
         return self.workflow.resume(task, approval_id=approval_id, approved=approved, approved_by=approved_by)
+
+    def _rehydrate_approval_if_needed(self, task: Task, approval_id: str) -> None:
+        from jarvis.approval import ApprovalError
+        from jarvis.approval.models import ApprovalRequest, ApprovalStatus
+
+        try:
+            self.approval_engine.get(approval_id)
+            return  # already tracked by this process; nothing to do
+        except ApprovalError:
+            pass
+
+        approval_meta = task.metadata.get("approval_request") or {}
+        if approval_meta.get("approval_id") != approval_id:
+            return  # nothing usable to rehydrate from; let resume() raise its own error
+
+        request = ApprovalRequest(
+            approval_id=approval_id,
+            task_id=task.task_id,
+            tier=task.tier,
+            reason=approval_meta.get("reason", ""),
+            status=ApprovalStatus(approval_meta.get("status", ApprovalStatus.WAITING.value)),
+            created_at=task.created_at,
+            expires_at=approval_meta.get("expires_at"),
+        )
+        self.approval_engine.register_existing(request)
 
     def health_reports(self) -> KernelHealthReports:
         return KernelHealthReports(
