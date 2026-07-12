@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from jarvis.audit import AuditLedger
 from jarvis.constitution import Constitution
+from jarvis.intelligence import IntelligenceEngine
 from jarvis.memory import MemoryManager
 from jarvis.orchestrator import Orchestrator
 from jarvis.registry import AgentRegistry
@@ -43,6 +44,7 @@ def run_core_health_check(
     registry: AgentRegistry,
     orchestrator: Orchestrator,
     memory: "MemoryManager | None" = None,
+    intelligence: "IntelligenceEngine | None" = None,
 ) -> CoreHealthReport:
     """
     Run every Sprint-0 health check and aggregate the result.
@@ -92,6 +94,15 @@ def run_core_health_check(
         memory_health = memory.health_check()
         checks["memory_foundation_healthy"] = memory_health.healthy
         detail["memory_foundation_healthy"] = memory_health.summary()
+
+    # SPRINT-4 ADDITION: Intelligence Layer health, same optional-param
+    # pattern Sprint-3 used for Memory — added here rather than kept
+    # separate so Core's one health report stays the single place every
+    # Bootstrap-constructed subsystem is checked.
+    if intelligence is not None:
+        intelligence_health = intelligence.health_check()
+        checks["intelligence_layer_healthy"] = intelligence_health.healthy
+        detail["intelligence_layer_healthy"] = intelligence_health.summary()
 
     overall_healthy = all(checks.values())
     return CoreHealthReport(healthy=overall_healthy, checks=checks, detail=detail)
