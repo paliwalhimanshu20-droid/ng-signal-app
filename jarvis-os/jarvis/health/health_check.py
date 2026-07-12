@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from jarvis.audit import AuditLedger
 from jarvis.constitution import Constitution
+from jarvis.memory import MemoryManager
 from jarvis.orchestrator import Orchestrator
 from jarvis.registry import AgentRegistry
 
@@ -41,6 +42,7 @@ def run_core_health_check(
     audit_ledger: AuditLedger,
     registry: AgentRegistry,
     orchestrator: Orchestrator,
+    memory: "MemoryManager | None" = None,
 ) -> CoreHealthReport:
     """
     Run every Sprint-0 health check and aggregate the result.
@@ -78,6 +80,18 @@ def run_core_health_check(
     orchestrator_health = orchestrator.health_check()
     checks["orchestrator_pipeline_wired"] = orchestrator_health.healthy
     detail["orchestrator_pipeline_wired"] = orchestrator_health.detail
+
+    # SPRINT-3 ADDITION: Memory Foundation health, folded into Core's own
+    # report rather than kept separate — Memory is now a Bootstrap-critical
+    # subsystem (Part 8's recovery runs during Bootstrap), so it belongs
+    # here alongside Constitution/Ledger/Registry/Orchestrator. Optional
+    # parameter so every prior sprint's direct call sites (none exist
+    # today, per the grep above, but the signature stays backward
+    # compatible regardless) keep working without a MemoryManager.
+    if memory is not None:
+        memory_health = memory.health_check()
+        checks["memory_foundation_healthy"] = memory_health.healthy
+        detail["memory_foundation_healthy"] = memory_health.summary()
 
     overall_healthy = all(checks.values())
     return CoreHealthReport(healthy=overall_healthy, checks=checks, detail=detail)
