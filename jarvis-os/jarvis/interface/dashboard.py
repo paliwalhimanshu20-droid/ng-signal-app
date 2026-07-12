@@ -32,6 +32,8 @@ class DashboardSnapshot:
     agent_count: int
     session_id: str | None
     session_status: str | None
+    memory_healthy: bool
+    memory_detail: str
     overall_healthy: bool
 
 
@@ -40,8 +42,9 @@ class SystemDashboard:
         core_health = core.health_check()
         kernel_health = kernel.health_reports()
         session = session_manager.current
+        memory_health = core.memory.health_check()
 
-        overall_healthy = core_health.healthy and kernel_health.healthy and interface_health.healthy
+        overall_healthy = core_health.healthy and kernel_health.healthy and interface_health.healthy and memory_health.healthy
 
         return DashboardSnapshot(
             version=jarvis.__version__,
@@ -51,6 +54,8 @@ class SystemDashboard:
             agent_count=len(kernel.registry),
             session_id=session.session_id if session else None,
             session_status=session.status.value if session else None,
+            memory_healthy=memory_health.healthy,
+            memory_detail=f"{sum(memory_health.checks.values())}/{len(memory_health.checks)} checks OK",
             overall_healthy=overall_healthy,
         )
 
@@ -67,6 +72,7 @@ class SystemDashboard:
             f"Audit:              connected",
             f"Registry:           {snapshot.agent_count} agent(s) registered",
             f"Engineering Agent:  {'HEALTHY' if snapshot.kernel_health.execution.checks.get('engineering_agent_healthy') else 'UNHEALTHY'}",
+            f"Memory:             {'HEALTHY' if snapshot.memory_healthy else 'UNHEALTHY'} ({snapshot.memory_detail})",
             f"Session:            {snapshot.session_id or '(none)'} [{snapshot.session_status or 'closed'}]",
             "-" * 70,
             f"OVERALL STATUS:     {'HEALTHY' if snapshot.overall_healthy else 'UNHEALTHY'}",

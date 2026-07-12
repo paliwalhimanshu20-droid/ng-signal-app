@@ -33,6 +33,7 @@ class CommandType(str, Enum):
     HELP = "help"
     STATUS = "status"
     HISTORY = "history"
+    CONVERSATION = "conversation"
     CLEAR = "clear"
     UNKNOWN = "unknown"
 
@@ -86,6 +87,8 @@ class CommandParser:
             return ParsedCommand(CommandType.STATUS, raw_input, normalized)
         if lowered == "history":
             return ParsedCommand(CommandType.HISTORY, raw_input, normalized)
+        if lowered == "conversation":
+            return ParsedCommand(CommandType.CONVERSATION, raw_input, normalized)
         if lowered == "clear":
             return ParsedCommand(CommandType.CLEAR, raw_input, normalized)
 

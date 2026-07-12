@@ -103,3 +103,19 @@ class ResponseRenderer:
             health.governance.summary(),
         ]
         return "\n\n".join(parts)
+
+    def render_recovery_report(self, report) -> str:
+        """SPRINT-3: shown once at startup, right after the dashboard — Part 8's 'report failure' (or success) requirement made visible to the owner, not just logged to audit."""
+        header = "MEMORY RECOVERY" if report.succeeded else "MEMORY RECOVERY — DEGRADED"
+        return f"{header}\n  {report.summary()}"
+
+    def render_conversation_history(self, records) -> str:
+        """SPRINT-3: full conversation continuity (Part 4), independent of the audit-tail 'history' command."""
+        if not records:
+            return "CONVERSATION HISTORY\n  (no prior conversation)"
+        lines = ["CONVERSATION HISTORY (most recent last)"]
+        for record in records:
+            lines.append(f"  [{record.timestamp}] you: {record.user_input}")
+            if record.response:
+                lines.append(f"    jarvis: {record.response.splitlines()[0]}")
+        return "\n".join(lines)
