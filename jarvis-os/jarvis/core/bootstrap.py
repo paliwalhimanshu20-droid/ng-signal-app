@@ -37,12 +37,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from jarvis.audit import AuditLedger, AuditLedgerError
 from jarvis.config import JarvisSettings, load_settings
 from jarvis.constitution import Constitution, ConstitutionValidationError, load_constitution
 from jarvis.health import CoreHealthReport, run_core_health_check
 from jarvis.logging_ import configure_logging, get_logger
+from jarvis.memory import MemoryManager, PersistenceError, RecoveryReport
 from jarvis.orchestrator import Orchestrator
 from jarvis.registry import AgentRegistry
 
@@ -76,6 +78,8 @@ class JarvisCore:
     audit_ledger: AuditLedger
     registry: AgentRegistry
     orchestrator: Orchestrator
+    memory: MemoryManager
+    recovery_report: Optional[RecoveryReport] = None
     ready: bool = False
 
     def health_check(self) -> CoreHealthReport:
@@ -85,23 +89,30 @@ class JarvisCore:
             audit_ledger=self.audit_ledger,
             registry=self.registry,
             orchestrator=self.orchestrator,
+            memory=self.memory,
         )
 
     def shutdown(self) -> None:
         """
-        Sprint-0 Shutdown Sequence, per JARVIS-001 §27.
+        Shutdown Sequence, per JARVIS-001 §27.
 
         Full §27 sequence requires in-flight task draining and suspended-
         workflow checkpointing, neither of which is meaningful yet since
-        Sprint-0's WorkflowEngine has no real in-flight execution. What
-        Sprint-0 DOES implement, for real: the final Audit Ledger write
-        confirming shutdown, which §27 requires regardless of what else
-        was in flight.
+        WorkflowEngine has no real in-flight execution at this sprint's
+        scope. What IS implemented, for real: the final Audit Ledger
+        write confirming shutdown (unchanged since Sprint-0), plus —
+        SPRINT-3 ADDITION — Working Memory is cleared here, since it is
+        explicitly runtime-only (Part 2) and must never be mistaken for
+        persisted state; Session/Conversation/Preference Memory are left
+        exactly as they already are, since every mutation to them was
+        already durably persisted at the moment it happened (Part 7's
+        atomic-write guarantee), not deferred to shutdown.
         """
         logger.info("JARVIS Core shutdown initiated.")
+        self.memory.working.clear()
         self.audit_ledger.record(
             event_type="core.shutdown",
-            message="JARVIS Core shutdown completed (Sprint-0: no in-flight workflows to drain).",
+            message="JARVIS Core shutdown completed. Working Memory cleared; persisted memory left intact.",
         )
         self.ready = False
         logger.info("JARVIS Core shutdown complete.")
@@ -181,12 +192,50 @@ def boot() -> JarvisCore:
     # pipeline wiring against (JARVIS-001 §22).
     orchestrator = Orchestrator(registry=registry)
 
+    # --- Step 4.5 (SPRINT-3): Memory Foundation --------------------------------
+    # Placed after the Registry (step 4) and before the self-health check
+    # (step 5), for the same reason Audit Ledger connectivity (step 2)
+    # precedes everything that might need to record an event: nothing
+    # below this point should touch Session/Conversation/Preference
+    # Memory before MemoryManager has verified it can actually reach
+    # storage. A failed connect() here is treated the same as a failed
+    # Audit Ledger connect() — fatal — because Sprint-3 promotes Memory
+    # to a Bootstrap-critical subsystem (JARVIS-001 §7's ordering logic:
+    # a subsystem that later steps depend on must be verified before
+    # those steps run).
+    memory = MemoryManager(storage_dir=settings.structural.memory_storage_path, audit_ledger=audit_ledger)
+    try:
+        memory.connect()
+    except PersistenceError as exc:
+        logger.critical("Bootstrap Step 4.5 (Memory Foundation) failed: %s", exc)
+        raise BootstrapError(
+            "Bootstrap halted at Step 4.5: Memory Foundation storage could not be "
+            "reached. JARVIS Core cannot guarantee continuity without it."
+        ) from exc
+
+    audit_ledger.record(
+        event_type="core.bootstrap.memory_connected",
+        message="Memory Foundation storage connected.",
+        details={"storage_path": str(settings.structural.memory_storage_path)},
+    )
+    logger.info("Bootstrap Step 4.5 complete: Memory Foundation connected.")
+
+    # Part 8's Recovery sequence runs here, still before the self-health
+    # check — a failed recovery is explicitly NOT fatal (see
+    # RecoveryManager's module docstring: continuity loss is degraded,
+    # not unsafe), so Bootstrap continues either way, but the attempt
+    # must happen before Core is declared ready and starts accepting new
+    # input, per Part 8's "on startup" requirement.
+    recovery_report = memory.recover()
+    logger.info("Bootstrap Step 4.5 recovery: %s", recovery_report.summary())
+
     # --- Step 5: Self-health check ------------------------------------------------
     health_report = run_core_health_check(
         constitution=constitution,
         audit_ledger=audit_ledger,
         registry=registry,
         orchestrator=orchestrator,
+        memory=memory,
     )
     logger.info("Bootstrap Step 5 self-health check:\n%s", health_report.summary())
 
@@ -208,6 +257,8 @@ def boot() -> JarvisCore:
         audit_ledger=audit_ledger,
         registry=registry,
         orchestrator=orchestrator,
+        memory=memory,
+        recovery_report=recovery_report,
         ready=True,
     )
     audit_ledger.record(
