@@ -35,6 +35,7 @@ def booted_core(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("JARVIS_CONSTITUTION_PATH", str(constitution_path))
     monkeypatch.setenv("JARVIS_REGISTRY_STATE_PATH", str(tmp_path / "registry_state.json"))
+    monkeypatch.setenv("JARVIS_MEMORY_STORAGE_PATH", str(tmp_path / "memory"))
     monkeypatch.chdir(tmp_path)
 
     core = boot()
