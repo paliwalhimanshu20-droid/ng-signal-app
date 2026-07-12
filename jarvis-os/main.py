@@ -64,7 +64,7 @@ def run() -> int:
     console = ConsoleInterface(
         core=core,
         kernel=kernel,
-        session_manager=SessionManager(),
+        session_manager=SessionManager(memory_manager=core.memory),
         command_parser=CommandParser(),
         renderer=ResponseRenderer(),
         dashboard=SystemDashboard(),
