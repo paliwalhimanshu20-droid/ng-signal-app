@@ -3,8 +3,11 @@ package com.jarvis.os.app.feature.connections
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.os.app.data.model.ConnectionHealth
+import com.jarvis.os.app.data.repository.ConnectionOperationError
 import com.jarvis.os.app.data.repository.ConnectionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -17,16 +20,35 @@ class ConnectionsViewModel @Inject constructor(
 
     val connections = repository.connections.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // Sprint-7.1 UX polish: a state-check failure here (e.g. a stale
+    // button firing after the connection's status already changed)
+    // must never crash the app or vanish silently — it's surfaced as a
+    // one-shot event the screen turns into a Snackbar. This does not
+    // relax or change any governance rule; ConnectionOperationError is
+    // still thrown by the same checks it always was.
+    private val _errors = MutableSharedFlow<String>()
+    val errors: SharedFlow<String> = _errors
+
+    private fun runGuarded(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: ConnectionOperationError) {
+                _errors.emit(e.message ?: "That action is no longer valid for this connection's current state.")
+            }
+        }
+    }
+
     // Owner Sovereignty (Sprint-6 Part 3), enforced at the UI action
     // layer too: every button below maps 1:1 to a ConnectionRepository
     // method that mirrors ConnectionManager's real governance rule —
     // there is no "quick approve" shortcut that skips a state check.
-    fun approve(connectionId: String) = viewModelScope.launch { repository.approve(connectionId, approvedBy = "owner") }
-    fun reject(connectionId: String) = viewModelScope.launch { repository.reject(connectionId, reason = "Rejected by owner") }
-    fun suspend(connectionId: String) = viewModelScope.launch { repository.suspend(connectionId, reason = "Suspended by owner") }
-    fun disconnect(connectionId: String) = viewModelScope.launch { repository.disconnect(connectionId, reason = "Disconnected by owner") }
-    fun reconnect(connectionId: String) = viewModelScope.launch { repository.reconnect(connectionId) }
-    fun disableAll() = viewModelScope.launch { repository.disableAll(reason = "Owner disabled all connections") }
+    fun approve(connectionId: String) = runGuarded { repository.approve(connectionId, approvedBy = "owner") }
+    fun reject(connectionId: String) = runGuarded { repository.reject(connectionId, reason = "Rejected by owner") }
+    fun suspend(connectionId: String) = runGuarded { repository.suspend(connectionId, reason = "Suspended by owner") }
+    fun disconnect(connectionId: String) = runGuarded { repository.disconnect(connectionId, reason = "Disconnected by owner") }
+    fun reconnect(connectionId: String) = runGuarded { repository.reconnect(connectionId) }
+    fun disableAll() = runGuarded { repository.disableAll(reason = "Owner disabled all connections") }
 
     fun testConnection(connectionId: String): ConnectionHealth = repository.testConnection(connectionId)
 }

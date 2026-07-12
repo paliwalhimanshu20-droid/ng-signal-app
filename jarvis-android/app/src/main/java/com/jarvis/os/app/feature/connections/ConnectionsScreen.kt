@@ -1,9 +1,11 @@
 package com.jarvis.os.app.feature.connections
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,11 +14,17 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -27,33 +35,51 @@ import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.JarvisStatusColors
 import com.jarvis.os.app.designsystem.components.JarvisCard
 import com.jarvis.os.app.designsystem.components.StatusPill
+import kotlinx.coroutines.launch
 
 @Composable
 fun ConnectionsScreen(viewModel: ConnectionsViewModel = hiltViewModel()) {
     val connections by viewModel.connections.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(JarvisSpacing.md),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("${connections.size} connection(s)", style = MaterialTheme.typography.titleMedium)
-            TextButton(onClick = { viewModel.disableAll() }) { Text("Disable All") }
-        }
+    // Sprint-7.1: governance failures (e.g. a stale button firing after
+    // status already changed) surface here instead of crashing or
+    // vanishing silently — see ConnectionsViewModel.errors.
+    LaunchedEffect(Unit) {
+        viewModel.errors.collect { message -> snackbarHostState.showSnackbar(message) }
+    }
 
-        LazyColumn(contentPadding = PaddingValues(horizontal = JarvisSpacing.md, vertical = JarvisSpacing.sm)) {
-            items(connections, key = { it.connectionId }) { connection ->
-                ConnectionCard(
-                    connection = connection,
-                    onApprove = { viewModel.approve(connection.connectionId) },
-                    onReject = { viewModel.reject(connection.connectionId) },
-                    onSuspend = { viewModel.suspend(connection.connectionId) },
-                    onDisconnect = { viewModel.disconnect(connection.connectionId) },
-                    onReconnect = { viewModel.reconnect(connection.connectionId) },
-                    onTest = { viewModel.testConnection(connection.connectionId) },
-                )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(JarvisSpacing.md),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("${connections.size} connection(s)", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = { viewModel.disableAll() }) { Text("Disable All") }
+            }
+
+            LazyColumn(contentPadding = PaddingValues(horizontal = JarvisSpacing.md, vertical = JarvisSpacing.sm)) {
+                items(connections, key = { it.connectionId }) { connection ->
+                    ConnectionCard(
+                        connection = connection,
+                        onApprove = { viewModel.approve(connection.connectionId) },
+                        onReject = { viewModel.reject(connection.connectionId) },
+                        onSuspend = { viewModel.suspend(connection.connectionId) },
+                        onDisconnect = { viewModel.disconnect(connection.connectionId) },
+                        onReconnect = { viewModel.reconnect(connection.connectionId) },
+                        onTest = { viewModel.testConnection(connection.connectionId) },
+                        onViewAudit = {
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Requires JARVIS Core — audit data isn't available yet.")
+                            }
+                        },
+                    )
+                }
             }
         }
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
@@ -66,6 +92,7 @@ private fun ConnectionCard(
     onDisconnect: () -> Unit,
     onReconnect: () -> Unit,
     onTest: () -> Unit,
+    onViewAudit: () -> Unit,
 ) {
     JarvisCard(modifier = Modifier.fillMaxWidth().padding(vertical = JarvisSpacing.xs)) {
         Column {
@@ -124,6 +151,12 @@ private fun ConnectionCard(
                     }
                 }
             }
+
+            // Present on every connection regardless of status — no
+            // audit data is plumbed from the Python side yet (Sprint-6
+            // built no such API surface), so this is honestly labeled
+            // "Backend Pending" rather than left off the screen entirely.
+            TextButton(onClick = onViewAudit) { Text("View Audit") }
         }
     }
 }
