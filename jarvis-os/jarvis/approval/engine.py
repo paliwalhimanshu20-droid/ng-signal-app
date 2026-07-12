@@ -136,6 +136,20 @@ class ApprovalEngine:
     def get(self, approval_id: str) -> ApprovalRequest:
         return self._get_and_expire_if_needed(approval_id)
 
+    def register_existing(self, request: ApprovalRequest) -> None:
+        """
+        SPRINT-3: rehydrate a previously-created ApprovalRequest that
+        this engine instance never saw (e.g. this process is a fresh
+        boot after a restart) so a subsequent confirm() call can resolve
+        it. This is the one concession made to this class's own
+        documented "in-memory only ... persistence is a future sprint's
+        concern once it's needed" design note above — Sprint-3's Session
+        Memory (Part 3, "resume paused workflows") is exactly that future
+        need. It never overwrites a request this engine already tracks
+        for the same process, and it changes no other method's behavior.
+        """
+        self._requests.setdefault(request.approval_id, request)
+
     def _get_and_expire_if_needed(self, approval_id: str) -> ApprovalRequest:
         try:
             request = self._requests[approval_id]
