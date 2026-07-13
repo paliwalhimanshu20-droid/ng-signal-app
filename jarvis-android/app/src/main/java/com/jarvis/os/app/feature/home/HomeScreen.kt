@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,11 +29,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,6 +68,28 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
     val state by viewModel.uiState.collectAsState()
     var showCustomizeSheet by remember { mutableStateOf(false) }
 
+    // DEBUG (Sprint 7.2 pipeline trace): shared across the whole screen,
+    // newest line first, capped at 40 so it doesn't grow unbounded.
+    val traceLines = remember { mutableStateListOf<String>() }
+    fun addTrace(line: String) {
+        Log.d(DEBUG_TAG, line)
+        traceLines.add(0, line)
+        if (traceLines.size > 40) traceLines.removeAt(traceLines.lastIndex)
+    }
+    LaunchedEffect(Unit) {
+        viewModel.trace.collect { line -> addTrace(line) }
+    }
+
+    // STEP 7: exactly what the filter produces, logged every time the
+    // underlying layout actually changes (not every recomposition).
+    LaunchedEffect(state.layout) {
+        val visible = state.layout.cards.filter { it.visible }
+        addTrace(
+            "STEP7 filter{it.visible} input=${state.layout.cards.size} cards, " +
+                "output=${visible.size} cards: ${visible.joinToString { it.id.name }}",
+        )
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         DailyBriefingHeader(
             connectedCount = state.connectedCount,
@@ -75,6 +101,11 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
         ReorderableCardList(
             visibleCards = state.layout.cards.filter { it.visible },
             onMove = viewModel::moveCard,
+            onCompose = { id, index ->
+                // STEP 8: which cards actually get composed as rows on
+                // the Home screen itself, and in what order.
+                addTrace("STEP8 ReorderableCardList composed row: ${id.name} (position $index)")
+            },
         )
     }
 
@@ -97,7 +128,7 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
             Box(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.padding(JarvisSpacing.md)) {
                     Text("Customize Dashboard", style = MaterialTheme.typography.titleLarge)
-                    LazyColumn(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                    LazyColumn(modifier = Modifier.padding(top = JarvisSpacing.sm).weight(1f, fill = false)) {
                         items(state.layout.cards, key = { it.id.name }) { card ->
                             val index = state.layout.cards.indexOf(card)
 
@@ -123,12 +154,26 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
                                     Switch(
                                         checked = card.visible,
                                         onCheckedChange = {
+                                            // STEP 1: exactly what the Switch itself
+                                            // reports on tap, before anything else runs.
+                                            addTrace("STEP1 Switch onCheckedChange: ${card.id.name} card.visible(before)=${card.visible} newValue=$it")
                                             debugReport("SWITCH", card.id, index)
                                             viewModel.setCardVisible(card.id, it)
                                         },
                                     )
                                 }
                             }
+                        }
+                    }
+                    HorizontalDivider()
+                    Text(
+                        "PIPELINE TRACE (newest first) — tap a switch above, then read down",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(vertical = JarvisSpacing.xs),
+                    )
+                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        items(traceLines) { line ->
+                            Text(line, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 2.dp))
                         }
                     }
                 }
@@ -178,6 +223,7 @@ private fun DailyBriefingHeader(
 private fun ReorderableCardList(
     visibleCards: List<com.jarvis.os.app.data.settings.DashboardCardState>,
     onMove: (Int, Int) -> Unit,
+    onCompose: (DashboardCardId, Int) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
     val thresholdPx = remember(density) { with(density) { 56.dp.toPx() } }
@@ -187,6 +233,7 @@ private fun ReorderableCardList(
     LazyColumn(contentPadding = PaddingValues(horizontal = JarvisSpacing.md, vertical = JarvisSpacing.sm)) {
         items(visibleCards, key = { it.id.name }) { card ->
             val index = visibleCards.indexOf(card)
+            SideEffect { onCompose(card.id, index) }
             JarvisCard(
                 modifier = Modifier
                     .fillMaxWidth()
