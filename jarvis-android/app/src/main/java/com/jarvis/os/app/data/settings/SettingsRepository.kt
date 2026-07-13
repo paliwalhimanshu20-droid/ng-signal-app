@@ -1,5 +1,6 @@
 package com.jarvis.os.app.data.settings
 
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -71,7 +72,12 @@ class DataStoreSettingsRepository @Inject constructor(
     }
 
     override val dashboardLayout: Flow<DashboardLayout> = dataStore.data.map { prefs ->
-        DashboardLayout.deserialize(prefs[Keys.DASHBOARD_LAYOUT].orEmpty())
+        val raw = prefs[Keys.DASHBOARD_LAYOUT].orEmpty()
+        val deserialized = DashboardLayout.deserialize(raw)
+        // STEP 5: exactly what came OUT of DataStore on this emission,
+        // both the raw stored string and what it deserialized to.
+        Log.d("JARVIS-TRACE", "STEP5 dataStore.data emission raw=\"$raw\" -> ${deserialized.cards.joinToString { "${it.id.name}:${it.visible}" }}")
+        deserialized
     }
 
     override suspend fun setAppearanceMode(mode: AppearanceMode) {
@@ -97,6 +103,11 @@ class DataStoreSettingsRepository @Inject constructor(
     }
 
     override suspend fun setDashboardLayout(layout: DashboardLayout) {
-        dataStore.edit { it[Keys.DASHBOARD_LAYOUT] = layout.serialize() }
+        // STEP 3/4: exactly what's being serialized and written into
+        // DataStore's edit transaction.
+        val serialized = layout.serialize()
+        Log.d("JARVIS-TRACE", "STEP3/4 setDashboardLayout() writing serialize()=\"$serialized\"")
+        dataStore.edit { it[Keys.DASHBOARD_LAYOUT] = serialized }
+        Log.d("JARVIS-TRACE", "STEP3/4 dataStore.edit{} transaction completed")
     }
 }
