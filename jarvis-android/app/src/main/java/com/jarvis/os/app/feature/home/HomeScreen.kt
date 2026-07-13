@@ -209,7 +209,7 @@ private fun placeholderBodyFor(id: DashboardCardId): String = when (id) {
 }
 
 private fun DashboardCardId.displayName(): String = when (this) {
-    DashboardCardId.TODAYS_BRIEFING -> "Today's Briefing"
+    DashboardCardId.TODAYS_BRIEFING -> "Daily Summary"
     DashboardCardId.TODAYS_TASKS -> "Today's Tasks"
     DashboardCardId.PROJECTS -> "Projects"
     DashboardCardId.NG_SIGNAL_PRO -> "NG Signal Pro"
