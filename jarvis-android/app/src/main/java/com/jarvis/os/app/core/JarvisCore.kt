@@ -1,6 +1,7 @@
 package com.jarvis.os.app.core
 
 import com.jarvis.os.app.data.repository.ApprovalRepository
+import com.jarvis.os.app.data.repository.ChatRepository
 import com.jarvis.os.app.data.repository.ConnectionRepository
 import com.jarvis.os.app.data.repository.MemoryRepository
 import com.jarvis.os.app.data.repository.ProjectRepository
@@ -10,54 +11,33 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Sprint-8: the single coordinating entry point above the repository
- * layer, requested as the "JARVIS Core" that should own task, memory,
- * connection, approval, event, and navigation coordination. Read this
- * docstring before extending this class — what it deliberately does
- * NOT do is as important as what it does:
+ * Sprint-8 established this as the coordination point above the
+ * repository layer. Sprint 8.1 activates it end to end for Chat, per
+ * that sprint's explicit required flow: ChatScreen -> ChatViewModel ->
+ * JarvisCore -> ChatRepository -> AiRouter -> active ChatProvider.
  *
- * - It does NOT duplicate or replace ConnectionRepository, ApprovalRepository,
- *   MemoryRepository, or ProjectRepository. Each already owns its domain
- *   correctly (verified: Connections' state machine matches the Python
- *   ConnectionManager 1:1, Home Automation's safety allowlist is
- *   enforced twice, DataStore persistence round-trips correctly). Core
- *   exposes them as read-only properties so a caller who wants "the
- *   app's central coordinator" doesn't have to inject five separate
- *   repositories — but the repositories remain the actual owners.
- *   Re-implementing their logic here would be exactly the "duplicate
- *   logic" this sprint's requirements explicitly forbid.
+ * Still does NOT duplicate ConnectionRepository, ApprovalRepository,
+ * MemoryRepository, ProjectRepository, or ChatRepository -- each
+ * remains the actual owner of its domain, exposed here as read-only
+ * properties (chat's sendChatMessage below is coordination on top of
+ * ChatRepository.sendMessage, not a second implementation of it).
  *
- * - "Task management" is ProjectTask, which already existed inside
- *   ProjectRepository before this sprint. There is no dedicated Task
- *   domain/repository, because none of this app's real requirements
- *   have asked for tasks independent of a project — inventing that
- *   abstraction with nothing to justify it would be premature
- *   abstraction, which this codebase's "boring technology" principle
- *   (stated since Sprint-0 of the Python backend) argues against. If a
- *   real need for project-independent tasks shows up, that is a
- *   scoped, justified addition for a later sprint.
+ * "Task management" is still ProjectTask inside ProjectRepository, per
+ * Sprint-8's reasoning -- unchanged this sprint.
  *
- * - "Navigation coordination" is NOT "Core owns the NavHost." Moving
- *   navigation ownership into Core would mean rewriting JarvisNavHost,
- *   JarvisApp, and every screen's navigation call sites in the same
- *   sprint as several other new subsystems — exactly the kind of
- *   high-risk, everything-at-once change "production quality, no
- *   shortcuts" argues against, and it would risk the working nav shell
- *   this app already has (9 destinations, verified reachable, no dead
- *   ends). Instead, Core exposes a navigation *intent* channel:
- *   [navigationRequests] emits route strings; a collector (added in a
- *   later sprint, once there's a real product decision about which
- *   events should trigger navigation) calls navController.navigate()
- *   in response. The NavHostController itself never touches Core.
+ * "Navigation coordination" is still a request channel, not Core
+ * owning the NavHostController -- but this sprint gives it a real,
+ * user-initiated trigger (see matchNavigationCommand) and a real
+ * consumer (JarvisAppViewModel, collected in JarvisApp.kt), completing
+ * the round trip Sprint-8 left unfinished.
  *
- * - Event dispatching ([events]) is the one genuinely new runtime
- *   capability this sprint adds: a shared bus for [CoreEvent]s so
- *   features can react to each other without depending on each other's
- *   ViewModels or Repositories. Nothing currently publishes to it —
- *   wiring real publishers (e.g. ApprovalRepository publishing
- *   ApprovalRequested when a new item arrives) is deliberately left for
- *   the sprint that has a concrete consumer for each event, rather than
- *   wiring speculative producers with no consumer to verify against.
+ * Event dispatching now has one complete, working chain:
+ * sendChatMessage publishes ChatMessageSent before sending, then
+ * ChatResponseReceived once ChatRepository's suspend call returns
+ * (which only happens after the full ChatChunk stream has completed --
+ * see ChatRepository.sendMessage). ChatViewModel collects events to
+ * drive the typing indicator, giving events real UI consequences
+ * rather than a bus nothing listens to.
  */
 @Singleton
 class JarvisCore @Inject constructor(
@@ -65,16 +45,14 @@ class JarvisCore @Inject constructor(
     val approvals: ApprovalRepository,
     val memory: MemoryRepository,
     val projects: ProjectRepository,
+    val chat: ChatRepository,
 ) {
     private val _events = MutableSharedFlow<CoreEvent>(extraBufferCapacity = 32)
     val events: SharedFlow<CoreEvent> = _events
 
     private val _navigationRequests = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
-    /**
-     * Route strings matching JarvisDestination.route values. Core
-     * never holds a NavHostController reference — see class docstring.
-     */
+    /** Route strings matching JarvisDestination.route values -- deliberately plain strings, not a JarvisDestination reference, so this coordination layer has no dependency on the navigation/UI package. */
     val navigationRequests: SharedFlow<String> = _navigationRequests
 
     suspend fun publish(event: CoreEvent) {
@@ -83,5 +61,49 @@ class JarvisCore @Inject constructor(
 
     suspend fun requestNavigation(route: String) {
         _navigationRequests.emit(route)
+    }
+
+    /**
+     * The single coordination point Requirement 1 asks for. Publishes
+     * ChatMessageSent, delegates the actual send to ChatRepository
+     * (which streams through AiRouter's active ChatProvider),
+     * publishes ChatResponseReceived once that completes, then checks
+     * whether the user's own text was a recognized navigation command
+     * -- see matchNavigationCommand's docstring for why this, and not
+     * an ambient auto-navigate-on-event trigger, is this sprint's one
+     * complete navigation example.
+     */
+    suspend fun sendChatMessage(text: String) {
+        publish(CoreEvent.ChatMessageSent(chat.activeSessionId, text))
+        chat.sendMessage(text)
+        chat.messages.value.lastOrNull()?.let { lastMessage ->
+            publish(CoreEvent.ChatResponseReceived(chat.activeSessionId, lastMessage.messageId))
+        }
+        matchNavigationCommand(text)?.let { route -> requestNavigation(route) }
+    }
+
+    /**
+     * Explicit, deterministic, user-initiated -- typing "open
+     * approvals" navigates there. Chosen over an automatic trigger
+     * (e.g. auto-navigate whenever ApprovalRequested fires) because an
+     * ambient navigation change is a real behavior change for whatever
+     * screen the user is already on, which this sprint's "do not
+     * redesign the application" instruction argues against. This is a
+     * genuine, testable, full round trip through the exact mechanism a
+     * later "JARVIS can navigate the app for you" capability would
+     * extend, not a throwaway demo.
+     */
+    private fun matchNavigationCommand(text: String): String? =
+        navigationCommandsByPhrase[text.trim().lowercase()]
+
+    companion object {
+        private val navigationCommandsByPhrase: Map<String, String> = mapOf(
+            "open approvals" to "approvals",
+            "open connections" to "connections",
+            "open settings" to "settings",
+            "open projects" to "projects",
+            "open memory" to "memory",
+            "go home" to "home",
+        )
     }
 }
