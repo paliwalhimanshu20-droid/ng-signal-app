@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.Flow
  * RepositoryModule.kt's docstring).
  */
 interface ChatProvider {
-    /** Stable identifier, e.g. "mock", "claude", "gpt". Used for selection once more than one provider exists — see ChatProviderRegistry. */
+    /** Stable identifier, e.g. "mock", "claude", "gpt". Used for selection once more than one provider exists — see AiRouter. */
     val id: String
 
     /** Human-readable name for a future provider-picker UI. */
