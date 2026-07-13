@@ -1,6 +1,9 @@
 package com.jarvis.os.app.data.repository
 
+import com.jarvis.os.app.core.chat.ChatChunk
+import com.jarvis.os.app.core.chat.ChatProviderRegistry
 import com.jarvis.os.app.data.model.ChatMessage
+import com.jarvis.os.app.data.model.ChatSession
 import com.jarvis.os.app.data.model.MemoryEntry
 import com.jarvis.os.app.data.model.MemoryTier
 import com.jarvis.os.app.data.model.MessageAuthor
@@ -74,32 +77,83 @@ class MockMemoryRepository @Inject constructor() : MemoryRepository {
 interface ChatRepository {
     val messages: StateFlow<List<ChatMessage>>
 
-    /** No real AI call happens here — see module docstring. Echoes a structured acknowledgment so the Chat UI (typing indicator, message list, markdown/code rendering) is fully exercisable today. */
+    /** Sprint-8: exactly one session exists this sprint (ChatSession.DEFAULT_SESSION_ID) — see ChatSession's docstring for why a session-switcher UI is deliberately not built yet. */
+    val activeSessionId: String
+
     suspend fun sendMessage(text: String)
 }
 
+/**
+ * Sprint-8: no longer hardcodes its own reply text — that behavior
+ * moved to MockChatProvider (see core/chat), reached here through
+ * ChatProviderRegistry. This repository's job is exactly what
+ * ChatRepository's Sprint-7 job was (own the message list, own
+ * sending), not what provider generates a reply — those are now
+ * separate concerns, which is what makes swapping in a real provider
+ * later not require touching this file.
+ */
 @Singleton
-class MockChatRepository @Inject constructor() : ChatRepository {
+class MockChatRepository @Inject constructor(
+    private val providerRegistry: ChatProviderRegistry,
+) : ChatRepository {
+
+    override val activeSessionId: String = ChatSession.DEFAULT_SESSION_ID
+
     private val _messages = MutableStateFlow(
         listOf(
             ChatMessage(
                 UUID.randomUUID().toString(), MessageAuthor.JARVIS, MessageContentKind.TEXT,
-                "Ready. This chat is a UI shell for Sprint-7 — no live AI Coordinator/provider call happens yet (see ChatRepository's docstring).",
+                "Ready. No live AI provider call happens yet — see ChatProvider's docstring for how a real one gets wired in.",
                 timestamp = Instant.now(),
+                sessionId = activeSessionId,
             ),
         ),
     )
     override val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
     override suspend fun sendMessage(text: String) {
-        val userMessage = ChatMessage(UUID.randomUUID().toString(), MessageAuthor.OWNER, MessageContentKind.TEXT, text, timestamp = Instant.now())
+        val userMessage = ChatMessage(
+            UUID.randomUUID().toString(), MessageAuthor.OWNER, MessageContentKind.TEXT, text,
+            timestamp = Instant.now(), sessionId = activeSessionId,
+        )
         _messages.update { it + userMessage }
 
-        val reply = ChatMessage(
-            UUID.randomUUID().toString(), MessageAuthor.JARVIS, MessageContentKind.TEXT,
-            "Received: \"$text\". Once Sprint-6's AI Coordination Layer is bridged to this app, this reply will come from a real provider response.",
-            timestamp = Instant.now(),
+        // One fixed id reused across every Token/Complete chunk in this
+        // turn: the LazyColumn in ChatScreen keys rows by messageId, so
+        // reusing it here makes each Token update replace the SAME
+        // bubble in place (real streaming), not append a new one.
+        val replyMessageId = UUID.randomUUID().toString()
+        var replyAdded = false
+
+        providerRegistry.active.sendMessage(activeSessionId, text).collect { chunk ->
+            when (chunk) {
+                is ChatChunk.Token -> {
+                    upsertReply(replyMessageId, chunk.text, alreadyAdded = replyAdded)
+                    replyAdded = true
+                }
+                is ChatChunk.Complete -> {
+                    upsertReply(replyMessageId, chunk.fullText, alreadyAdded = replyAdded)
+                    replyAdded = true
+                }
+                is ChatChunk.Error -> {
+                    val errorMessage = ChatMessage(
+                        UUID.randomUUID().toString(), MessageAuthor.JARVIS, MessageContentKind.TEXT,
+                        "Error: ${chunk.message}", timestamp = Instant.now(), sessionId = activeSessionId,
+                    )
+                    _messages.update { it + errorMessage }
+                }
+            }
+        }
+    }
+
+    private fun upsertReply(messageId: String, text: String, alreadyAdded: Boolean) {
+        val message = ChatMessage(
+            messageId, MessageAuthor.JARVIS, MessageContentKind.MARKDOWN, text,
+            timestamp = Instant.now(), sessionId = activeSessionId,
         )
-        _messages.update { it + reply }
+        _messages.update { current ->
+            if (alreadyAdded) current.map { if (it.messageId == messageId) message else it }
+            else current + message
+        }
     }
 }
