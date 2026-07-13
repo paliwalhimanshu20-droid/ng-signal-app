@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -128,7 +128,7 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
             Box(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.padding(JarvisSpacing.md)) {
                     Text("Customize Dashboard", style = MaterialTheme.typography.titleLarge)
-                    LazyColumn(modifier = Modifier.padding(top = JarvisSpacing.sm).weight(1f, fill = false)) {
+                    LazyColumn(modifier = Modifier.padding(top = JarvisSpacing.sm).heightIn(max = 260.dp)) {
                         items(state.layout.cards, key = { it.id.name }) { card ->
                             val index = state.layout.cards.indexOf(card)
 
@@ -171,7 +171,7 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(vertical = JarvisSpacing.xs),
                     )
-                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                    LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
                         items(traceLines) { line ->
                             Text(line, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 2.dp))
                         }
