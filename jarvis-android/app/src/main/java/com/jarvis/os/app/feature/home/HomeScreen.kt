@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -60,7 +61,10 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
     }
 
     if (showCustomizeSheet) {
-        ModalBottomSheet(onDismissRequest = { showCustomizeSheet = false }) {
+        ModalBottomSheet(
+            onDismissRequest = { showCustomizeSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
             Column(modifier = Modifier.padding(JarvisSpacing.md)) {
                 Text("Customize Dashboard", style = MaterialTheme.typography.titleLarge)
                 LazyColumn(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
