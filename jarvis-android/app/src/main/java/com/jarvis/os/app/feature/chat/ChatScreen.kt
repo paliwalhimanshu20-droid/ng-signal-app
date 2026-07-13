@@ -45,6 +45,7 @@ import androidx.lifecycle.viewModelScope
 import com.jarvis.os.app.data.model.ChatMessage
 import com.jarvis.os.app.data.model.MessageAuthor
 import com.jarvis.os.app.data.model.MessageContentKind
+import com.jarvis.os.app.core.chat.markdown.MarkdownText
 import com.jarvis.os.app.data.repository.ChatRepository
 import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.components.JarvisCard
@@ -149,7 +150,8 @@ private fun MessageBubble(message: ChatMessage) {
                         .background(MaterialTheme.colorScheme.surface)
                         .padding(JarvisSpacing.sm),
                 )
-                else -> Text(message.content, style = MaterialTheme.typography.bodyMedium)
+                MessageContentKind.MARKDOWN -> MarkdownText(message.content)
+                MessageContentKind.TEXT -> Text(message.content, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
