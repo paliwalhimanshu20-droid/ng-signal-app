@@ -1,10 +1,13 @@
 package com.jarvis.os.app.feature.home
 
+import android.util.Log
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,16 +20,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -39,6 +49,14 @@ import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.JarvisStatusColors
 import com.jarvis.os.app.designsystem.components.JarvisCard
 import com.jarvis.os.app.designsystem.components.StatusPill
+import kotlinx.coroutines.launch
+
+// TEMPORARY DEBUG INSTRUMENTATION — remove this whole block once the
+// root cause is found. Everything logged here goes to both Logcat
+// (filter: adb logcat -s JARVIS-DEBUG) and an on-screen Snackbar, so
+// results are visible even without a USB/logcat connection.
+private const val DEBUG_TAG = "JARVIS-DEBUG"
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,23 +79,60 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
     }
 
     if (showCustomizeSheet) {
+        val debugSnackbarHostState = remember { SnackbarHostState() }
+        val debugScope = rememberCoroutineScope()
+        val debugTapCount = remember { mutableIntStateOf(0) }
+
+        fun debugReport(source: String, cardId: DashboardCardId, index: Int) {
+            debugTapCount.intValue += 1
+            val msg = "#${debugTapCount.intValue} $source fired: ${cardId.name} (index $index)"
+            Log.d(DEBUG_TAG, msg)
+            debugScope.launch { debugSnackbarHostState.showSnackbar(msg) }
+        }
+
         ModalBottomSheet(
             onDismissRequest = { showCustomizeSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
-            Column(modifier = Modifier.padding(JarvisSpacing.md)) {
-                Text("Customize Dashboard", style = MaterialTheme.typography.titleLarge)
-                LazyColumn(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
-                    items(state.layout.cards, key = { it.id.name }) { card ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = JarvisSpacing.xs),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(card.id.displayName(), style = MaterialTheme.typography.bodyLarge)
-                            Switch(checked = card.visible, onCheckedChange = { viewModel.setCardVisible(card.id, it) })
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.padding(JarvisSpacing.md)) {
+                    Text("Customize Dashboard", style = MaterialTheme.typography.titleLarge)
+                    LazyColumn(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                        items(state.layout.cards, key = { it.id.name }) { card ->
+                            val index = state.layout.cards.indexOf(card)
+
+                            // DEBUG: fires on every recomposition of this row, whether
+                            // or not the user taps anything — tells us definitively
+                            // whether rows beyond the first are even being composed.
+                            SideEffect { Log.d(DEBUG_TAG, "COMPOSED row: ${card.id.name} (index $index)") }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = JarvisSpacing.xs),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(card.id.displayName(), style = MaterialTheme.typography.bodyLarge)
+                                Row {
+                                    // DEBUG PROBE: a completely independent click target,
+                                    // no Switch internals involved at all. If this fires
+                                    // for every row, the bug is specific to Switch. If
+                                    // this ALSO only fires for row 1, the bug is above
+                                    // Switch — in the Row/LazyColumn/sheet touch dispatch.
+                                    TextButton(onClick = { debugReport("TEXTBUTTON", card.id, index) }) {
+                                        Text("TEST")
+                                    }
+                                    Switch(
+                                        checked = card.visible,
+                                        onCheckedChange = {
+                                            debugReport("SWITCH", card.id, index)
+                                            viewModel.setCardVisible(card.id, it)
+                                        },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+                SnackbarHost(hostState = debugSnackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
             }
         }
     }
