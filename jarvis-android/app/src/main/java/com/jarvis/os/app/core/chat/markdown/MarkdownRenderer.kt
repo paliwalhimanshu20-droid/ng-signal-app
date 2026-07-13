@@ -81,10 +81,10 @@ private fun CodeBlockView(block: MarkdownBlock.CodeBlock) {
 
 /**
  * Single-pass scan, not sequential regex substitution — a common bug
- * source for **bold**/*italic* is regex for one pattern also matching
- * inside the other. Checking "**" before "*" in this `when`'s branch
- * order (Kotlin evaluates in order, first match wins) is what makes
- * that ambiguity a non-issue here.
+ * source for bold and italic markers is regex for one pattern also
+ * matching inside the other. Checking "**" before "*" in this `when`'s
+ * branch order (Kotlin evaluates in order, first match wins) is what
+ * makes that ambiguity a non-issue here.
  */
 private fun parseInlineSpans(text: String): AnnotatedString = buildAnnotatedString {
     var i = 0
