@@ -42,11 +42,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jarvis.os.app.core.JarvisCore
+import com.jarvis.os.app.core.CoreEvent
 import com.jarvis.os.app.data.model.ChatMessage
 import com.jarvis.os.app.data.model.MessageAuthor
 import com.jarvis.os.app.data.model.MessageContentKind
 import com.jarvis.os.app.core.chat.markdown.MarkdownText
-import com.jarvis.os.app.data.repository.ChatRepository
 import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.components.JarvisCard
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -54,25 +55,61 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Sprint 8.1: routes through JarvisCore instead of calling
+ * ChatRepository directly, per this sprint's required flow (ChatScreen
+ * -> ChatViewModel -> JarvisCore -> ChatRepository -> AiRouter ->
+ * active ChatProvider).
+ *
+ * The typing indicator has two independent signals, each with one
+ * job: the init block's collector on core.events is the sole,
+ * authoritative source that clears it -- reacting to
+ * CoreEvent.ChatResponseReceived is what makes this a genuine
+ * dependency on the event bus rather than decoration next to a
+ * separate direct-call signal that would make the event redundant. If
+ * that collector were ever broken, the indicator would visibly get
+ * stuck, which is deliberate: it makes the event chain's correctness
+ * observable, not silent. send()'s inner launch is a separate,
+ * earlier UX nicety -- clearing the indicator the moment the first
+ * reply chunk actually appears in the list, before the whole turn
+ * finishes -- and is not relied on for correctness.
+ */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    private val repository: ChatRepository,
+    private val core: JarvisCore,
 ) : ViewModel() {
-    val messages = repository.messages.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val messages = core.chat.messages.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            core.events.collect { event ->
+                if (event is CoreEvent.ChatResponseReceived && event.sessionId == core.chat.activeSessionId) {
+                    _isTyping.value = false
+                }
+            }
+        }
+    }
 
     fun send(text: String) {
         if (text.isBlank()) return
         viewModelScope.launch {
             _isTyping.value = true
-            repository.sendMessage(text)
-            _isTyping.value = false
+
+            val baselineCount = messages.value.size + 1
+            launch {
+                messages.first { it.size > baselineCount }
+                _isTyping.value = false
+            }
+
+            core.sendChatMessage(text)
         }
     }
 }
