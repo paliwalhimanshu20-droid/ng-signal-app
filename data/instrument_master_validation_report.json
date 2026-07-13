@@ -1,19 +1,19 @@
 {
-  "generated_at": "2026-07-10T05:51:42Z",
-  "execution_seconds": 3.619,
+  "generated_at": "2026-07-13T05:23:14Z",
+  "execution_seconds": 4.133,
   "schema_version": 4,
   "sync": {
-    "total_source_records": 129493,
-    "new": 896,
-    "updated": 10,
-    "unchanged": 128587,
-    "deactivated": 1123,
-    "download_started_at": "2026-07-10T05:51:38Z"
+    "total_source_records": 129496,
+    "new": 901,
+    "updated": 78,
+    "unchanged": 128517,
+    "deactivated": 2021,
+    "download_started_at": "2026-07-13T05:23:10Z"
   },
-  "row_count_before": 129720,
-  "row_count_after": 130616,
+  "row_count_before": 130616,
+  "row_count_after": 131517,
   "validation": {
-    "total_rows": 130616,
+    "total_rows": 131517,
     "rules_run": 12,
     "info_count": 0,
     "warning_count": 26,
@@ -314,9 +314,9 @@
   "anomalies": [
     {
       "metric": "deactivated_items",
-      "message": "Deactivated count (1123) is more than 3x the 3-run baseline average (336.7) \u2014 a mass deactivation can mean the source feed had a partial outage that looked like 'these no longer exist' rather than a genuine delisting wave.",
-      "current_value": 1123,
-      "baseline_value": 336.7,
+      "message": "Deactivated count (2021) is more than 3x the 3-run baseline average (649.0) \u2014 a mass deactivation can mean the source feed had a partial outage that looked like 'these no longer exist' rather than a genuine delisting wave.",
+      "current_value": 2021,
+      "baseline_value": 649.0,
       "priority": "HIGH_PRIORITY"
     }
   ]
