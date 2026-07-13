@@ -34,6 +34,12 @@ enum class MessageAuthor { OWNER, JARVIS }
 
 enum class MessageContentKind { TEXT, CODE_BLOCK, MARKDOWN }
 
+/**
+ * Sprint-8: sessionId defaults to ChatSession.DEFAULT_SESSION_ID, which
+ * is what every message already implicitly belonged to in Sprint-7 —
+ * this is additive, not a breaking change. No existing call site needs
+ * to change unless it wants to address a non-default session.
+ */
 data class ChatMessage(
     val messageId: String,
     val author: MessageAuthor,
@@ -41,7 +47,30 @@ data class ChatMessage(
     val content: String,
     val language: String? = null, // set only when kind == CODE_BLOCK
     val timestamp: Instant,
+    val sessionId: String = ChatSession.DEFAULT_SESSION_ID,
 )
+
+/**
+ * Sprint-8: the session concept Requirement 2 asks for, introduced at
+ * the model/repository layer only. This sprint ships exactly one
+ * session (DEFAULT_SESSION_ID, created on first app use) — there is no
+ * session-switcher UI yet. Building that UI now, with no product
+ * decision made about what multi-session chat should look like in this
+ * app's design language, would be exactly the kind of speculative
+ * feature Sprint 9 (not this one) should own. What Sprint 8 delivers is
+ * the seam: ChatMessage already carries a sessionId, ChatRepository
+ * already scopes by it — a session list screen is additive from here,
+ * not a rework.
+ */
+data class ChatSession(
+    val sessionId: String,
+    val title: String,
+    val createdAt: Instant,
+) {
+    companion object {
+        const val DEFAULT_SESSION_ID: String = "default"
+    }
+}
 
 // --- Part 12: Home Automation --------------------------------------------------------------
 
