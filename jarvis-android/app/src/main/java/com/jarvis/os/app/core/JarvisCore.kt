@@ -4,6 +4,7 @@ import com.jarvis.os.app.data.repository.ApprovalRepository
 import com.jarvis.os.app.data.repository.ChatRepository
 import com.jarvis.os.app.data.repository.ConnectionRepository
 import com.jarvis.os.app.data.repository.MemoryRepository
+import com.jarvis.os.app.data.repository.NotificationRepository
 import com.jarvis.os.app.data.repository.ProjectRepository
 import com.jarvis.os.app.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
@@ -54,6 +55,20 @@ import javax.inject.Singleton
  * initiate. ConnectionRepository still owns all transition validity
  * (see its allowedTransitions) -- this class forwards and coordinates,
  * it does not re-implement or duplicate that logic.
+ *
+ * Sprint 9 (PR2) adds the other half of "every important action must
+ * emit a CoreEvent" -- what happens to that event afterward. A second
+ * init-block collector below reads this class's own `events` flow (the
+ * same one publish() writes to) and, for each event, asks
+ * NotificationFactory whether it should become a Notification; if so,
+ * inserts it into NotificationRepository. That collector is the ONLY
+ * call site of NotificationRepository.insert() anywhere in this
+ * codebase -- see that interface's docstring. This is deliberately a
+ * self-subscription (JarvisCore both produces and consumes its own bus
+ * for this side effect) rather than pushing the responsibility onto
+ * whatever produced the event, so ConnectionRepository, ApprovalRepository,
+ * etc. stay exactly as ignorant of "notifications exist" as they were
+ * before this PR.
  */
 @Singleton
 class JarvisCore @Inject constructor(
@@ -62,6 +77,7 @@ class JarvisCore @Inject constructor(
     val memory: MemoryRepository,
     val projects: ProjectRepository,
     val chat: ChatRepository,
+    val notifications: NotificationRepository,
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val _events = MutableSharedFlow<CoreEvent>(extraBufferCapacity = 32)
@@ -80,6 +96,11 @@ class JarvisCore @Inject constructor(
                         t.connectionId, t.providerName, t.previousStatus, t.newStatus, t.reason,
                     ),
                 )
+            }
+        }
+        appScope.launch {
+            events.collect { event ->
+                NotificationFactory.from(event)?.let { notifications.insert(it) }
             }
         }
     }
@@ -108,6 +129,19 @@ class JarvisCore @Inject constructor(
     fun reconnectConnection(connectionId: String) = connections.reconnect(connectionId)
     fun disableAllConnections(reason: String = "Owner disabled all connections") = connections.disableAll(reason)
     fun testConnection(connectionId: String) = connections.testConnection(connectionId)
+
+    // --- Notifications coordination (Sprint 9 PR2) -------------------------------
+    // Read/clear actions, unlike connections, never need a CoreEvent of
+    // their own -- "you read a notification" isn't an event any other
+    // part of the app needs to react to, it's a private UI-state change
+    // on the notification itself. These exist on JarvisCore (rather than
+    // NotificationsViewModel calling NotificationRepository directly)
+    // purely for consistency with "JarvisCore coordinates every
+    // workflow" -- there's no hidden logic in them beyond the call-through.
+
+    fun markNotificationRead(notificationId: String) = notifications.markRead(notificationId)
+    fun markAllNotificationsRead() = notifications.markAllRead()
+    fun clearReadNotifications() = notifications.clearRead()
 
     suspend fun requestNavigation(route: String) {
         _navigationRequests.emit(route)
