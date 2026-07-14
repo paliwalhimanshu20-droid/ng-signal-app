@@ -32,47 +32,65 @@ class CalculatorTool @Inject constructor() : Tool {
             ToolResult.Failure(e.message ?: "Invalid expression")
         }
 
-    /** Minimal recursive-descent evaluator -- no third-party expression library, per this codebase's stdlib-first preference (see this file's class docstring). Supports + - * / and parentheses; rejects anything else. */
+    /**
+     * Minimal recursive-descent evaluator -- no third-party expression
+     * library, per this codebase's stdlib-first preference (see this
+     * file's class docstring). Supports + - * / and parentheses;
+     * rejects anything else.
+     *
+     * parseExpr/parseTerm/parseFactor are class-level private members,
+     * not functions local to `evaluate`, because they're mutually
+     * recursive (parseFactor calls back into parseExpr for a
+     * parenthesized sub-expression) -- Kotlin resolves member
+     * functions regardless of declaration order, but local functions
+     * only see local functions already declared earlier in the same
+     * block, so a local-function version of this cycle fails to
+     * compile no matter which of the three is written first.
+     * `sanitized`/`pos` are threaded through as parameters instead of
+     * captured by closure since these are no longer nested functions.
+     */
     private fun evaluate(expression: String): Double {
         val sanitized = expression.filter { !it.isWhitespace() }
         require(sanitized.isNotEmpty()) { "Empty expression" }
         require(sanitized.all { it.isDigit() || it in "+-*/()." }) { "Unsupported character in expression" }
         val pos = intArrayOf(0)
-
-        fun parseExpr(): Double {
-            var value = parseTerm()
-            while (pos[0] < sanitized.length && sanitized[pos[0]] in "+-") {
-                val op = sanitized[pos[0]++]
-                val rhs = parseTerm()
-                value = if (op == '+') value + rhs else value - rhs
-            }
-            return value
-        }
-        fun parseTerm(): Double {
-            var value = parseFactor()
-            while (pos[0] < sanitized.length && sanitized[pos[0]] in "*/") {
-                val op = sanitized[pos[0]++]
-                val rhs = parseFactor()
-                value = if (op == '*') value * rhs else value / rhs
-            }
-            return value
-        }
-        fun parseFactor(): Double {
-            if (pos[0] < sanitized.length && sanitized[pos[0]] == '(') {
-                pos[0]++
-                val value = parseExpr()
-                require(pos[0] < sanitized.length && sanitized[pos[0]] == ')') { "Missing closing parenthesis" }
-                pos[0]++
-                return value
-            }
-            val start = pos[0]
-            while (pos[0] < sanitized.length && (sanitized[pos[0]].isDigit() || sanitized[pos[0]] == '.')) pos[0]++
-            require(pos[0] > start) { "Expected a number at position $start" }
-            return sanitized.substring(start, pos[0]).toDouble()
-        }
-        val result = parseExpr()
+        val result = parseExpr(sanitized, pos)
         require(pos[0] == sanitized.length) { "Unexpected trailing characters" }
         return result
+    }
+
+    private fun parseExpr(sanitized: String, pos: IntArray): Double {
+        var value = parseTerm(sanitized, pos)
+        while (pos[0] < sanitized.length && sanitized[pos[0]] in "+-") {
+            val op = sanitized[pos[0]++]
+            val rhs = parseTerm(sanitized, pos)
+            value = if (op == '+') value + rhs else value - rhs
+        }
+        return value
+    }
+
+    private fun parseTerm(sanitized: String, pos: IntArray): Double {
+        var value = parseFactor(sanitized, pos)
+        while (pos[0] < sanitized.length && sanitized[pos[0]] in "*/") {
+            val op = sanitized[pos[0]++]
+            val rhs = parseFactor(sanitized, pos)
+            value = if (op == '*') value * rhs else value / rhs
+        }
+        return value
+    }
+
+    private fun parseFactor(sanitized: String, pos: IntArray): Double {
+        if (pos[0] < sanitized.length && sanitized[pos[0]] == '(') {
+            pos[0]++
+            val value = parseExpr(sanitized, pos)
+            require(pos[0] < sanitized.length && sanitized[pos[0]] == ')') { "Missing closing parenthesis" }
+            pos[0]++
+            return value
+        }
+        val start = pos[0]
+        while (pos[0] < sanitized.length && (sanitized[pos[0]].isDigit() || sanitized[pos[0]] == '.')) pos[0]++
+        require(pos[0] > start) { "Expected a number at position $start" }
+        return sanitized.substring(start, pos[0]).toDouble()
     }
 }
 
