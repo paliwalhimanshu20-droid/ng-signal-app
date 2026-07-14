@@ -1,5 +1,6 @@
 package com.jarvis.os.app.core
 
+import com.jarvis.os.app.data.model.ApprovalOutcome
 import com.jarvis.os.app.data.model.ConnectionStatus
 
 /**
@@ -19,9 +20,28 @@ import com.jarvis.os.app.data.model.ConnectionStatus
  * ConnectionStatus. previousStatus and reason are carried so a listener
  * can tell "APPROVED -> CONNECTING" from "CONNECTED -> ERROR" without
  * re-reading ConnectionRepository.
+ *
+ * Sprint 9 Final applies the identical reasoning to approvals:
+ * ApprovalStatusChanged replaces the spec's suggested
+ * ApprovalApproved/Rejected/Cancelled/Expired/Revoked with one event
+ * carrying `newState`, for the same reason -- one source of truth for
+ * "what state is this in", not six classes that could in principle
+ * disagree with ApprovalOutcome. ApprovalRequested (below) stays
+ * separate because creation isn't a state *transition* (there's no
+ * previous state), the same way connection creation isn't represented
+ * as a ConnectionStatusChanged either.
  */
 sealed interface CoreEvent {
     data class ApprovalRequested(val approvalId: String, val summary: String) : CoreEvent
+    data class ApprovalStatusChanged(
+        val approvalId: String,
+        val title: String,
+        val relatedConnectionId: String?,
+        val previousState: ApprovalOutcome,
+        val newState: ApprovalOutcome,
+        val actor: String,
+        val reason: String? = null,
+    ) : CoreEvent
     data class ConnectionStatusChanged(
         val connectionId: String,
         val providerName: String,
