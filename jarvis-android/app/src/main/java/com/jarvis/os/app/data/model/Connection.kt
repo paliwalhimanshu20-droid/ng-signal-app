@@ -12,7 +12,21 @@ import java.time.Instant
  */
 enum class PermissionScope { READ, WRITE, EXECUTE, HIGH_RISK_ACTIONS }
 
-enum class ConnectionStatus { PENDING_APPROVAL, APPROVED, CONNECTED, SUSPENDED, DISCONNECTED, REJECTED, FAILED }
+/**
+ * Sprint 9: the 7-state validated machine the sprint calls for --
+ * CONNECTING (an in-flight connect attempt between an approved
+ * connection and a confirmed one) and ERROR (a connect attempt or a
+ * live connection that failed) replace the old flat FAILED, which had
+ * no place in the transition graph and was never actually reachable.
+ * REJECTED is kept alongside DISCONNECTED as a second terminal state
+ * because they mean different things to the owner (an explicit "no"
+ * at approval time vs. a connection that was live and was taken down)
+ * and Sprint 8's UI already surfaces that distinction -- collapsing
+ * them would be a behavior change this sprint's "do not redesign"
+ * rule argues against. See ConnectionRepository.allowedTransitions
+ * for the full graph.
+ */
+enum class ConnectionStatus { PENDING_APPROVAL, APPROVED, CONNECTING, CONNECTED, SUSPENDED, ERROR, DISCONNECTED, REJECTED }
 
 enum class ConnectionHealth { HEALTHY, DEGRADED, UNHEALTHY, UNKNOWN }
 
