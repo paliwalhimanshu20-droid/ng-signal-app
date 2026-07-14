@@ -116,11 +116,12 @@ private fun NotificationCategory.label(): String = when (this) {
     NotificationCategory.WARNING -> "Warning"
     NotificationCategory.ERROR -> "Error"
     NotificationCategory.SYSTEM -> "System"
+    NotificationCategory.TOOL -> "Tool"
 }
 
 private fun NotificationCategory.toColor() = when (this) {
     NotificationCategory.ERROR, NotificationCategory.WARNING -> JarvisStatusColors.Unhealthy
     NotificationCategory.CONNECTION -> JarvisStatusColors.Healthy
     NotificationCategory.APPROVAL -> JarvisStatusColors.Degraded
-    NotificationCategory.AI, NotificationCategory.PROJECT, NotificationCategory.SYSTEM -> JarvisStatusColors.Unknown
+    NotificationCategory.AI, NotificationCategory.PROJECT, NotificationCategory.SYSTEM, NotificationCategory.TOOL -> JarvisStatusColors.Unknown
 }
