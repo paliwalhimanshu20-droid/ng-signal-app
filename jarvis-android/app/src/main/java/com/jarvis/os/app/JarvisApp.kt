@@ -3,6 +3,8 @@ package com.jarvis.os.app
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -17,16 +19,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.jarvis.os.app.data.settings.AppearanceSettings
 import com.jarvis.os.app.designsystem.JarvisTheme
+import com.jarvis.os.app.feature.notifications.NotificationsViewModel
 import com.jarvis.os.app.navigation.JarvisDestination
 import com.jarvis.os.app.navigation.JarvisNavHost
 import kotlinx.coroutines.launch
@@ -53,6 +58,14 @@ fun JarvisApp(appearance: AppearanceSettings) {
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination
 
+        // Sprint 9 (PR2): read directly from NotificationsViewModel's
+        // unreadCount rather than duplicating a filter over the
+        // notification list here -- see NotificationRepository's
+        // docstring for why unreadCount is the one source of truth a
+        // badge anywhere in the UI should read.
+        val notificationsViewModel: NotificationsViewModel = hiltViewModel()
+        val unreadCount by notificationsViewModel.unreadCount.collectAsState()
+
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
@@ -60,7 +73,15 @@ fun JarvisApp(appearance: AppearanceSettings) {
                     JarvisDestination.all.forEach { destination ->
                         NavigationDrawerItem(
                             label = { Text(destination.label) },
-                            icon = { Icon(destination.icon, contentDescription = null) },
+                            icon = {
+                                if (destination == JarvisDestination.Notifications && unreadCount > 0) {
+                                    BadgedBox(badge = { Badge { Text(unreadCount.coerceAtMost(99).toString()) } }) {
+                                        Icon(destination.icon, contentDescription = null)
+                                    }
+                                } else {
+                                    Icon(destination.icon, contentDescription = null)
+                                }
+                            },
                             selected = currentRoute?.hierarchy?.any { it.route == destination.route } == true,
                             onClick = {
                                 scope.launch { drawerState.close() }
