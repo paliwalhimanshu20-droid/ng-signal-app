@@ -2,9 +2,9 @@ package com.jarvis.os.app.feature.connections
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jarvis.os.app.core.JarvisCore
 import com.jarvis.os.app.data.model.ConnectionHealth
 import com.jarvis.os.app.data.repository.ConnectionOperationError
-import com.jarvis.os.app.data.repository.ConnectionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -13,19 +13,29 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Sprint 9 (PR1): every action below now calls a JarvisCore
+ * coordination method instead of ConnectionRepository directly --
+ * this is the "remove duplicated coordination logic from ViewModels"
+ * requirement. The ViewModel still owns nothing about connection
+ * business rules (it never decided what states were valid, before or
+ * now); it's just no longer the thing directly holding a reference to
+ * ConnectionRepository.
+ */
 @HiltViewModel
 class ConnectionsViewModel @Inject constructor(
-    private val repository: ConnectionRepository,
+    private val core: JarvisCore,
 ) : ViewModel() {
 
-    val connections = repository.connections.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val connections = core.connections.connections.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // Sprint-7.1 UX polish: a state-check failure here (e.g. a stale
     // button firing after the connection's status already changed)
     // must never crash the app or vanish silently — it's surfaced as a
     // one-shot event the screen turns into a Snackbar. This does not
     // relax or change any governance rule; ConnectionOperationError is
-    // still thrown by the same checks it always was.
+    // still thrown by the same checks it always was, now inside
+    // ConnectionRepository's single `transition()` gate.
     private val _errors = MutableSharedFlow<String>()
     val errors: SharedFlow<String> = _errors
 
@@ -40,15 +50,17 @@ class ConnectionsViewModel @Inject constructor(
     }
 
     // Owner Sovereignty (Sprint-6 Part 3), enforced at the UI action
-    // layer too: every button below maps 1:1 to a ConnectionRepository
-    // method that mirrors ConnectionManager's real governance rule —
-    // there is no "quick approve" shortcut that skips a state check.
-    fun approve(connectionId: String) = runGuarded { repository.approve(connectionId, approvedBy = "owner") }
-    fun reject(connectionId: String) = runGuarded { repository.reject(connectionId, reason = "Rejected by owner") }
-    fun suspend(connectionId: String) = runGuarded { repository.suspend(connectionId, reason = "Suspended by owner") }
-    fun disconnect(connectionId: String) = runGuarded { repository.disconnect(connectionId, reason = "Disconnected by owner") }
-    fun reconnect(connectionId: String) = runGuarded { repository.reconnect(connectionId) }
-    fun disableAll() = runGuarded { repository.disableAll(reason = "Owner disabled all connections") }
+    // layer too: every button below maps 1:1 to a JarvisCore
+    // coordination method that mirrors ConnectionManager's real
+    // governance rule — there is no "quick approve" shortcut that
+    // skips a state check.
+    fun approve(connectionId: String) = runGuarded { core.approveConnection(connectionId) }
+    fun reject(connectionId: String) = runGuarded { core.rejectConnection(connectionId) }
+    fun connect(connectionId: String) = runGuarded { core.connectConnection(connectionId) }
+    fun suspend(connectionId: String) = runGuarded { core.suspendConnection(connectionId) }
+    fun disconnect(connectionId: String) = runGuarded { core.disconnectConnection(connectionId) }
+    fun reconnect(connectionId: String) = runGuarded { core.reconnectConnection(connectionId) }
+    fun disableAll() = runGuarded { core.disableAllConnections() }
 
-    fun testConnection(connectionId: String): ConnectionHealth = repository.testConnection(connectionId)
+    fun testConnection(connectionId: String): ConnectionHealth = core.testConnection(connectionId)
 }

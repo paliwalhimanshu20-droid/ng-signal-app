@@ -66,6 +66,7 @@ fun ConnectionsScreen(viewModel: ConnectionsViewModel = hiltViewModel()) {
                         connection = connection,
                         onApprove = { viewModel.approve(connection.connectionId) },
                         onReject = { viewModel.reject(connection.connectionId) },
+                        onConnect = { viewModel.connect(connection.connectionId) },
                         onSuspend = { viewModel.suspend(connection.connectionId) },
                         onDisconnect = { viewModel.disconnect(connection.connectionId) },
                         onReconnect = { viewModel.reconnect(connection.connectionId) },
@@ -88,6 +89,7 @@ private fun ConnectionCard(
     connection: Connection,
     onApprove: () -> Unit,
     onReject: () -> Unit,
+    onConnect: () -> Unit,
     onSuspend: () -> Unit,
     onDisconnect: () -> Unit,
     onReconnect: () -> Unit,
@@ -130,7 +132,26 @@ private fun ConnectionCard(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = JarvisStatusColors.Unhealthy),
                         ) { Text("Reject") }
                     }
-                    ConnectionStatus.APPROVED -> Text("Awaiting connect…", style = MaterialTheme.typography.labelMedium)
+                    ConnectionStatus.APPROVED -> {
+                        Button(onClick = onConnect) { Text("Connect") }
+                        OutlinedButton(
+                            onClick = onDisconnect,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = JarvisStatusColors.Unhealthy),
+                        ) { Text("Cancel") }
+                    }
+                    ConnectionStatus.CONNECTING -> {
+                        // No resolving action here by design — Sprint 9 wires the
+                        // state machine's shape, not a real network handshake (see
+                        // ConnectionRepository's BACKEND STATUS docstring). A real
+                        // ConnectionRepository would move this to CONNECTED or
+                        // ERROR on its own; Disconnect still lets the owner bail
+                        // out of a stuck attempt rather than being stranded.
+                        Text("Connecting…", style = MaterialTheme.typography.labelMedium)
+                        OutlinedButton(
+                            onClick = onDisconnect,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = JarvisStatusColors.Unhealthy),
+                        ) { Text("Cancel") }
+                    }
                     ConnectionStatus.CONNECTED -> {
                         OutlinedButton(onClick = onTest) { Text("Test") }
                         OutlinedButton(onClick = onSuspend) { Text("Suspend") }
@@ -146,7 +167,15 @@ private fun ConnectionCard(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = JarvisStatusColors.Unhealthy),
                         ) { Text("Disconnect") }
                     }
-                    ConnectionStatus.DISCONNECTED, ConnectionStatus.REJECTED, ConnectionStatus.FAILED -> {
+                    ConnectionStatus.ERROR -> {
+                        Text("Connection error.", style = MaterialTheme.typography.labelMedium, color = JarvisStatusColors.Unhealthy)
+                        Button(onClick = onReconnect) { Text("Retry") }
+                        OutlinedButton(
+                            onClick = onDisconnect,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = JarvisStatusColors.Unhealthy),
+                        ) { Text("Disconnect") }
+                    }
+                    ConnectionStatus.DISCONNECTED, ConnectionStatus.REJECTED -> {
                         Text("Inactive — request a new connection to re-enable.", style = MaterialTheme.typography.labelMedium)
                     }
                 }
