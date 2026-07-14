@@ -8,6 +8,29 @@ enum class ProjectStatus { ACTIVE, BLOCKED, PAUSED, COMPLETED }
 
 data class ProjectTask(val taskId: String, val title: String, val done: Boolean)
 
+/** Sprint 10 "Milestone management" -- a named checkpoint within a project, distinct from ProjectTask (a milestone can be reached by many completed tasks; it is not itself one). */
+data class Milestone(
+    val milestoneId: String,
+    val title: String,
+    val targetDate: Instant?,
+    val reached: Boolean,
+)
+
+/** Sprint 10 "Evidence collection" -- a link between a completed unit of work and proof it happened, mirroring this codebase's own working-style rule ("every claim requires evidence from the actual live repo"). `reference` is free-form: a commit sha, a file path, a PR url. */
+data class Evidence(
+    val evidenceId: String,
+    val description: String,
+    val reference: String,
+    val recordedAt: Instant,
+)
+
+/** Sprint 10 "Sprint tracking" -- one development sprint inside a Project's timeline. Named SprintRecord (not Sprint) to avoid any collision with kotlinx.coroutines' unrelated CoroutineScope-adjacent vocabulary and to read unambiguously wherever it's imported alongside coroutine types. */
+data class SprintRecord(
+    val sprintId: String,
+    val label: String,
+    val completed: Boolean,
+)
+
 data class Project(
     val projectId: String,
     val name: String,
@@ -15,17 +38,58 @@ data class Project(
     val progressPercent: Int,
     val pendingTasks: List<ProjectTask>,
     val priority: RiskLevel, // reusing RiskLevel's ordering as a stand-in priority scale (LOW..CRITICAL) rather than inventing a second one — see data/model/Approval.kt
+    val milestones: List<Milestone> = emptyList(),
+    val evidence: List<Evidence> = emptyList(),
+    val sprints: List<SprintRecord> = emptyList(),
 )
 
-// --- Part 7: Memory --------------------------------------------------------------------
+/** Sprint 10 "Progress dashboard" deliverable -- a computed rollup across every Project, not a stored entity. See ProjectRepository.dashboard. */
+data class ProgressDashboard(
+    val totalProjects: Int,
+    val activeProjects: Int,
+    val blockedProjects: Int,
+    val averageProgressPercent: Int,
+    val openTaskCount: Int,
+    val reachedMilestoneCount: Int,
+    val totalMilestoneCount: Int,
+)
 
-enum class MemoryTier { WORKING, CONVERSATION, KNOWLEDGE, PREFERENCE }
+// --- Part 7 / Sprint 10: Memory --------------------------------------------------------------------
 
+/**
+ * Sprint 10 extends Sprint-7's four tiers (WORKING, CONVERSATION,
+ * KNOWLEDGE, PREFERENCE, unchanged in meaning) with the three the
+ * sprint brief names explicitly: LONG_TERM (durable facts that outlive
+ * any one conversation or project), PROJECT (scoped to one
+ * Project.projectId via MemoryEntry.relatedId), and DECISION (an
+ * append-style record of a choice JARVIS or the owner made and why --
+ * ProjectMemory/AgentMemory read this tier when asked "why did we do
+ * X"). KNOWLEDGE is kept rather than renamed to LONG_TERM to avoid
+ * breaking every existing seeded entry and MockMemoryRepository call
+ * site -- the two are conceptually close but not merged, matching this
+ * codebase's stated preference against silently reinterpreting an
+ * existing enum value's meaning.
+ */
+enum class MemoryTier { WORKING, CONVERSATION, KNOWLEDGE, PREFERENCE, LONG_TERM, PROJECT, DECISION }
+
+/**
+ * @param relatedId Sprint 10: scopes an entry to a sessionId (tier ==
+ * CONVERSATION), a Project.projectId (tier == PROJECT), or an agentId
+ * (a future Sprint 11 AgentMemory use) -- null for entries with no
+ * natural owner (PREFERENCE, most LONG_TERM/KNOWLEDGE facts). This is
+ * additive: every entry seeded before Sprint 10 keeps working with
+ * relatedId defaulting to null.
+ * @param tags Sprint 10's "searchable memory" requirement -- `search`
+ * below matches against both `summary` and `tags`, so an entry can be
+ * found by a keyword that doesn't appear verbatim in its summary text.
+ */
 data class MemoryEntry(
     val entryId: String,
     val tier: MemoryTier,
     val summary: String,
     val timestamp: Instant,
+    val relatedId: String? = null,
+    val tags: Set<String> = emptySet(),
 )
 
 // --- Part 5: Chat ------------------------------------------------------------------------

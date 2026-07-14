@@ -2,8 +2,19 @@ package com.jarvis.os.app.data.model
 
 import java.time.Instant
 
-/** Mirrors the shape of Sprint-1D's ApprovalRequest (Python) plus Sprint-6's connection-approval flow — Part 9 explicitly needs BOTH permission requests (Tier 2/3 task approvals) and connection requests represented in one Approval Center list. */
-enum class ApprovalKind { PERMISSION_REQUEST, CONNECTION_REQUEST }
+/**
+ * Mirrors the shape of Sprint-1D's ApprovalRequest (Python) plus
+ * Sprint-6's connection-approval flow — Part 9 explicitly needs BOTH
+ * permission requests (Tier 2/3 task approvals) and connection
+ * requests represented in one Approval Center list.
+ *
+ * Sprint 11 adds AGENT_TASK: MultiAiCoordinator's "human approval
+ * before execution" requirement gates every coordinated agent task
+ * behind the same Approval Center list, exactly as Sprint 10 gated
+ * MODERATE+ tool execution -- one governance surface, not three
+ * parallel ones.
+ */
+enum class ApprovalKind { PERMISSION_REQUEST, CONNECTION_REQUEST, TOOL_EXECUTION, AGENT_TASK }
 
 /**
  * Sprint 9 Final: the full 6-state governance machine. WAITING was
@@ -38,6 +49,10 @@ data class ApprovalItem(
     val resolvedAt: Instant?,
     val resolvedBy: String?,
     val relatedConnectionId: String? = null,
+    /** Sprint 10: set only when kind == TOOL_EXECUTION, mirroring relatedConnectionId's role for CONNECTION_REQUEST -- see ToolRepository.execute. */
+    val relatedToolId: String? = null,
+    /** Sprint 11: set only when kind == AGENT_TASK -- see MultiAiCoordinator.coordinate. */
+    val relatedAgentTaskId: String? = null,
 )
 
 /**

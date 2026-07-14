@@ -10,7 +10,7 @@ import java.time.Instant
  * cards. This one is backed by NotificationFactory (see core package)
  * and is the taxonomy CoreEvents actually map onto.
  */
-enum class NotificationCategory { APPROVAL, CONNECTION, AI, PROJECT, WARNING, ERROR, SYSTEM }
+enum class NotificationCategory { APPROVAL, CONNECTION, AI, PROJECT, WARNING, ERROR, SYSTEM, TOOL }
 
 enum class NotificationPriority { LOW, NORMAL, HIGH }
 
