@@ -1,5 +1,6 @@
 package com.jarvis.os.app.core
 
+import com.jarvis.os.app.core.tools.ToolResult
 import com.jarvis.os.app.data.model.ApprovalKind
 import com.jarvis.os.app.data.model.ApprovalOutcome
 import com.jarvis.os.app.data.model.ConnectionStatus
@@ -7,12 +8,14 @@ import com.jarvis.os.app.data.model.PermissionScope
 import com.jarvis.os.app.data.model.RiskLevel
 import com.jarvis.os.app.data.repository.ApprovalRepository
 import com.jarvis.os.app.data.repository.ApprovalTransition
+import com.jarvis.os.app.data.repository.AuditRepository
 import com.jarvis.os.app.data.repository.ChatRepository
 import com.jarvis.os.app.data.repository.ConnectionOperationError
 import com.jarvis.os.app.data.repository.ConnectionRepository
 import com.jarvis.os.app.data.repository.MemoryRepository
 import com.jarvis.os.app.data.repository.NotificationRepository
 import com.jarvis.os.app.data.repository.ProjectRepository
+import com.jarvis.os.app.data.repository.ToolRepository
 import com.jarvis.os.app.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -112,6 +115,8 @@ class JarvisCore @Inject constructor(
     val projects: ProjectRepository,
     val chat: ChatRepository,
     val notifications: NotificationRepository,
+    val tools: ToolRepository,
+    val audit: AuditRepository,
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val _events = MutableSharedFlow<CoreEvent>(extraBufferCapacity = 32)
@@ -136,6 +141,15 @@ class JarvisCore @Inject constructor(
             events.collect { event ->
                 NotificationFactory.from(event)?.let { notifications.insert(it) }
             }
+        }
+        appScope.launch {
+            // Sprint 11 Governance: the sole writer of AuditRepository,
+            // same shape as the notification collector directly above --
+            // every CoreEvent becomes one flattened AuditEntry, using
+            // AuditFactory (analogous to NotificationFactory) so this
+            // stays a one-line collector rather than a second `when`
+            // duplicated here.
+            events.collect { event -> audit.record(AuditFactory.from(event)) }
         }
         appScope.launch {
             approvals.created.collect { approval ->
@@ -287,6 +301,26 @@ class JarvisCore @Inject constructor(
         }
     }
 
+    // --- Tools coordination (Sprint 10) ------------------------------------------
+    // Closes the honesty gap ToolRepository's own docstring names: this
+    // is the "coordinator for what happens AFTER a tool runs" it
+    // refers to. Every screen/caller that wants to run a tool goes
+    // through this, not ToolRepository.execute directly, so a
+    // CoreEvent (and therefore a Notification and an AuditEntry) is
+    // guaranteed for every tool execution attempt -- same "every
+    // important action must emit a CoreEvent" discipline as
+    // Connections and Approvals above.
+
+    suspend fun runTool(toolId: String, input: String, approvalId: String? = null): ToolResult {
+        val result = tools.execute(toolId, input, approvalId)
+        val (success, summary) = when (result) {
+            is ToolResult.Success -> true to result.output
+            is ToolResult.Failure -> false to result.message
+        }
+        publish(CoreEvent.ToolExecuted(toolId, success, summary))
+        return result
+    }
+
     suspend fun requestNavigation(route: String) {
         _navigationRequests.emit(route)
     }
@@ -331,6 +365,7 @@ class JarvisCore @Inject constructor(
             "open settings" to "settings",
             "open projects" to "projects",
             "open memory" to "memory",
+            "open dashboard" to "dashboard",
             "go home" to "home",
         )
     }

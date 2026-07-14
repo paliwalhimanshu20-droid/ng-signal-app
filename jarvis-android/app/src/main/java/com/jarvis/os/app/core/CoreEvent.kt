@@ -52,4 +52,7 @@ sealed interface CoreEvent {
     data class ChatMessageSent(val sessionId: String, val text: String) : CoreEvent
     data class ChatResponseReceived(val sessionId: String, val messageId: String) : CoreEvent
     data class TaskStatusChanged(val taskId: String, val done: Boolean) : CoreEvent
+
+    /** Sprint 10: published by JarvisCore.runTool after every tool execution attempt (success or failure) -- see that method's docstring for why tool execution goes through Core rather than callers hitting ToolRepository directly. */
+    data class ToolExecuted(val toolId: String, val success: Boolean, val summary: String) : CoreEvent
 }

@@ -57,7 +57,20 @@ object NotificationFactory {
         is CoreEvent.ChatMessageSent -> null
         is CoreEvent.ChatResponseReceived -> null
         is CoreEvent.TaskStatusChanged -> null
+        is CoreEvent.ToolExecuted -> fromToolExecuted(event)
     }
+
+    private fun fromToolExecuted(event: CoreEvent.ToolExecuted): Notification {
+        return Notification(
+            notificationId = UUID.randomUUID().toString(),
+            category = NotificationCategory.TOOL,
+            priority = if (event.success) NotificationPriority.LOW else NotificationPriority.NORMAL,
+            title = if (event.success) "Tool ran: ${event.toolId}" else "Tool failed: ${event.toolId}",
+            message = event.summary,
+            timestamp = Instant.now(),
+            source = "Tools",
+            relatedEntityId = event.toolId,
+        )
 
     private fun fromApprovalStatusChanged(event: CoreEvent.ApprovalStatusChanged): Notification? {
         val (title, priority) = when (event.newState) {
