@@ -6,6 +6,7 @@ import com.jarvis.os.app.data.repository.ConnectionOperationError
 import com.jarvis.os.app.data.repository.MockConnectionRepository
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -134,7 +135,7 @@ class MockConnectionRepositoryTest {
         val job = launch { repo.transitions.collect { seen += it.newStatus } }
         // MutableSharedFlow.collect suspends until cancelled -- yield lets the
         // collector above actually start (and register) before we emit.
-        kotlinx.coroutines.yield()
+        yield()
 
         repo.approve(connection.connectionId, "owner")
         repo.connect(connection.connectionId)
