@@ -5,8 +5,8 @@ import com.jarvis.os.app.data.model.PermissionScope
 import com.jarvis.os.app.data.repository.ConnectionOperationError
 import com.jarvis.os.app.data.repository.MockConnectionRepository
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -127,15 +127,19 @@ class MockConnectionRepositoryTest {
     }
 
     @Test
-    fun `sprint 9 - every accepted transition is published on the transitions flow`() = runTest {
+    fun `sprint 9 - every accepted transition is published on the transitions flow`() = runTest(UnconfinedTestDispatcher()) {
         val repo = MockConnectionRepository()
         val seen = mutableListOf<ConnectionStatus>()
         val connection = repo.requestConnection("provider-x", "X", setOf(PermissionScope.READ), PermissionScope.READ)
 
+        // UnconfinedTestDispatcher runs a freshly-launched coroutine eagerly, up
+        // to its first suspension point, before `launch` returns control here --
+        // so by the next line the collector below is already registered and
+        // suspended inside collect(), with no race against the emissions that
+        // follow (the earlier StandardTestDispatcher + yield() version of this
+        // test depended on scheduler ordering that didn't hold in CI -- this
+        // does not).
         val job = launch { repo.transitions.collect { seen += it.newStatus } }
-        // MutableSharedFlow.collect suspends until cancelled -- yield lets the
-        // collector above actually start (and register) before we emit.
-        yield()
 
         repo.approve(connection.connectionId, "owner")
         repo.connect(connection.connectionId)
