@@ -1,5 +1,6 @@
 package com.jarvis.os.app.core.chat
 
+import com.jarvis.os.app.data.model.AiCapability
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -26,6 +27,9 @@ import javax.inject.Singleton
 class MockChatProvider @Inject constructor() : ChatProvider {
     override val id: String = "mock"
     override val displayName: String = "JARVIS (offline shell)"
+
+    /** Always-available fallback -- deliberately just GENERAL_CHAT so routeFor never has to treat "no provider matched" as a real failure mode when this one is bound. */
+    override val capabilities: Set<AiCapability> = setOf(AiCapability.GENERAL_CHAT)
 
     override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
         val reply = buildString {

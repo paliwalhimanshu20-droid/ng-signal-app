@@ -1,5 +1,6 @@
 package com.jarvis.os.app.core.chat
 
+import com.jarvis.os.app.data.model.AiCapability
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -19,6 +20,15 @@ interface ChatProvider {
 
     /** Human-readable name for a future provider-picker UI. */
     val displayName: String
+
+    /**
+     * PR4: what this provider is good for, used by AiRouter.routeFor to
+     * pick a provider by required capability rather than always using
+     * whatever switchProvider last set. A provider with no particular
+     * strength still declares GENERAL_CHAT so it remains a valid
+     * fallback -- see MockChatProvider.
+     */
+    val capabilities: Set<AiCapability>
 
     /**
      * Streaming-ready: returns a Flow of chunks rather than a single
