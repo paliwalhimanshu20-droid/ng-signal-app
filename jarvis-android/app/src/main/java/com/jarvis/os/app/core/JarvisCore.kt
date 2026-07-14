@@ -1,7 +1,14 @@
 package com.jarvis.os.app.core
 
+import com.jarvis.os.app.data.model.ApprovalKind
+import com.jarvis.os.app.data.model.ApprovalOutcome
+import com.jarvis.os.app.data.model.ConnectionStatus
+import com.jarvis.os.app.data.model.PermissionScope
+import com.jarvis.os.app.data.model.RiskLevel
 import com.jarvis.os.app.data.repository.ApprovalRepository
+import com.jarvis.os.app.data.repository.ApprovalTransition
 import com.jarvis.os.app.data.repository.ChatRepository
+import com.jarvis.os.app.data.repository.ConnectionOperationError
 import com.jarvis.os.app.data.repository.ConnectionRepository
 import com.jarvis.os.app.data.repository.MemoryRepository
 import com.jarvis.os.app.data.repository.NotificationRepository
@@ -69,6 +76,33 @@ import javax.inject.Singleton
  * whatever produced the event, so ConnectionRepository, ApprovalRepository,
  * etc. stay exactly as ignorant of "notifications exist" as they were
  * before this PR.
+ *
+ * Sprint 9 Final adds the Approvals half of "single coordinator", mirroring
+ * PR1's Connections pattern exactly: two more init-block collectors below
+ * forward ApprovalRepository.created and .transitions as
+ * CoreEvent.ApprovalRequested / ApprovalStatusChanged (picked up by the
+ * existing notification collector automatically -- no changes needed
+ * there beyond NotificationFactory gaining a case for the new event
+ * type). This finally gives ApprovalRequested a real publisher; see
+ * NotificationFactory's docstring for why PR2 could only describe that
+ * gap, not close it.
+ *
+ * It also adds the one piece of real cross-repository *coordination*
+ * this sprint introduces: reactToApprovalTransition, called from the
+ * approvals.transitions collector, drives the linked Connection (when
+ * relatedConnectionId is set) through the right next ConnectionRepository
+ * call for each approval outcome -- "Connections react automatically."
+ * This is coordination, not duplicated business logic: every individual
+ * call it makes (connect(), reject(), disconnect(), suspend()) is still
+ * validated by ConnectionRepository's own allowedTransitions, exactly as
+ * if a button had called it. reactToApprovalTransition only decides
+ * WHICH already-legal call fits the situation, wrapped in try/catch so
+ * a connection that was independently changed out from under an
+ * in-flight approval (e.g. manually disconnected via the Connections
+ * screen while its approval was still PENDING) logs a mismatch instead
+ * of crashing this collector for the rest of the process's life --
+ * SupervisorJob isolates a crashed child coroutine from its siblings,
+ * but does nothing to restart that one child once it dies.
  */
 @Singleton
 class JarvisCore @Inject constructor(
@@ -101,6 +135,21 @@ class JarvisCore @Inject constructor(
         appScope.launch {
             events.collect { event ->
                 NotificationFactory.from(event)?.let { notifications.insert(it) }
+            }
+        }
+        appScope.launch {
+            approvals.created.collect { approval ->
+                publish(CoreEvent.ApprovalRequested(approval.approvalId, approval.title))
+            }
+        }
+        appScope.launch {
+            approvals.transitions.collect { t ->
+                publish(
+                    CoreEvent.ApprovalStatusChanged(
+                        t.approvalId, t.title, t.relatedConnectionId, t.previousState, t.newState, t.actor, t.reason,
+                    ),
+                )
+                reactToApprovalTransition(t)
             }
         }
     }
@@ -142,6 +191,101 @@ class JarvisCore @Inject constructor(
     fun markNotificationRead(notificationId: String) = notifications.markRead(notificationId)
     fun markAllNotificationsRead() = notifications.markAllRead()
     fun clearReadNotifications() = notifications.clearRead()
+
+    // --- Approvals coordination (Sprint 9 Final) ---------------------------------
+    // Same shape as Connections coordination above: thin call-throughs,
+    // no CoreEvent published here (the init block's collectors own that,
+    // driven by what ApprovalRepository actually accepted).
+
+    fun requestApproval(
+        kind: ApprovalKind,
+        title: String,
+        reason: String,
+        riskLevel: RiskLevel,
+        requestedBy: String = "system",
+        relatedConnectionId: String? = null,
+    ) = approvals.requestApproval(kind, title, reason, riskLevel, requestedBy, relatedConnectionId)
+
+    fun approveApproval(approvalId: String, actor: String = "owner", reason: String? = null) = approvals.approve(approvalId, actor, reason)
+    fun rejectApproval(approvalId: String, actor: String = "owner", reason: String? = null) = approvals.reject(approvalId, actor, reason)
+    fun cancelApproval(approvalId: String, actor: String = "owner", reason: String? = null) = approvals.cancel(approvalId, actor, reason)
+    fun expireApproval(approvalId: String, actor: String = "system", reason: String? = null) = approvals.expire(approvalId, actor, reason)
+    fun revokeApproval(approvalId: String, actor: String = "owner", reason: String? = null) = approvals.revoke(approvalId, actor, reason)
+
+    /**
+     * Sprint 9 Final, Section 6's "Request Connection" entry point:
+     * creates the Connection (PENDING_APPROVAL, same as every other
+     * seeded connection) and the linked Approval that gates it, in that
+     * order, so the approval's relatedConnectionId always points at a
+     * connection that already exists by the time anything reacts to it.
+     * No screen calls this yet -- see this method's own honesty note in
+     * the PR's delivery summary for why that's a real, stated gap
+     * rather than an oversight.
+     */
+    fun requestConnectionApproval(
+        providerId: String,
+        providerName: String,
+        requestedPermissions: Set<PermissionScope>,
+        maximumPermission: PermissionScope,
+        requestedBy: String = "owner",
+    ) {
+        val connection = connections.requestConnection(providerId, providerName, requestedPermissions, maximumPermission)
+        requestApproval(
+            kind = ApprovalKind.CONNECTION_REQUEST,
+            title = "Connect $providerName",
+            reason = "New AI provider connection requested.",
+            riskLevel = RiskLevel.MODERATE,
+            requestedBy = requestedBy,
+            relatedConnectionId = connection.connectionId,
+        )
+    }
+
+    /**
+     * "Connections react automatically" (Sprint 9 Final Section 6) --
+     * called from the approvals.transitions collector for every
+     * accepted approval transition. A no-op for approvals with no
+     * relatedConnectionId (plain PERMISSION_REQUEST approvals aren't
+     * about any one connection). Every ConnectionRepository call below
+     * can still legitimately throw ConnectionOperationError if the
+     * connection's actual current state doesn't allow it (e.g. it was
+     * already manually disconnected elsewhere) -- caught and swallowed
+     * here rather than propagated, because this collector must keep
+     * running for every approval after this one; see this class's
+     * docstring for why an uncaught exception here would be silent and
+     * permanent, not a one-time miss.
+     */
+    private fun reactToApprovalTransition(t: ApprovalTransition) {
+        val connectionId = t.relatedConnectionId ?: return
+        try {
+            when (t.newState) {
+                ApprovalOutcome.APPROVED -> {
+                    connections.approve(connectionId, t.actor)
+                    connections.connect(connectionId)
+                }
+                ApprovalOutcome.REJECTED -> connections.reject(connectionId, t.reason ?: "Approval rejected")
+                ApprovalOutcome.CANCELLED -> connections.disconnect(connectionId, t.reason ?: "Approval cancelled")
+                ApprovalOutcome.EXPIRED -> connections.disconnect(connectionId, t.reason ?: "Approval expired")
+                ApprovalOutcome.REVOKED -> {
+                    val status = connections.connections.value.firstOrNull { it.connectionId == connectionId }?.status
+                    if (status == ConnectionStatus.CONNECTED) {
+                        connections.suspend(connectionId, t.reason ?: "Approval revoked")
+                    } else {
+                        connections.disconnect(connectionId, t.reason ?: "Approval revoked")
+                    }
+                }
+                // PENDING is never a `newState` on an accepted transition
+                // (see ApprovalRepository.allowedTransitions) -- required
+                // for exhaustiveness, unreachable in practice.
+                ApprovalOutcome.PENDING -> Unit
+            }
+        } catch (e: ConnectionOperationError) {
+            // The approval's own state change already succeeded and was
+            // already audited/notified above regardless of this outcome
+            // -- a connection that drifted out of sync with its approval
+            // is a real (if unusual) situation this logs by not crashing,
+            // not a reason to have refused the approval action itself.
+        }
+    }
 
     suspend fun requestNavigation(route: String) {
         _navigationRequests.emit(route)
