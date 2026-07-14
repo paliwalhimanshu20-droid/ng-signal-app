@@ -10,7 +10,9 @@ import com.jarvis.os.app.data.repository.MockChatRepository
 import com.jarvis.os.app.data.repository.MockConnectionRepository
 import com.jarvis.os.app.data.repository.MockHomeAutomationRepository
 import com.jarvis.os.app.data.repository.MockMemoryRepository
+import com.jarvis.os.app.data.repository.MockNotificationRepository
 import com.jarvis.os.app.data.repository.MockProjectRepository
+import com.jarvis.os.app.data.repository.NotificationRepository
 import com.jarvis.os.app.data.repository.ProjectRepository
 import com.jarvis.os.app.data.settings.DataStoreSettingsRepository
 import com.jarvis.os.app.data.settings.SettingsRepository
@@ -56,6 +58,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindHomeAutomationRepository(impl: MockHomeAutomationRepository): HomeAutomationRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindNotificationRepository(impl: MockNotificationRepository): NotificationRepository
 
     @Binds
     @Singleton
