@@ -1,5 +1,6 @@
 package com.jarvis.os.app.core
 
+import com.jarvis.os.app.data.model.ApprovalOutcome
 import com.jarvis.os.app.data.model.ConnectionStatus
 import com.jarvis.os.app.data.model.Notification
 import com.jarvis.os.app.data.model.NotificationCategory
@@ -17,19 +18,22 @@ import java.util.UUID
  * `else` branch means adding a new CoreEvent subtype without deciding
  * what it means here is a compile error, not a silently-dropped event.
  *
- * Honesty note (explicit per this sprint's own instruction not to
- * simulate a capability that doesn't exist): CoreEvent has no
- * AiProviderUnavailable or SystemWarning variant yet, because nothing
- * in this codebase currently detects either condition -- there is no
- * real AI-router health signal and no real system-health signal to
- * publish from. NotificationCategory.AI, .WARNING and .SYSTEM exist
- * and this factory would need one more `is CoreEvent.Whatever ->`
- * branch each to light up, but nothing fabricates that event today.
- * Likewise ApprovalRequested is handled below but nothing currently
- * publishes it (ApprovalRepository's items are seeded at construction,
- * not created through a live "request" action any screen exposes) --
- * see ApprovalRepository's docstring. The category taxonomy and this
- * factory are ready for both the day a real trigger exists.
+ * Sprint 9 Final: ApprovalRequested's honesty caveat from PR2 is now
+ * resolved -- ApprovalRepository.requestApproval (called from
+ * JarvisCore.requestConnectionApproval, see that class) is a real live
+ * publisher, not a dormant case waiting for one. ApprovalStatusChanged
+ * is new this PR and handled below the same way ConnectionStatusChanged
+ * is: one factory function per state, all under NotificationCategory.APPROVAL
+ * regardless of which of the 5 terminal-or-revocable states was reached,
+ * since they're all still fundamentally "something about an approval
+ * changed" -- CONNECTION and ERROR are reserved for events about the
+ * connection itself, not the approval that gated it.
+ *
+ * Honesty note still standing: CoreEvent has no AiProviderUnavailable or
+ * SystemWarning variant yet -- no real AI-router health signal or
+ * system-health signal exists to publish either from (the AI Router PR
+ * is what would add the first real trigger for AiProviderUnavailable).
+ * NotificationCategory.AI, .WARNING and .SYSTEM exist and are ready.
  */
 object NotificationFactory {
 
@@ -44,6 +48,7 @@ object NotificationFactory {
             source = "Approvals",
             relatedEntityId = event.approvalId,
         )
+        is CoreEvent.ApprovalStatusChanged -> fromApprovalStatusChanged(event)
         is CoreEvent.ConnectionStatusChanged -> fromConnectionStatusChanged(event)
         // Sent/Received drive the chat typing indicator (Sprint 8.1) and
         // aren't notification-worthy on their own -- a chat message isn't
@@ -52,6 +57,35 @@ object NotificationFactory {
         is CoreEvent.ChatMessageSent -> null
         is CoreEvent.ChatResponseReceived -> null
         is CoreEvent.TaskStatusChanged -> null
+    }
+
+    private fun fromApprovalStatusChanged(event: CoreEvent.ApprovalStatusChanged): Notification? {
+        val (title, priority) = when (event.newState) {
+            ApprovalOutcome.APPROVED -> "${event.title} approved" to NotificationPriority.NORMAL
+            ApprovalOutcome.REJECTED -> "${event.title} rejected" to NotificationPriority.NORMAL
+            ApprovalOutcome.CANCELLED -> "${event.title} cancelled" to NotificationPriority.LOW
+            ApprovalOutcome.EXPIRED -> "${event.title} expired" to NotificationPriority.NORMAL
+            // Revoking pulls back access that was previously granted --
+            // a security-relevant event, not routine housekeeping like a
+            // cancel, so it's the one approval outcome that gets HIGH.
+            ApprovalOutcome.REVOKED -> "${event.title} revoked" to NotificationPriority.HIGH
+            // PENDING is only ever a *previous* state in this event (the
+            // state something transitioned FROM), never a `newState` --
+            // ApprovalRepository has no transition that lands back on
+            // PENDING (see its allowedTransitions), so this branch is
+            // unreachable but required for exhaustiveness.
+            ApprovalOutcome.PENDING -> return null
+        }
+        return Notification(
+            notificationId = UUID.randomUUID().toString(),
+            category = NotificationCategory.APPROVAL,
+            priority = priority,
+            title = title,
+            message = event.reason ?: "Status changed to ${event.newState}.",
+            timestamp = Instant.now(),
+            source = "Approvals",
+            relatedEntityId = event.relatedConnectionId ?: event.approvalId,
+        )
     }
 
     private fun fromConnectionStatusChanged(event: CoreEvent.ConnectionStatusChanged): Notification? {
