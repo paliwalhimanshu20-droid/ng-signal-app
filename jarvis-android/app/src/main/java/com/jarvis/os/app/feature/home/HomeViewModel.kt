@@ -41,7 +41,7 @@ class HomeViewModel @Inject constructor(
         HomeUiState(
             layout = layout,
             connectedCount = connections.count { it.status == ConnectionStatus.CONNECTED },
-            pendingApprovalCount = approvals.count { it.outcome == ApprovalOutcome.WAITING },
+            pendingApprovalCount = approvals.count { it.outcome == ApprovalOutcome.PENDING },
             activeProjectCount = projects.size,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
