@@ -5,8 +5,11 @@ import com.jarvis.os.app.data.repository.ChatRepository
 import com.jarvis.os.app.data.repository.ConnectionRepository
 import com.jarvis.os.app.data.repository.MemoryRepository
 import com.jarvis.os.app.data.repository.ProjectRepository
+import com.jarvis.os.app.di.ApplicationScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +41,19 @@ import javax.inject.Singleton
  * see ChatRepository.sendMessage). ChatViewModel collects events to
  * drive the typing indicator, giving events real UI consequences
  * rather than a bus nothing listens to.
+ *
+ * Sprint 9 (PR1) adds the Connections half of "single coordinator":
+ * every mutating action a screen can take on a connection now goes
+ * through one of the methods below instead of ConnectionsViewModel
+ * calling ConnectionRepository directly -- and every transition
+ * ConnectionRepository accepts (including ones no button triggers
+ * directly, like a future background health-check calling markError)
+ * is republished here as CoreEvent.ConnectionStatusChanged via the
+ * init block's collector, so "every important action must emit a
+ * CoreEvent" holds even for transitions this class didn't itself
+ * initiate. ConnectionRepository still owns all transition validity
+ * (see its allowedTransitions) -- this class forwards and coordinates,
+ * it does not re-implement or duplicate that logic.
  */
 @Singleton
 class JarvisCore @Inject constructor(
@@ -46,6 +62,7 @@ class JarvisCore @Inject constructor(
     val memory: MemoryRepository,
     val projects: ProjectRepository,
     val chat: ChatRepository,
+    @ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val _events = MutableSharedFlow<CoreEvent>(extraBufferCapacity = 32)
     val events: SharedFlow<CoreEvent> = _events
@@ -55,9 +72,42 @@ class JarvisCore @Inject constructor(
     /** Route strings matching JarvisDestination.route values -- deliberately plain strings, not a JarvisDestination reference, so this coordination layer has no dependency on the navigation/UI package. */
     val navigationRequests: SharedFlow<String> = _navigationRequests
 
+    init {
+        appScope.launch {
+            connections.transitions.collect { t ->
+                publish(
+                    CoreEvent.ConnectionStatusChanged(
+                        t.connectionId, t.providerName, t.previousStatus, t.newStatus, t.reason,
+                    ),
+                )
+            }
+        }
+    }
+
     suspend fun publish(event: CoreEvent) {
         _events.emit(event)
     }
+
+    // --- Connections coordination (Sprint 9 PR1) --------------------------------
+    // Each of these is a thin call-through to ConnectionRepository; the
+    // CoreEvent for it is NOT published here (that would double-publish
+    // alongside the init block's collector above) -- publishing happens
+    // exactly once, in one place, driven by what ConnectionRepository
+    // actually accepted. A caller that needs to react to a specific
+    // action's outcome (e.g. ConnectionsViewModel's Snackbar-on-error)
+    // still gets that from the thrown ConnectionOperationError, same as
+    // Sprint 7.1.
+
+    fun approveConnection(connectionId: String, approvedBy: String = "owner") = connections.approve(connectionId, approvedBy)
+    fun rejectConnection(connectionId: String, reason: String = "Rejected by owner") = connections.reject(connectionId, reason)
+    fun connectConnection(connectionId: String) = connections.connect(connectionId)
+    fun markConnectionConnected(connectionId: String) = connections.markConnected(connectionId)
+    fun markConnectionError(connectionId: String, reason: String) = connections.markError(connectionId, reason)
+    fun suspendConnection(connectionId: String, reason: String = "Suspended by owner") = connections.suspend(connectionId, reason)
+    fun disconnectConnection(connectionId: String, reason: String? = "Disconnected by owner") = connections.disconnect(connectionId, reason)
+    fun reconnectConnection(connectionId: String) = connections.reconnect(connectionId)
+    fun disableAllConnections(reason: String = "Owner disabled all connections") = connections.disableAll(reason)
+    fun testConnection(connectionId: String) = connections.testConnection(connectionId)
 
     suspend fun requestNavigation(route: String) {
         _navigationRequests.emit(route)
