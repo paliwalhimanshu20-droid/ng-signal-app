@@ -1,19 +1,31 @@
 package com.jarvis.os.app.di
 
+import com.jarvis.os.app.core.memory.AgentMemory
+import com.jarvis.os.app.core.memory.AgentMemoryImpl
+import com.jarvis.os.app.core.memory.ConversationMemory
+import com.jarvis.os.app.core.memory.ConversationMemoryImpl
+import com.jarvis.os.app.core.memory.PersonalMemory
+import com.jarvis.os.app.core.memory.PersonalMemoryImpl
+import com.jarvis.os.app.core.memory.ProjectMemory
+import com.jarvis.os.app.core.memory.ProjectMemoryImpl
 import com.jarvis.os.app.data.repository.ApprovalRepository
+import com.jarvis.os.app.data.repository.AuditRepository
 import com.jarvis.os.app.data.repository.ChatRepository
 import com.jarvis.os.app.data.repository.ConnectionRepository
 import com.jarvis.os.app.data.repository.HomeAutomationRepository
 import com.jarvis.os.app.data.repository.MemoryRepository
 import com.jarvis.os.app.data.repository.MockApprovalRepository
+import com.jarvis.os.app.data.repository.MockAuditRepository
 import com.jarvis.os.app.data.repository.MockChatRepository
 import com.jarvis.os.app.data.repository.MockConnectionRepository
 import com.jarvis.os.app.data.repository.MockHomeAutomationRepository
 import com.jarvis.os.app.data.repository.MockMemoryRepository
 import com.jarvis.os.app.data.repository.MockNotificationRepository
 import com.jarvis.os.app.data.repository.MockProjectRepository
+import com.jarvis.os.app.data.repository.MockToolRepository
 import com.jarvis.os.app.data.repository.NotificationRepository
 import com.jarvis.os.app.data.repository.ProjectRepository
+import com.jarvis.os.app.data.repository.ToolRepository
 import com.jarvis.os.app.data.settings.DataStoreSettingsRepository
 import com.jarvis.os.app.data.settings.SettingsRepository
 import dagger.Binds
@@ -66,4 +78,30 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSettingsRepository(impl: DataStoreSettingsRepository): SettingsRepository
+
+    // --- Sprint 10: Memory views (see core/memory/MemoryInterfaces.kt for why these are four separate classes, not one) ---
+
+    @Binds
+    @Singleton
+    abstract fun bindConversationMemory(impl: ConversationMemoryImpl): ConversationMemory
+
+    @Binds
+    @Singleton
+    abstract fun bindProjectMemory(impl: ProjectMemoryImpl): ProjectMemory
+
+    @Binds
+    @Singleton
+    abstract fun bindPersonalMemory(impl: PersonalMemoryImpl): PersonalMemory
+
+    @Binds
+    @Singleton
+    abstract fun bindAgentMemory(impl: AgentMemoryImpl): AgentMemory
+
+    @Binds
+    @Singleton
+    abstract fun bindToolRepository(impl: MockToolRepository): ToolRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAuditRepository(impl: MockAuditRepository): AuditRepository
 }
