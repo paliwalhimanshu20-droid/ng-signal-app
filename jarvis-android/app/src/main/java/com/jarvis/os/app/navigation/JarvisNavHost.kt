@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import com.jarvis.os.app.feature.approvals.ApprovalCenterScreen
 import com.jarvis.os.app.feature.chat.ChatScreen
 import com.jarvis.os.app.feature.connections.ConnectionsScreen
+import com.jarvis.os.app.feature.dashboard.ExecutiveDashboardScreen
 import com.jarvis.os.app.feature.home.HomeScreen
 import com.jarvis.os.app.feature.homeautomation.HomeAutomationScreen
 import com.jarvis.os.app.feature.memory.MemoryScreen
@@ -26,5 +27,6 @@ fun JarvisNavHost(navController: NavHostController) {
         composable(JarvisDestination.Notifications.route) { NotificationsScreen() }
         composable(JarvisDestination.HomeAutomation.route) { HomeAutomationScreen() }
         composable(JarvisDestination.Settings.route) { SettingsScreen() }
+        composable(JarvisDestination.Dashboard.route) { ExecutiveDashboardScreen() }
     }
 }

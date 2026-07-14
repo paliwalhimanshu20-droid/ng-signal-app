@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Memory
@@ -29,10 +30,11 @@ sealed class JarvisDestination(val route: String, val label: String, val icon: I
     data object Notifications : JarvisDestination("notifications", "Notifications", Icons.Filled.Notifications)
     data object Settings : JarvisDestination("settings", "Settings", Icons.Filled.Settings)
     data object HomeAutomation : JarvisDestination("home_automation", "Home Automation", Icons.Filled.Home)
+    data object Dashboard : JarvisDestination("dashboard", "Executive Dashboard", Icons.Filled.Dashboard)
 
     companion object {
         val bottomBarItems = listOf(Home, Chat, Projects, Connections)
-        val drawerOnlyItems = listOf(Memory, Approvals, Notifications, HomeAutomation, Settings)
+        val drawerOnlyItems = listOf(Memory, Approvals, Notifications, HomeAutomation, Settings, Dashboard)
         val all = bottomBarItems + drawerOnlyItems
     }
 }
