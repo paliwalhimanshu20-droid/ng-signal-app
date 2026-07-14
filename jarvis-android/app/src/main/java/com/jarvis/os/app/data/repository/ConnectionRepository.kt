@@ -5,7 +5,9 @@ import com.jarvis.os.app.data.model.ConnectionHealth
 import com.jarvis.os.app.data.model.ConnectionStatus
 import com.jarvis.os.app.data.model.PermissionScope
 import com.jarvis.os.app.data.model.TrustLevel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -26,18 +28,44 @@ import javax.inject.Singleton
  * approved_by) -> approve(connectionId, approvedBy), etc.) SPECIFICALLY
  * so that the day a real API exists, a `RemoteConnectionRepository`
  * implementing this same interface is a thin HTTP client, not a
- * redesign of anything that calls it (every ViewModel in this app
- * depends on `ConnectionRepository`, never on `MockConnectionRepository`
- * directly — see di/RepositoryModule.kt).
+ * redesign of anything that calls it (JarvisCore is the only thing
+ * that depends on `ConnectionRepository` as of Sprint 9 — see that
+ * class's docstring — never a ViewModel directly).
+ *
+ * SPRINT 9 — validated state machine:
+ *
+ *   PENDING_APPROVAL --approve--> APPROVED --connect--> CONNECTING
+ *   CONNECTING --markConnected--> CONNECTED
+ *   CONNECTING --markError-------> ERROR
+ *   CONNECTED  --markError-------> ERROR
+ *   CONNECTED  --suspend---------> SUSPENDED
+ *   SUSPENDED  --reconnect-------> CONNECTING
+ *   ERROR      --reconnect-------> CONNECTING
+ *   PENDING_APPROVAL --reject----> REJECTED (terminal)
+ *   {APPROVED,CONNECTING,CONNECTED,SUSPENDED,ERROR} --disconnect--> DISCONNECTED (terminal)
+ *
+ * `allowedTransitions` below is the single source of truth for this
+ * graph — every mutating method routes through `transition()`, which
+ * consults it, so an impossible state combination (e.g. suspending a
+ * connection that was never connected) throws ConnectionOperationError
+ * instead of silently succeeding. Every successful transition is
+ * emitted on `transitions`; JarvisCore is the sole subscriber, and
+ * republishes each one as CoreEvent.ConnectionStatusChanged (see that
+ * class) — this repository does not depend on JarvisCore or CoreEvent
+ * itself, keeping the dependency direction one-way per Sprint 9
+ * Section 7 ("JarvisCore coordinates only").
  *
  * `MockConnectionRepository` below is real, working, in-memory state
- * management — approve/reject/suspend/disconnect genuinely transition
- * state and genuinely fail on an invalid transition, exactly like the
- * Python ConnectionManager's own rules — it is a faithful behavioral
+ * management — every method genuinely transitions state and genuinely
+ * fails on an invalid transition, exactly like the Python
+ * ConnectionManager's own rules — it is a faithful behavioral
  * stand-in, not a UI placeholder that always succeeds.
  */
 interface ConnectionRepository {
     val connections: StateFlow<List<Connection>>
+
+    /** Every successful state transition, in order. JarvisCore is the sole subscriber -- see this file's class docstring. */
+    val transitions: SharedFlow<ConnectionTransition>
 
     fun requestConnection(
         providerId: String,
@@ -49,13 +77,34 @@ interface ConnectionRepository {
 
     fun approve(connectionId: String, approvedBy: String)
     fun reject(connectionId: String, reason: String)
+
+    /** APPROVED -> CONNECTING. The explicit "begin connecting" step Sprint 9 Flow A requires between an owner's approval and a live connection. */
+    fun connect(connectionId: String)
+
+    /** CONNECTING -> CONNECTED. */
     fun markConnected(connectionId: String)
+
+    /** CONNECTING or CONNECTED -> ERROR. Sprint 9 Flow C: a failed connect attempt or a live connection dropping. */
+    fun markError(connectionId: String, reason: String)
+
     fun disconnect(connectionId: String, reason: String? = null)
     fun suspend(connectionId: String, reason: String)
+
+    /** SUSPENDED or ERROR -> CONNECTING (retry/resume). Callers that want the resulting CONNECTED state must follow up with markConnected once the (mock or real) connect attempt resolves, same as a fresh connect(). */
     fun reconnect(connectionId: String)
+
     fun disableAll(reason: String)
     fun testConnection(connectionId: String): ConnectionHealth
 }
+
+/** One accepted transition, as published on ConnectionRepository.transitions. */
+data class ConnectionTransition(
+    val connectionId: String,
+    val providerName: String,
+    val previousStatus: ConnectionStatus,
+    val newStatus: ConnectionStatus,
+    val reason: String? = null,
+)
 
 class ConnectionOperationError(message: String) : Exception(message)
 
@@ -64,6 +113,9 @@ class MockConnectionRepository @Inject constructor() : ConnectionRepository {
 
     private val _connections = MutableStateFlow(seedConnections())
     override val connections: StateFlow<List<Connection>> = _connections.asStateFlow()
+
+    private val _transitions = MutableSharedFlow<ConnectionTransition>(extraBufferCapacity = 32)
+    override val transitions: SharedFlow<ConnectionTransition> = _transitions
 
     override fun requestConnection(
         providerId: String,
@@ -87,49 +139,53 @@ class MockConnectionRepository @Inject constructor() : ConnectionRepository {
     }
 
     override fun approve(connectionId: String, approvedBy: String) {
-        transition(connectionId, expected = ConnectionStatus.PENDING_APPROVAL) {
-            it.copy(status = ConnectionStatus.APPROVED)
-        }
+        transition(connectionId, ConnectionStatus.APPROVED) { it.copy(status = ConnectionStatus.APPROVED) }
     }
 
     override fun reject(connectionId: String, reason: String) {
-        transition(connectionId, expected = ConnectionStatus.PENDING_APPROVAL) {
+        transition(connectionId, ConnectionStatus.REJECTED, reason) {
             it.copy(status = ConnectionStatus.REJECTED, trustLevel = TrustLevel.none())
         }
     }
 
+    override fun connect(connectionId: String) {
+        transition(connectionId, ConnectionStatus.CONNECTING) { it.copy(status = ConnectionStatus.CONNECTING) }
+    }
+
     override fun markConnected(connectionId: String) {
-        transition(connectionId, expected = ConnectionStatus.APPROVED) {
+        transition(connectionId, ConnectionStatus.CONNECTED) {
             it.copy(status = ConnectionStatus.CONNECTED, health = ConnectionHealth.HEALTHY, lastSync = Instant.now())
         }
     }
 
+    override fun markError(connectionId: String, reason: String) {
+        transition(connectionId, ConnectionStatus.ERROR, reason) {
+            it.copy(status = ConnectionStatus.ERROR, health = ConnectionHealth.UNHEALTHY)
+        }
+    }
+
     override fun disconnect(connectionId: String, reason: String?) {
-        update(connectionId) {
-            if (it.status == ConnectionStatus.REJECTED || it.status == ConnectionStatus.DISCONNECTED) it
-            else it.copy(status = ConnectionStatus.DISCONNECTED, trustLevel = TrustLevel.none(), health = ConnectionHealth.UNKNOWN)
+        val current = _connections.value.firstOrNull { it.connectionId == connectionId }
+            ?: throw ConnectionOperationError("No connection found with id '$connectionId'.")
+        // Idempotent no-op on the two terminal states, same as Sprint-8 -- disconnecting an already-terminal connection isn't an error, it's a no-op.
+        if (current.status == ConnectionStatus.REJECTED || current.status == ConnectionStatus.DISCONNECTED) return
+        transition(connectionId, ConnectionStatus.DISCONNECTED, reason) {
+            it.copy(status = ConnectionStatus.DISCONNECTED, trustLevel = TrustLevel.none(), health = ConnectionHealth.UNKNOWN)
         }
     }
 
     override fun suspend(connectionId: String, reason: String) {
-        transition(connectionId, expected = ConnectionStatus.CONNECTED) {
-            it.copy(status = ConnectionStatus.SUSPENDED)
-        }
+        transition(connectionId, ConnectionStatus.SUSPENDED, reason) { it.copy(status = ConnectionStatus.SUSPENDED) }
     }
 
     override fun reconnect(connectionId: String) {
-        transition(connectionId, expected = ConnectionStatus.SUSPENDED) {
-            it.copy(status = ConnectionStatus.APPROVED)
-        }
+        transition(connectionId, ConnectionStatus.CONNECTING) { it.copy(status = ConnectionStatus.CONNECTING) }
     }
 
     override fun disableAll(reason: String) {
-        _connections.update { list ->
-            list.map {
-                if (it.status == ConnectionStatus.REJECTED || it.status == ConnectionStatus.DISCONNECTED) it
-                else it.copy(status = ConnectionStatus.DISCONNECTED, trustLevel = TrustLevel.none(), health = ConnectionHealth.UNKNOWN)
-            }
-        }
+        _connections.value
+            .filter { it.status != ConnectionStatus.REJECTED && it.status != ConnectionStatus.DISCONNECTED }
+            .forEach { disconnect(it.connectionId, reason) }
     }
 
     override fun testConnection(connectionId: String): ConnectionHealth {
@@ -140,15 +196,34 @@ class MockConnectionRepository @Inject constructor() : ConnectionRepository {
         return health
     }
 
-    private fun transition(connectionId: String, expected: ConnectionStatus, block: (Connection) -> Connection) {
+    /**
+     * The single validation gate every mutating method above routes
+     * through. Looks up the current status, checks `newStatus` against
+     * `allowedTransitions[current]`, applies `block` only if legal, and
+     * emits the resulting ConnectionTransition -- so it is structurally
+     * impossible for a state change to happen without either a legal
+     * transition or an exception, and impossible for `transitions` to
+     * emit something that didn't actually happen to `connections`.
+     */
+    private fun transition(
+        connectionId: String,
+        newStatus: ConnectionStatus,
+        reason: String? = null,
+        block: (Connection) -> Connection,
+    ) {
         val current = _connections.value.firstOrNull { it.connectionId == connectionId }
             ?: throw ConnectionOperationError("No connection found with id '$connectionId'.")
-        if (current.status != expected) {
+        val allowed = allowedTransitions[current.status].orEmpty()
+        if (newStatus !in allowed) {
             throw ConnectionOperationError(
-                "Cannot perform this action: status is '${current.status}', expected '$expected'.",
+                "Cannot move '${current.providerName}' from ${current.status} to $newStatus " +
+                    "-- allowed next states are ${if (allowed.isEmpty()) "none (terminal)" else allowed}.",
             )
         }
         update(connectionId, block)
+        _transitions.tryEmit(
+            ConnectionTransition(connectionId, current.providerName, current.status, newStatus, reason),
+        )
     }
 
     private fun update(connectionId: String, block: (Connection) -> Connection) {
@@ -179,4 +254,27 @@ class MockConnectionRepository @Inject constructor() : ConnectionRepository {
         lastSync = if (status == ConnectionStatus.CONNECTED) Instant.now() else null,
         profileTags = tags,
     )
+
+    companion object {
+        /**
+         * The full Sprint 9 transition graph. A status absent as a key
+         * (or mapped to an empty set) is terminal. This is the ONLY
+         * place transition legality is decided -- see `transition()`.
+         */
+        val allowedTransitions: Map<ConnectionStatus, Set<ConnectionStatus>> = mapOf(
+            // DISCONNECTED is included here (in addition to APPROVED/REJECTED) so
+            // disableAll() can route every non-terminal connection, pending ones
+            // included, through the same transition()/disconnect() path rather
+            // than a bulk-write special case -- a pending request is a valid
+            // thing for an owner override to withdraw.
+            ConnectionStatus.PENDING_APPROVAL to setOf(ConnectionStatus.APPROVED, ConnectionStatus.REJECTED, ConnectionStatus.DISCONNECTED),
+            ConnectionStatus.APPROVED to setOf(ConnectionStatus.CONNECTING, ConnectionStatus.DISCONNECTED),
+            ConnectionStatus.CONNECTING to setOf(ConnectionStatus.CONNECTED, ConnectionStatus.ERROR, ConnectionStatus.DISCONNECTED),
+            ConnectionStatus.CONNECTED to setOf(ConnectionStatus.SUSPENDED, ConnectionStatus.ERROR, ConnectionStatus.DISCONNECTED),
+            ConnectionStatus.SUSPENDED to setOf(ConnectionStatus.CONNECTING, ConnectionStatus.DISCONNECTED),
+            ConnectionStatus.ERROR to setOf(ConnectionStatus.CONNECTING, ConnectionStatus.DISCONNECTED),
+            ConnectionStatus.REJECTED to emptySet(),
+            ConnectionStatus.DISCONNECTED to emptySet(),
+        )
+    }
 }
