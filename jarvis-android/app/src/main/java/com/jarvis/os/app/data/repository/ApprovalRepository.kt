@@ -71,6 +71,10 @@ interface ApprovalRepository {
         riskLevel: RiskLevel,
         requestedBy: String = "system",
         relatedConnectionId: String? = null,
+        /** Sprint 10: set for kind == TOOL_EXECUTION. See ApprovalItem.relatedToolId. */
+        relatedToolId: String? = null,
+        /** Sprint 11: set for kind == AGENT_TASK. See ApprovalItem.relatedAgentTaskId. */
+        relatedAgentTaskId: String? = null,
     ): ApprovalItem
 
     fun approve(approvalId: String, actor: String, reason: String? = null)
@@ -115,6 +119,8 @@ class MockApprovalRepository @Inject constructor() : ApprovalRepository {
         riskLevel: RiskLevel,
         requestedBy: String,
         relatedConnectionId: String?,
+        relatedToolId: String?,
+        relatedAgentTaskId: String?,
     ): ApprovalItem {
         val approval = ApprovalItem(
             approvalId = UUID.randomUUID().toString(),
@@ -127,6 +133,8 @@ class MockApprovalRepository @Inject constructor() : ApprovalRepository {
             resolvedAt = null,
             resolvedBy = null,
             relatedConnectionId = relatedConnectionId,
+            relatedToolId = relatedToolId,
+            relatedAgentTaskId = relatedAgentTaskId,
         )
         _items.update { it + approval }
         appendAudit(approval.approvalId, requestedBy, relatedConnectionId, previousState = null, newState = ApprovalOutcome.PENDING, reason = "Request created")
