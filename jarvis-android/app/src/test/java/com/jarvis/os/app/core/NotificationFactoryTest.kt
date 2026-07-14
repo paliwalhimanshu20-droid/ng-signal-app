@@ -1,5 +1,6 @@
 package com.jarvis.os.app.core
 
+import com.jarvis.os.app.data.model.ApprovalOutcome
 import com.jarvis.os.app.data.model.ConnectionStatus
 import com.jarvis.os.app.data.model.NotificationCategory
 import com.jarvis.os.app.data.model.NotificationPriority
@@ -18,6 +19,34 @@ class NotificationFactoryTest {
         assertEquals(NotificationCategory.APPROVAL, notification.category)
         assertEquals("approval-1", notification.relatedEntityId)
         assertEquals("Connect Claude", notification.message)
+    }
+
+    @Test
+    fun `approval approved becomes a normal-priority approval notification`() {
+        val event = CoreEvent.ApprovalStatusChanged("a1", "Connect Claude", "c1", ApprovalOutcome.PENDING, ApprovalOutcome.APPROVED, "owner")
+        val notification = NotificationFactory.from(event)
+
+        requireNotNull(notification)
+        assertEquals(NotificationCategory.APPROVAL, notification.category)
+        assertEquals(NotificationPriority.NORMAL, notification.priority)
+        assertEquals("Connect Claude approved", notification.title)
+        // Related to the connection when one exists, so a tap could one
+        // day open the right screen -- see NotificationFactory's docstring.
+        assertEquals("c1", notification.relatedEntityId)
+    }
+
+    @Test
+    fun `approval revoked becomes a high-priority approval notification`() {
+        val event = CoreEvent.ApprovalStatusChanged("a1", "GitHub write", null, ApprovalOutcome.APPROVED, ApprovalOutcome.REVOKED, "owner", reason = "no longer needed")
+        val notification = NotificationFactory.from(event)
+
+        requireNotNull(notification)
+        assertEquals(NotificationCategory.APPROVAL, notification.category)
+        assertEquals(NotificationPriority.HIGH, notification.priority)
+        assertEquals("GitHub write revoked", notification.title)
+        assertEquals("no longer needed", notification.message)
+        // Falls back to the approvalId when there's no related connection.
+        assertEquals("a1", notification.relatedEntityId)
     }
 
     @Test
