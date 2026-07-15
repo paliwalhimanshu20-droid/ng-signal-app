@@ -1,9 +1,16 @@
 package com.jarvis.os.app.core
 
+import com.jarvis.os.app.core.agents.WatchTowerOrchestrator
+import com.jarvis.os.app.core.intelligence.ContextManager
+import com.jarvis.os.app.core.intelligence.ExecutiveBriefing
+import com.jarvis.os.app.core.intelligence.ExecutiveBriefingEngine
+import com.jarvis.os.app.core.intelligence.JarvisDecision
+import com.jarvis.os.app.core.intelligence.JarvisDecisionEngine
 import com.jarvis.os.app.core.tools.ToolResult
 import com.jarvis.os.app.data.model.ApprovalKind
 import com.jarvis.os.app.data.model.ApprovalOutcome
 import com.jarvis.os.app.data.model.ConnectionStatus
+import com.jarvis.os.app.data.model.ContextBundle
 import com.jarvis.os.app.data.model.PermissionScope
 import com.jarvis.os.app.data.model.RiskLevel
 import com.jarvis.os.app.data.repository.ApprovalRepository
@@ -117,6 +124,10 @@ class JarvisCore @Inject constructor(
     val notifications: NotificationRepository,
     val tools: ToolRepository,
     val audit: AuditRepository,
+    private val contextManager: ContextManager,
+    private val decisionEngine: JarvisDecisionEngine,
+    val watchTower: WatchTowerOrchestrator,
+    val briefingEngine: ExecutiveBriefingEngine,
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
     private val _events = MutableSharedFlow<CoreEvent>(extraBufferCapacity = 32)
@@ -321,27 +332,142 @@ class JarvisCore @Inject constructor(
         return result
     }
 
+    // --- Watch Tower coordination (Sprint 12 Phase 2) -----------------------------
+    // Same "ask first, run once approved" two-call shape as runTool above,
+    // deliberately -- one governance pattern in this codebase, not a
+    // second one for agents that could quietly drift from the first. The
+    // actual approval-required rule lives in MultiAiCoordinator (Sprint
+    // 11), not re-decided here -- see WatchTowerOrchestrator's docstring.
+
+    /** Requests approval to convene Watch Tower on [topic] -- never runs a specialist itself. Mirrors requestApproval's shape, not runTool's, because nothing executes on this call. */
+    suspend fun requestWatchTowerConvene(topic: String) = watchTower.requestConvene(topic)
+
+    /** Runs Watch Tower on [topic] once [approvalId] has been approved -- mirrors runTool(toolId, input, approvalId)'s shape exactly. */
+    suspend fun runWatchTower(topic: String, approvalId: String) = watchTower.convene(topic, approvalId)
+
     suspend fun requestNavigation(route: String) {
         _navigationRequests.emit(route)
     }
 
     /**
-     * The single coordination point Requirement 1 asks for. Publishes
-     * ChatMessageSent, delegates the actual send to ChatRepository
-     * (which streams through AiRouter's active ChatProvider),
-     * publishes ChatResponseReceived once that completes, then checks
-     * whether the user's own text was a recognized navigation command
-     * -- see matchNavigationCommand's docstring for why this, and not
-     * an ambient auto-navigate-on-event trigger, is this sprint's one
-     * complete navigation example.
+     * Sprint 12: the single coordination point Sprint-8 originally asked
+     * for, now actually consulting the rest of the Sprint 10/11
+     * foundation before replying instead of forwarding text verbatim.
+     * Still publishes ChatMessageSent before sending and
+     * ChatResponseReceived once ChatRepository's suspend call returns,
+     * same as every sprint before this one -- Sprint 12 changes WHAT
+     * gets sent to ChatRepository.sendMessage, not the event-publishing
+     * shape around it.
+     *
+     * Routes to exactly one of three things, in priority order, based
+     * on JarvisDecisionEngine.decide(text):
+     *  1. needsBriefing -> ExecutiveBriefingEngine (Phase 3) -- a status
+     *     roundup, not a reply about the owner's specific words.
+     *  2. needsOrchestration -> WatchTowerOrchestrator.requestConvene
+     *     (Phase 2) -- always creates a pending approval, never runs a
+     *     specialist from this call (see that class's docstring).
+     *  3. otherwise -> the Phase 1 conversational context hint: recalled
+     *     memory/conversation (ContextManager, consulted every turn --
+     *     Phase 3's "no repeated explanations" means memory is never
+     *     conditional on a keyword), project status if relevant, and an
+     *     honest, non-executing note about any tool or agent the
+     *     message named (see buildConversationalContextHint's own
+     *     docstring for why matched tools/agents are never auto-run).
+     *
+     * The owner's own chat bubble is unaffected by any of this --
+     * ChatRepository.sendMessage's contextHint parameter augments only
+     * what the ChatProvider sees, never what's stored as the
+     * OWNER-authored ChatMessage (see that interface's docstring).
      */
     suspend fun sendChatMessage(text: String) {
         publish(CoreEvent.ChatMessageSent(chat.activeSessionId, text))
-        chat.sendMessage(text)
+
+        val decision = decisionEngine.decide(text)
+        val contextHint = when {
+            decision.needsBriefing -> renderBriefing(briefingEngine.generateMorningBriefing())
+            decision.needsOrchestration -> renderOrchestrationRequest(text)
+            else -> buildConversationalContextHint(text, decision)
+        }
+
+        chat.sendMessage(text, contextHint)
         chat.messages.value.lastOrNull()?.let { lastMessage ->
             publish(CoreEvent.ChatResponseReceived(chat.activeSessionId, lastMessage.messageId))
         }
         matchNavigationCommand(text)?.let { route -> requestNavigation(route) }
+    }
+
+    /** Phase 3 + Phase 4: renders an ExecutiveBriefing as natural prose, not a labeled data dump -- "never respond like a debug application" (this sprint's own Phase 4 wording). */
+    private fun renderBriefing(briefing: ExecutiveBriefing): String {
+        val body = briefing.lines.joinToString(" ")
+        return "${briefing.greeting} $body"
+    }
+
+    /**
+     * Phase 2 + Phase 4: requests a Watch Tower convening and phrases
+     * the result naturally. Deliberately does not say "PENDING", an
+     * approval id in brackets, or any other UI/data-model vocabulary
+     * the owner didn't ask for -- Phase 4's "avoid implementation
+     * details unless explicitly requested" rule, applied to the one
+     * place this sprint most risked violating it (WatchTowerSummary's
+     * own [approvalId] field name reads exactly like an implementation
+     * detail if surfaced verbatim).
+     */
+    private suspend fun renderOrchestrationRequest(topic: String): String {
+        val summary = watchTower.requestConvene(topic)
+        return if (summary.approvalId != null) {
+            "I'd like to bring in the specialist team on this -- I've asked for your approval first, since convening the full team is always something you sign off on."
+        } else {
+            summary.headline
+        }
+    }
+
+    /**
+     * Phase 1 + Phase 4: what the ChatProvider actually sees this turn
+     * when neither a briefing nor an orchestration request was asked
+     * for. Recalled memory and active conversation from ContextManager
+     * come first and unconditionally (Phase 3's "no repeated
+     * explanations" -- consulted every turn, not gated behind a
+     * keyword), followed by project status only when the message
+     * actually needs it, followed by a natural mention of any tool or
+     * agent JarvisDecisionEngine matched.
+     *
+     * A matched tool or agent is named, never run or dispatched, for
+     * either risk level: there is no reliable, deterministic way to
+     * extract a tool's real input (e.g. a bare arithmetic expression)
+     * out of the owner's full sentence without guessing, and a
+     * guessed-wrong input failing would look exactly like JARVIS
+     * attempted and failed -- the fake-success/fake-failure dishonesty
+     * this codebase's "no fake success" rule exists to rule out. A
+     * matched agent is likewise only named, not dispatched -- Sprint 12
+     * Phase 2's Watch Tower path is the one place this codebase
+     * actually dispatches a specialist, and only after an explicit
+     * orchestration request plus owner approval, never as a side effect
+     * of an ordinary message that happened to mention an agent's name.
+     */
+    private suspend fun buildConversationalContextHint(text: String, decision: JarvisDecision): String {
+        val context = contextManager.buildContext(sessionId = chat.activeSessionId, query = text)
+        val parts = mutableListOf<String>()
+
+        if (context.recentConversation.isNotEmpty()) {
+            parts += "we recently touched on: ${context.recentConversation.takeLast(3).joinToString("; ")}"
+        }
+        if (context.relevantPersonalMemory.isNotEmpty()) {
+            parts += "for context: ${context.relevantPersonalMemory.joinToString("; ")}"
+        }
+        if (decision.needsProjectContext && projects.projects.value.isNotEmpty()) {
+            val summary = projects.projects.value.joinToString("; ") { p ->
+                "${p.name} is ${p.status} at ${p.progressPercent}% with ${p.pendingTasks.count { !it.done }} open task(s)"
+            }
+            parts += summary
+        }
+        decision.matchedTool?.let { tool ->
+            parts += "${tool.name} looks relevant here -- it's available from the Tools screen whenever you'd like to run it"
+        }
+        decision.matchedAgent?.let { agent ->
+            parts += "${agent.name} specializes in ${agent.specialty.lowercase()} and could weigh in if you'd like to bring the team in"
+        }
+
+        return if (parts.isEmpty()) "" else parts.joinToString(". ") + "."
     }
 
     /**
