@@ -56,3 +56,28 @@ object JarvisStatusColors {
     val Unhealthy = Color(0xFFFF5470)
     val Unknown = Color(0xFF9AA4B2)
 }
+
+/**
+ * Sprint 13 "JARVIS Identity": the holographic avatar and its
+ * surrounding hero chrome use these FIXED colors, never the Owner's
+ * chosen AccentColor -- same reasoning JarvisStatusColors already
+ * applies one level up ("status meaning must never depend on
+ * personalization"), extended here to "JARVIS's own presence must
+ * never depend on personalization." An Owner who picked Crimson Alert
+ * as their accent still sees the same recognizably-JARVIS blue/cyan
+ * avatar everyone else does -- a brand mark, not themeable chrome.
+ * AccentColor continues to govern ordinary UI (buttons, selection
+ * states, the rest of MaterialTheme.colorScheme) unchanged.
+ *
+ * Void is deliberately darker than JarvisNeutrals.DarkSurface/AmoledSurface
+ * -- reserved for the specific hero space directly behind the avatar,
+ * not swapped in for either of those tokens, so the avatar's own glow
+ * has somewhere darker to bloom into without competing with ordinary
+ * card surfaces elsewhere on the same screen.
+ */
+object JarvisBrand {
+    val CoreBlue = Color(0xFF2F6BFF)
+    val CoreCyan = Color(0xFF5EEAFF)
+    val CorePlasma = Color(0xFF8B5CF6)
+    val Void = Color(0xFF06070A)
+}
