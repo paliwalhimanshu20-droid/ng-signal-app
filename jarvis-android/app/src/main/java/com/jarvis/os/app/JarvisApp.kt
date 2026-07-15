@@ -17,31 +17,70 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.jarvis.os.app.core.JarvisCore
 import com.jarvis.os.app.data.settings.AppearanceSettings
 import com.jarvis.os.app.designsystem.JarvisTheme
 import com.jarvis.os.app.feature.notifications.NotificationsViewModel
 import com.jarvis.os.app.navigation.JarvisDestination
 import com.jarvis.os.app.navigation.JarvisNavHost
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
- * Part 15 (Branding): app chrome is intentionally quiet — a single
- * TopAppBar with a drawer trigger and the current screen's label, never
- * a decorated hero header. The "feels like an operating system, not a
- * chatbot" brief is mostly a restraint decision, not an added-feature
- * decision.
+ * Sprint 8.1: JarvisCore.navigationRequests had no consumer since
+ * Sprint-8 -- this is that consumer, kept as a thin ViewModel rather
+ * than injecting JarvisCore straight into the JarvisApp composable, per
+ * that sprint's "no business logic inside Composables" requirement.
+ *
+ * Sprint 13 note: this class existed correctly since Sprint 8.1, but a
+ * copy of JarvisApp.kt without it was live at this file's actual
+ * package path, while a copy WITH it sat as dead code outside any
+ * Gradle source set (jarvis-android/app/src/main/JarvisApp.kt, missing
+ * the java/com/jarvis/os/app folder structure entirely -- silently
+ * ignored by the build, so this compiled fine while quietly not doing
+ * anything). This sprint merges the two back into one correct file at
+ * the correct path and deletes the stray one -- restoring
+ * "open approvals"-style chat navigation commands, which were
+ * consequently dead in the actual running app until now.
+ */
+@HiltViewModel
+class JarvisAppViewModel @Inject constructor(core: JarvisCore) : ViewModel() {
+    val navigationRequests: SharedFlow<String> = core.navigationRequests
+}
+
+/**
+ * Sprint 13 "JARVIS Identity": app chrome stays quiet and out of the
+ * way -- the emotional signature this sprint asks for lives on Home
+ * (the avatar, the greeting, the briefing), not in a redesigned
+ * navigation shell. The TopAppBar/NavigationBar/drawer below are the
+ * same well-tested Material3 scaffold every prior sprint has used,
+ * given a transparent top bar (so Home's dark background reads as one
+ * continuous surface behind it, not a separate bar sitting on top) and
+ * the natural-language labels from JarvisDestination -- deliberately
+ * not rebuilt as bespoke chrome, since Sprint 13 is explicit that
+ * "the goal is not to add functionality," and hand-rolling a full
+ * custom nav shell without any way to compile-check it against this
+ * sprint's real Android toolchain is exactly the kind of risk not
+ * worth taking for a part of the screen this sprint's own success
+ * criteria don't hinge on (see this sprint's integration report).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,6 +96,17 @@ fun JarvisApp(appearance: AppearanceSettings) {
         val scope = rememberCoroutineScope()
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination
+        val appViewModel: JarvisAppViewModel = hiltViewModel()
+
+        LaunchedEffect(Unit) {
+            appViewModel.navigationRequests.collect { route ->
+                navController.navigate(route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        }
 
         // Sprint 9 (PR2): read directly from NotificationsViewModel's
         // unreadCount rather than duplicating a filter over the
@@ -108,8 +158,10 @@ fun JarvisApp(appearance: AppearanceSettings) {
                                 Icon(Icons.Filled.Menu, contentDescription = "Open navigation drawer")
                             }
                         },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                     )
                 },
+                containerColor = Color.Transparent,
                 bottomBar = {
                     NavigationBar {
                         JarvisDestination.bottomBarItems.forEach { destination ->
