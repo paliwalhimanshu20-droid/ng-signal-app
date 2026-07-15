@@ -1,8 +1,16 @@
 package com.jarvis.os.app.core
 
+import com.jarvis.os.app.core.agents.DefaultMultiAiCoordinator
+import com.jarvis.os.app.core.agents.MockAgentRegistry
+import com.jarvis.os.app.core.agents.WatchTowerOrchestrator
 import com.jarvis.os.app.core.chat.AiRouter
 import com.jarvis.os.app.core.chat.ChatSessionManager
 import com.jarvis.os.app.core.chat.MockChatProvider
+import com.jarvis.os.app.core.intelligence.ContextManager
+import com.jarvis.os.app.core.intelligence.ExecutiveBriefingEngine
+import com.jarvis.os.app.core.intelligence.JarvisDecisionEngine
+import com.jarvis.os.app.core.memory.ConversationMemoryImpl
+import com.jarvis.os.app.core.memory.PersonalMemoryImpl
 import com.jarvis.os.app.data.model.ApprovalKind
 import com.jarvis.os.app.data.model.ApprovalOutcome
 import com.jarvis.os.app.data.model.ConnectionStatus
@@ -14,6 +22,7 @@ import com.jarvis.os.app.data.repository.MockAuditRepository
 import com.jarvis.os.app.data.repository.MockChatRepository
 import com.jarvis.os.app.data.repository.MockConnectionRepository
 import com.jarvis.os.app.data.repository.MockMemoryRepository
+import com.jarvis.os.app.data.repository.MockNgSignalProStatusProvider
 import com.jarvis.os.app.data.repository.MockNotificationRepository
 import com.jarvis.os.app.data.repository.MockProjectRepository
 import com.jarvis.os.app.data.repository.MockToolRepository
@@ -42,15 +51,30 @@ class JarvisCoreApprovalTest {
         val chatSessionManager = ChatSessionManager()
         val aiRouter = AiRouter(setOf(MockChatProvider()))
         val approvalsRepo = MockApprovalRepository()
+        val memoryRepo = MockMemoryRepository()
+        val projectsRepo = MockProjectRepository()
+        val chatRepo = MockChatRepository(aiRouter, chatSessionManager)
+        val toolsRepo = MockToolRepository(emptySet(), approvalsRepo)
+        val agentRegistry = MockAgentRegistry(emptySet())
+        val multiAiCoordinator = DefaultMultiAiCoordinator(agentRegistry, approvalsRepo)
+        val connectionsRepo = MockConnectionRepository()
+        val notificationsRepo = MockNotificationRepository(scope)
+        val auditRepo = MockAuditRepository()
         return JarvisCore(
-            connections = MockConnectionRepository(),
+            connections = connectionsRepo,
             approvals = approvalsRepo,
-            memory = MockMemoryRepository(),
-            projects = MockProjectRepository(),
-            chat = MockChatRepository(aiRouter, chatSessionManager),
-            notifications = MockNotificationRepository(scope),
-            tools = MockToolRepository(emptySet(), approvalsRepo),
-            audit = MockAuditRepository(),
+            memory = memoryRepo,
+            projects = projectsRepo,
+            chat = chatRepo,
+            notifications = notificationsRepo,
+            tools = toolsRepo,
+            audit = auditRepo,
+            contextManager = ContextManager(ConversationMemoryImpl(memoryRepo), PersonalMemoryImpl(memoryRepo), chatRepo, projectsRepo),
+            decisionEngine = JarvisDecisionEngine(toolsRepo, agentRegistry),
+            watchTower = WatchTowerOrchestrator(multiAiCoordinator, approvalsRepo),
+            briefingEngine = ExecutiveBriefingEngine(
+                projectsRepo, approvalsRepo, notificationsRepo, connectionsRepo, memoryRepo, agentRegistry, MockNgSignalProStatusProvider(),
+            ),
             appScope = scope,
         )
     }
