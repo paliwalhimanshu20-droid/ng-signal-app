@@ -11,7 +11,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 
-/** Uses UnconfinedTestDispatcher so unreadCount's stateIn collector runs eagerly -- see JarvisCoreNotificationTest's docstring for why, same reasoning applies here. */
+/**
+ * Uses UnconfinedTestDispatcher so unreadCount's stateIn collector runs
+ * eagerly, and backgroundScope (not the test's own scope) so that
+ * collector -- which, like JarvisCore's init-block collectors, runs for
+ * the repository's entire lifetime and never completes on its own --
+ * doesn't trip runTest's UncompletedCoroutinesError check. See
+ * JarvisCoreNotificationTest's docstring for the full reasoning; same
+ * root cause, same fix, applied here to stateIn's internal collector
+ * instead of a SharedFlow.collect one.
+ */
 class MockNotificationRepositoryTest {
 
     private fun sample(id: String, read: Boolean = false) = Notification(
@@ -27,7 +36,7 @@ class MockNotificationRepositoryTest {
 
     @Test
     fun `insert adds newest first`() = runTest(UnconfinedTestDispatcher()) {
-        val repo = MockNotificationRepository(this)
+        val repo = MockNotificationRepository(backgroundScope)
         repo.insert(sample("n1"))
         repo.insert(sample("n2"))
 
@@ -36,7 +45,7 @@ class MockNotificationRepositoryTest {
 
     @Test
     fun `unread count reflects only unread notifications`() = runTest(UnconfinedTestDispatcher()) {
-        val repo = MockNotificationRepository(this)
+        val repo = MockNotificationRepository(backgroundScope)
         repo.insert(sample("n1"))
         repo.insert(sample("n2", read = true))
 
@@ -45,7 +54,7 @@ class MockNotificationRepositoryTest {
 
     @Test
     fun `markRead flips only the targeted notification`() = runTest(UnconfinedTestDispatcher()) {
-        val repo = MockNotificationRepository(this)
+        val repo = MockNotificationRepository(backgroundScope)
         repo.insert(sample("n1"))
         repo.insert(sample("n2"))
 
@@ -58,7 +67,7 @@ class MockNotificationRepositoryTest {
 
     @Test
     fun `markAllRead clears unread count to zero`() = runTest(UnconfinedTestDispatcher()) {
-        val repo = MockNotificationRepository(this)
+        val repo = MockNotificationRepository(backgroundScope)
         repo.insert(sample("n1"))
         repo.insert(sample("n2"))
 
@@ -70,7 +79,7 @@ class MockNotificationRepositoryTest {
 
     @Test
     fun `clearRead removes only read notifications, unread survive`() = runTest(UnconfinedTestDispatcher()) {
-        val repo = MockNotificationRepository(this)
+        val repo = MockNotificationRepository(backgroundScope)
         repo.insert(sample("n1", read = true))
         repo.insert(sample("n2"))
 
