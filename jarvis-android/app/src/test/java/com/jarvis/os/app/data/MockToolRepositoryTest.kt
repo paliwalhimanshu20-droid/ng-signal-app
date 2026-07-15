@@ -29,15 +29,22 @@ class MockToolRepositoryTest {
         val (tools, approvals) = repo()
         val result = tools.execute("project_note", "hello")
         assertTrue(result is ToolResult.Failure)
-        assertEquals(1, approvals.items.value.size)
-        assertEquals(ApprovalOutcome.PENDING, approvals.items.value.first().outcome)
+        // MockApprovalRepository seeds 3 approvals at construction (see its
+        // seed()), so items.value isn't empty going in -- filter to the one
+        // this execute() call actually created rather than assuming size/position.
+        val toolApprovals = approvals.items.value.filter { it.relatedToolId == "project_note" }
+        assertEquals(1, toolApprovals.size)
+        assertEquals(ApprovalOutcome.PENDING, toolApprovals.first().outcome)
     }
 
     @Test
     fun `MODERATE risk tool runs once its approval is APPROVED`() = runTest {
         val (tools, approvals) = repo()
         tools.execute("project_note", "hello") // creates the pending approval as a side effect
-        val approvalId = approvals.items.value.first().approvalId
+        // .first() alone would grab one of MockApprovalRepository's 3 seeded
+        // approvals (they're already in the list before this call), not the
+        // one just created -- filter by relatedToolId for the same reason as above.
+        val approvalId = approvals.items.value.first { it.relatedToolId == "project_note" }.approvalId
         approvals.approve(approvalId, "owner")
 
         val result = tools.execute("project_note", "hello", approvalId)
