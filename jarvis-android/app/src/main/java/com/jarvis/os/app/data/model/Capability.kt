@@ -15,4 +15,15 @@ enum class AiCapability {
     LONG_CONTEXT,
     TOOL_USE,
     VISION,
+
+    // Sprint 12 "Watch Tower Orchestration": one capability per specialist
+    // domain that didn't already fit an existing value -- same "extend by
+    // addition" reasoning as this enum's own docstring states, not a
+    // redesign of the vocabulary. See WatchTowerAgents.kt for which
+    // specialist declares which of these.
+    ARCHITECTURE_REVIEW,
+    PERFORMANCE_ANALYSIS,
+    TESTING,
+    COORDINATION,
+    STRATEGY,
 }
