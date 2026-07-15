@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -88,6 +89,21 @@ class ChatViewModel @Inject constructor(
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
 
+    /**
+     * Sprint 13 "Conversation First": the avatar stays visible during
+     * chat and reflects real state, not a decorative loop -- Thinking
+     * while awaiting a reply (the same isTyping signal already driving
+     * the text indicator below), Idle otherwise. Deliberately not
+     * Speaking/Listening here: those imply actual audio output/input,
+     * and this app has neither wired in yet (see ChatScreen's own
+     * voice-input note) -- claiming them visually would be exactly the
+     * "invented intelligence" this sprint's experience rules forbid,
+     * applied to the avatar instead of briefing text.
+     */
+    val avatarState: StateFlow<com.jarvis.os.app.designsystem.components.JarvisAvatarState> = isTyping
+        .map { typing -> if (typing) com.jarvis.os.app.designsystem.components.JarvisAvatarState.Thinking else com.jarvis.os.app.designsystem.components.JarvisAvatarState.Idle }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.jarvis.os.app.designsystem.components.JarvisAvatarState.Idle)
+
     init {
         viewModelScope.launch {
             core.events.collect { event ->
@@ -118,6 +134,7 @@ class ChatViewModel @Inject constructor(
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val messages by viewModel.messages.collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()
+    val avatarState by viewModel.avatarState.collectAsState()
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -127,8 +144,20 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().background(com.jarvis.os.app.designsystem.JarvisBrand.Void)) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // Sprint 13 "Conversation First": a small, persistent avatar
+            // above the transcript -- the same JarvisAvatar used on Home,
+            // reflecting the same real Thinking/Idle state ChatViewModel
+            // already tracks (see its docstring for why not Speaking/Listening).
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                com.jarvis.os.app.designsystem.components.JarvisAvatar(
+                    state = avatarState,
+                    size = 64.dp,
+                    modifier = Modifier.padding(top = JarvisSpacing.md, bottom = JarvisSpacing.sm),
+                )
+            }
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
