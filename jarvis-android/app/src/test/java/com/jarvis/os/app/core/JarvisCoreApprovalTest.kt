@@ -57,7 +57,7 @@ class JarvisCoreApprovalTest {
 
     @Test
     fun `requesting a connection approval creates both records linked together`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
 
         core.requestConnectionApproval("provider-test", "TestProvider", setOf(PermissionScope.READ), PermissionScope.READ)
 
@@ -75,7 +75,7 @@ class JarvisCoreApprovalTest {
 
     @Test
     fun `approving a linked approval drives the connection to CONNECTING automatically`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
         core.requestConnectionApproval("provider-test", "TestProvider", setOf(PermissionScope.READ), PermissionScope.READ)
         val connection = core.connections.connections.value.first { it.providerName == "TestProvider" }
         val approval = core.approvals.items.value.first { it.relatedConnectionId == connection.connectionId }
@@ -95,7 +95,7 @@ class JarvisCoreApprovalTest {
 
     @Test
     fun `revoking an approved, connected approval suspends the live connection`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
         core.requestConnectionApproval("provider-test", "TestProvider", setOf(PermissionScope.READ), PermissionScope.READ)
         val connection = core.connections.connections.value.first { it.providerName == "TestProvider" }
         val approval = core.approvals.items.value.first { it.relatedConnectionId == connection.connectionId }
@@ -114,7 +114,7 @@ class JarvisCoreApprovalTest {
 
     @Test
     fun `rejecting a linked approval rejects the connection, not silently ignored`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
         core.requestConnectionApproval("provider-test", "TestProvider", setOf(PermissionScope.READ), PermissionScope.READ)
         val connection = core.connections.connections.value.first { it.providerName == "TestProvider" }
         val approval = core.approvals.items.value.first { it.relatedConnectionId == connection.connectionId }
@@ -126,7 +126,7 @@ class JarvisCoreApprovalTest {
 
     @Test
     fun `a plain permission-request approval with no related connection never touches ConnectionRepository`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
         val connectionsBefore = core.connections.connections.value
 
         val approval = core.requestApproval(
@@ -145,7 +145,7 @@ class JarvisCoreApprovalTest {
 
     @Test
     fun `audit log survives every stage of the full flow and is never empty`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
         core.requestConnectionApproval("provider-test", "TestProvider", setOf(PermissionScope.READ), PermissionScope.READ)
         val approval = core.approvals.items.value.first { it.title == "Connect TestProvider" }
 

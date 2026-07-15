@@ -29,14 +29,24 @@ import org.junit.Test
  * test double) so this exercises the exact object graph Hilt would
  * assemble in the app, just constructed by hand.
  *
- * Uses runTest(UnconfinedTestDispatcher()) and passes `this` straight
- * through as JarvisCore's appScope -- the same fix applied to
- * MockConnectionRepositoryTest's flaky flow-collection test earlier in
- * this sprint. Unconfined means JarvisCore's init-block collectors run
- * eagerly to their first suspension point the moment JarvisCore is
+ * Uses runTest(UnconfinedTestDispatcher()) and passes `backgroundScope`
+ * (not the test's own coroutine scope, `this`) as JarvisCore's
+ * appScope. Unconfined still means JarvisCore's init-block collectors
+ * run eagerly to their first suspension point the moment JarvisCore is
  * constructed, and each emission below resumes an already-subscribed
  * collector synchronously, in-line -- no buffering assumptions, no
- * manual scheduler advancement, no race to reason about.
+ * manual scheduler advancement, no race to reason about. backgroundScope
+ * specifically (Stabilization Sprint) replaces an earlier version that
+ * passed `this`: JarvisCore's init block launches five collectors that
+ * run for the object's entire lifetime (they collect a SharedFlow,
+ * which never completes on its own), and runTest requires every
+ * coroutine launched directly in the test's own scope to finish before
+ * the test body returns -- so those five permanent collectors threw
+ * UncompletedCoroutinesError on every test here. backgroundScope is
+ * TestScope's dedicated home for exactly this shape of background work:
+ * coroutines launched there share the same test dispatcher/scheduler
+ * (so eager collection still behaves identically) but are cancelled
+ * automatically when the test ends instead of being awaited.
  */
 class JarvisCoreNotificationTest {
 
@@ -59,7 +69,7 @@ class JarvisCoreNotificationTest {
 
     @Test
     fun `approving and connecting produces a Connected notification with no manual insert`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
 
         val connectionId = core.connections.connections.value.first { it.providerName == "Claude" }.connectionId
         core.approveConnection(connectionId)
@@ -75,7 +85,7 @@ class JarvisCoreNotificationTest {
 
     @Test
     fun `a connection error produces an Error-category notification`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
 
         val connectionId = core.connections.connections.value.first { it.providerName == "Claude" }.connectionId
         core.approveConnection(connectionId)
@@ -90,7 +100,7 @@ class JarvisCoreNotificationTest {
 
     @Test
     fun `markNotificationRead through JarvisCore actually flips the repository's read state`() = runTest(UnconfinedTestDispatcher()) {
-        val core = buildCore(this)
+        val core = buildCore(backgroundScope)
 
         val connectionId = core.connections.connections.value.first { it.providerName == "Claude" }.connectionId
         core.approveConnection(connectionId)
