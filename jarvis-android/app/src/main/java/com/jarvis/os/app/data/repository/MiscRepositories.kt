@@ -222,7 +222,17 @@ interface ChatRepository {
     /** Sprint 8.1: reads from ChatSessionManager now — see that class's docstring for why session switching has no UI surface yet despite being real underneath. */
     val activeSessionId: String
 
-    suspend fun sendMessage(text: String)
+    /**
+     * Sprint 12 "Context Engine": [contextHint], when non-blank, is
+     * prepended to what the active ChatProvider actually receives --
+     * NOT to the owner-authored ChatMessage stored in [messages], so
+     * the chat transcript still shows exactly what the owner typed.
+     * Defaults to "" so every pre-Sprint-12 call site (including every
+     * existing test) is source-compatible unchanged; JarvisCore is the
+     * only caller that passes a real one, built from
+     * ContextManager.buildContext -- see JarvisCore.sendChatMessage.
+     */
+    suspend fun sendMessage(text: String, contextHint: String = "")
 }
 
 /**
@@ -254,13 +264,18 @@ class MockChatRepository @Inject constructor(
     )
     override val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
-    override suspend fun sendMessage(text: String) {
+    override suspend fun sendMessage(text: String, contextHint: String) {
         val sessionId = activeSessionId
         val userMessage = ChatMessage(
             UUID.randomUUID().toString(), MessageAuthor.OWNER, MessageContentKind.TEXT, text,
             timestamp = Instant.now(), sessionId = sessionId,
         )
         _messages.update { it + userMessage }
+
+        // The provider sees context-augmented text; the transcript above
+        // (and therefore the owner's own chat bubble) keeps the exact
+        // words they typed -- see this interface's docstring for why.
+        val promptForProvider = if (contextHint.isBlank()) text else "$contextHint\n\n$text"
 
         // One fixed id reused across every Token/Complete chunk in this
         // turn: the LazyColumn in ChatScreen keys rows by messageId, so
@@ -269,7 +284,7 @@ class MockChatRepository @Inject constructor(
         val replyMessageId = UUID.randomUUID().toString()
         var replyAdded = false
 
-        router.active.sendMessage(sessionId, text).collect { chunk ->
+        router.active.sendMessage(sessionId, promptForProvider).collect { chunk ->
             when (chunk) {
                 is ChatChunk.Token -> {
                     upsertReply(replyMessageId, chunk.text, sessionId, alreadyAdded = replyAdded)
