@@ -184,7 +184,7 @@ class MockMemoryRepository @Inject constructor() : MemoryRepository {
         MemoryEntry(UUID.randomUUID().toString(), MemoryTier.CONVERSATION, "Discussed Sprint-6 connection dashboard design", Instant.now().minus(1, ChronoUnit.DAYS)),
         MemoryEntry(UUID.randomUUID().toString(), MemoryTier.WORKING, "Current task: Android Sprint-7 build", Instant.now()),
         MemoryEntry(UUID.randomUUID().toString(), MemoryTier.KNOWLEDGE, "Upstox 90-day historical candle limit (discovered Sprint prior)", Instant.now().minus(10, ChronoUnit.DAYS)),
-        MemoryEntry(UUID.randomUUID().toString(), MemoryTier.PREFERENCE, "Accent color: Arc Blue", Instant.now().minus(2, ChronoUnit.DAYS)),
+        MemoryEntry(UUID.randomUUID().toString(), MemoryTier.PREFERENCE, "Accent color: JARVIS Blue", Instant.now().minus(2, ChronoUnit.DAYS)),
         MemoryEntry(
             UUID.randomUUID().toString(), MemoryTier.DECISION,
             "Chose capability-based routing (score by set overlap) over a fixed provider priority list -- keeps AiRouter deterministic without hardcoding provider rank.",
