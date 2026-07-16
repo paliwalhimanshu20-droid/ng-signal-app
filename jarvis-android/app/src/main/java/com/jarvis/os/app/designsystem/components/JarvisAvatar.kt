@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.jarvis.os.app.designsystem.JarvisBrand
+import com.jarvis.os.app.designsystem.JarvisExpression
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -42,6 +43,18 @@ import kotlin.math.sin
  * minSdk is 26. The soft-glow look instead comes from layering several
  * concentric circles at decreasing alpha, which renders identically on
  * every supported OS version.
+ *
+ * Sprint 14-16 "Theme Engine" + "Live Facial Animation" added two
+ * parameters without touching the state machine above: [themeColor]
+ * (the Owner's chosen AccentColor.seed, replacing the fixed
+ * JarvisBrand.CoreBlue this avatar used before -- see JarvisBrand's own
+ * docstring for the full reasoning) and [expression] (an emotional
+ * overlay -- Neutral/Happy/Warning/Error -- orthogonal to [state]'s
+ * motion). CoreCyan (the hot inner core) and the functional state
+ * colors (Thinking's plasma, Speaking's cyan waveform) stay fixed
+ * regardless of theme -- only the Idle/Listening/Waiting glow (JARVIS's
+ * "at rest" presence, not a specific activity) actually uses
+ * [themeColor], and [expression]'s tint, when non-null, overrides both.
  */
 enum class JarvisAvatarState { Idle, Listening, Thinking, Speaking, Working, Waiting }
 
@@ -50,6 +63,8 @@ fun JarvisAvatar(
     state: JarvisAvatarState,
     modifier: Modifier = Modifier,
     size: Dp = 160.dp,
+    themeColor: Color = JarvisBrand.CoreBlue,
+    expression: JarvisExpression = JarvisExpression.Neutral,
 ) {
     val transition = rememberInfiniteTransition(label = "jarvis-avatar")
 
@@ -120,10 +135,15 @@ fun JarvisAvatar(
 
         // Outer soft glow -- concentric circles, decreasing alpha with
         // radius, standing in for a real blur (see this file's docstring).
-        val glowColor = when (state) {
+        // themeColor drives the "at rest" glow (Idle/Listening/Working/Waiting);
+        // Thinking/Speaking keep their own fixed functional colors regardless
+        // of theme (see this file's docstring for why). expression's tint,
+        // when set, overrides all of the above -- an emotional read takes
+        // priority over both theme and activity.
+        val glowColor = expression.tint ?: when (state) {
             JarvisAvatarState.Thinking -> JarvisBrand.CorePlasma
             JarvisAvatarState.Speaking -> JarvisBrand.CoreCyan
-            else -> JarvisBrand.CoreBlue
+            else -> themeColor
         }
         listOf(3.2f to 0.05f, 2.4f to 0.09f, 1.7f to 0.16f).forEach { (radiusMultiplier, alpha) ->
             drawCircle(color = glowColor.copy(alpha = alpha * coreAlpha), radius = coreRadius * radiusMultiplier, center = center)
