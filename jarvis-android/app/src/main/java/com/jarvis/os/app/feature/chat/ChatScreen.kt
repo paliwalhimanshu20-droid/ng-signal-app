@@ -44,10 +44,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.os.app.core.JarvisCore
 import com.jarvis.os.app.core.CoreEvent
+import com.jarvis.os.app.core.voice.SpeechSynthesizer
+import com.jarvis.os.app.core.voice.SpeechToTextController
+import com.jarvis.os.app.core.voice.VoiceRecognitionEvent
 import com.jarvis.os.app.data.model.ChatMessage
 import com.jarvis.os.app.data.model.MessageAuthor
 import com.jarvis.os.app.data.model.MessageContentKind
 import com.jarvis.os.app.core.chat.markdown.MarkdownText
+import com.jarvis.os.app.data.settings.SettingsRepository
 import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.components.JarvisCard
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -79,30 +83,50 @@ import javax.inject.Inject
  * earlier UX nicety -- clearing the indicator the moment the first
  * reply chunk actually appears in the list, before the whole turn
  * finishes -- and is not relied on for correctness.
+ *
+ * Sprint 14-16: voice input/output wired in, same
+ * SpeechToTextController/SpeechSynthesizer HomeViewModel uses --
+ * Speaking/Listening are real states now, not the "not wired in yet"
+ * this docstring used to say.
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val core: JarvisCore,
+    private val speechToText: SpeechToTextController,
+    private val speechSynthesizer: SpeechSynthesizer,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
     val messages = core.chat.messages.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
 
+    private val _isListening = MutableStateFlow(false)
+    val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
+
+    val voiceInputAvailable: Boolean get() = speechToText.isAvailable
+
     /**
-     * Sprint 13 "Conversation First": the avatar stays visible during
-     * chat and reflects real state, not a decorative loop -- Thinking
-     * while awaiting a reply (the same isTyping signal already driving
-     * the text indicator below), Idle otherwise. Deliberately not
-     * Speaking/Listening here: those imply actual audio output/input,
-     * and this app has neither wired in yet (see ChatScreen's own
-     * voice-input note) -- claiming them visually would be exactly the
-     * "invented intelligence" this sprint's experience rules forbid,
-     * applied to the avatar instead of briefing text.
+     * Sprint 13 "Conversation First", extended by Sprint 14-16: the
+     * avatar stays visible during chat and reflects real state --
+     * Listening while a voice session is active, Thinking while
+     * awaiting a reply (isTyping), Speaking driven by
+     * SpeechSynthesizer's real callback (see that interface's
+     * docstring), Idle otherwise. Priority order matters here (a voice
+     * session naturally overlaps with typing briefly): Listening and
+     * Speaking are momentary and explicit, so they take priority over
+     * the ambient isTyping-derived Thinking state.
      */
-    val avatarState: StateFlow<com.jarvis.os.app.designsystem.components.JarvisAvatarState> = isTyping
-        .map { typing -> if (typing) com.jarvis.os.app.designsystem.components.JarvisAvatarState.Thinking else com.jarvis.os.app.designsystem.components.JarvisAvatarState.Idle }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.jarvis.os.app.designsystem.components.JarvisAvatarState.Idle)
+    val avatarState: StateFlow<com.jarvis.os.app.designsystem.components.JarvisAvatarState> = kotlinx.coroutines.flow.combine(
+        isTyping, _isListening, speechSynthesizer.isSpeaking,
+    ) { typing, listening, speaking ->
+        when {
+            listening -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Listening
+            speaking -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Speaking
+            typing -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Thinking
+            else -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Idle
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.jarvis.os.app.designsystem.components.JarvisAvatarState.Idle)
 
     init {
         viewModelScope.launch {
@@ -112,6 +136,23 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun startListening() {
+        viewModelScope.launch {
+            _isListening.value = true
+            speechToText.startListening().collect { event ->
+                when (event) {
+                    is VoiceRecognitionEvent.FinalResult -> send(event.text)
+                    is VoiceRecognitionEvent.Done -> _isListening.value = false
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    fun stopListening() {
+        speechToText.stopListening()
     }
 
     fun send(text: String) {
@@ -126,6 +167,11 @@ class ChatViewModel @Inject constructor(
             }
 
             core.sendChatMessage(text)
+
+            if (settingsRepository.appearance.first().voiceOutputEnabled) {
+                val reply = messages.value.lastOrNull { it.author == com.jarvis.os.app.data.model.MessageAuthor.JARVIS }?.content
+                reply?.let { speechSynthesizer.speak(it) }
+            }
         }
     }
 }
@@ -134,11 +180,38 @@ class ChatViewModel @Inject constructor(
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val messages by viewModel.messages.collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()
+    val isListening by viewModel.isListening.collectAsState()
     val avatarState by viewModel.avatarState.collectAsState()
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val micPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.startListening()
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("Microphone permission is needed for voice input.") }
+        }
+    }
+
+    fun onMicTapped() {
+        if (!viewModel.voiceInputAvailable) {
+            scope.launch { snackbarHostState.showSnackbar("Voice input isn't available on this device.") }
+            return
+        }
+        val alreadyGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.RECORD_AUDIO,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (alreadyGranted) {
+            if (isListening) viewModel.stopListening() else viewModel.startListening()
+        } else {
+            micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
@@ -146,10 +219,10 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
 
     Box(modifier = Modifier.fillMaxSize().background(com.jarvis.os.app.designsystem.JarvisBrand.Void)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Sprint 13 "Conversation First": a small, persistent avatar
-            // above the transcript -- the same JarvisAvatar used on Home,
-            // reflecting the same real Thinking/Idle state ChatViewModel
-            // already tracks (see its docstring for why not Speaking/Listening).
+            // Sprint 13 "Conversation First", extended by Sprint 14-16: a
+            // small, persistent avatar above the transcript reflecting
+            // real Listening/Thinking/Speaking/Idle state (see
+            // ChatViewModel's docstring).
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 com.jarvis.os.app.designsystem.components.JarvisAvatar(
                     state = avatarState,
@@ -183,16 +256,15 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     }),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 )
-                // Voice interaction UI only, per Sprint-7 scope — no
-                // speech-to-text or wake-word wiring exists behind this
-                // button yet (wake-word is explicitly deferred). The tap
-                // itself must still do something observable rather than
-                // nothing (Sprint-7.1 UX polish) — it surfaces an honest
-                // status message instead of pretending to listen.
-                IconButton(onClick = {
-                    scope.launch { snackbarHostState.showSnackbar("Voice input will be enabled in a future sprint.") }
-                }) {
-                    Icon(Icons.Filled.Mic, contentDescription = "Voice input (not yet available)")
+                // Sprint 14-16: real voice input now -- the Sprint 7
+                // placeholder ("voice input will be enabled in a future
+                // sprint") is that future sprint.
+                IconButton(onClick = { onMicTapped() }) {
+                    Icon(
+                        Icons.Filled.Mic,
+                        contentDescription = if (isListening) "Stop listening" else "Voice input",
+                        tint = if (isListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    )
                 }
                 IconButton(onClick = { scope.launch { viewModel.send(input); input = "" } }) {
                     Icon(Icons.Filled.Send, contentDescription = "Send")
