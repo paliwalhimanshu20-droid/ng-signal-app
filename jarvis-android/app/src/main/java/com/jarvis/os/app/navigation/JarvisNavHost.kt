@@ -14,6 +14,7 @@ import com.jarvis.os.app.feature.missioncontrol.MissionControlScreen
 import com.jarvis.os.app.feature.notifications.NotificationsScreen
 import com.jarvis.os.app.feature.projects.ProjectsScreen
 import com.jarvis.os.app.feature.settings.SettingsScreen
+import com.jarvis.os.app.feature.watchtower.WatchTowerScreen
 
 @Composable
 fun JarvisNavHost(navController: NavHostController) {
@@ -27,6 +28,7 @@ fun JarvisNavHost(navController: NavHostController) {
         composable(JarvisDestination.Notifications.route) { NotificationsScreen() }
         composable(JarvisDestination.HomeAutomation.route) { HomeAutomationScreen() }
         composable(JarvisDestination.Settings.route) { SettingsScreen() }
-        composable(JarvisDestination.MissionControl.route) { MissionControlScreen() }
+        composable(JarvisDestination.MissionControl.route) { MissionControlScreen(navController) }
+        composable(JarvisDestination.WatchTower.route) { WatchTowerScreen() }
     }
 }
