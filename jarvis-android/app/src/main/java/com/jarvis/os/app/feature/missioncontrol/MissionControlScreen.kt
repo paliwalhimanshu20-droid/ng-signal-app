@@ -129,7 +129,7 @@ class MissionControlViewModel @Inject constructor(
 }
 
 @Composable
-fun MissionControlScreen(viewModel: MissionControlViewModel = hiltViewModel()) {
+fun MissionControlScreen(navController: androidx.navigation.NavHostController, viewModel: MissionControlViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
 
     LazyVerticalGrid(
@@ -142,8 +142,9 @@ fun MissionControlScreen(viewModel: MissionControlViewModel = hiltViewModel()) {
             MissionControlTile(
                 label = "AI PROVIDERS",
                 value = "${state.totalProviders} online",
-                detail = "Active: ${state.activeProviderId.ifBlank { "none" }}",
+                detail = "Active: ${state.activeProviderId.ifBlank { "none" }} · tap to switch",
                 accentColor = JarvisBrand.CoreCyan,
+                onClick = { navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.Settings.route) },
             )
         }
         item {
@@ -152,6 +153,7 @@ fun MissionControlScreen(viewModel: MissionControlViewModel = hiltViewModel()) {
                 value = "${state.watchTowerAgentCount} specialists",
                 detail = state.watchTowerLastActivity,
                 accentColor = JarvisBrand.CorePlasma,
+                onClick = { navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.WatchTower.route) },
             )
         }
         item {
