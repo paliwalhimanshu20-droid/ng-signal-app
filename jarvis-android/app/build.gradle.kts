@@ -47,6 +47,13 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.activity.compose)
 
+    // Sprint 12 "Real AI Conversation": OkHttp for the real streaming
+    // ChatProvider (SSE), security-crypto for encrypted API key storage
+    // -- see core/chat/OpenAiCompatibleChatProvider.kt and
+    // data/settings/ApiKeyStore.kt.
+    implementation(libs.okhttp)
+    implementation(libs.security.crypto)
+
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
