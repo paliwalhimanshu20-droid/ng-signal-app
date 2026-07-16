@@ -22,10 +22,12 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -160,6 +162,72 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                         checked = appearance.voiceOutputEnabled,
                         onCheckedChange = { viewModel.setVoiceOutputEnabled(it) },
                     )
+                }
+            }
+        }
+
+        item {
+            val aiState by viewModel.aiProviderState.collectAsState()
+            val activeProviderId by viewModel.activeProviderId.collectAsState()
+            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
+                Column {
+                    Text("AI Provider", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Connect a real AI provider so JARVIS can actually converse, instead of running offline.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
+                    )
+
+                    Text("Active provider", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(JarvisSpacing.sm), modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.md)) {
+                        viewModel.availableProviderIds.forEach { (id, label) ->
+                            FilterChip(
+                                selected = activeProviderId == id,
+                                onClick = { viewModel.switchProvider(id) },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+
+                    if (aiState.hasStoredKey) {
+                        Text("An API key is saved.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        Row(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                            TextButton(onClick = { viewModel.testConnection() }, enabled = !aiState.testInProgress) {
+                                Text(if (aiState.testInProgress) "Testing…" else "Test connection")
+                            }
+                            TextButton(onClick = { viewModel.clearApiKey() }) { Text("Remove key") }
+                        }
+                        aiState.testResult?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = JarvisSpacing.xs))
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = aiState.baseUrl,
+                            onValueChange = { viewModel.updateBaseUrl(it) },
+                            label = { Text("Base URL") },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = aiState.model,
+                            onValueChange = { viewModel.updateModel(it) },
+                            label = { Text("Model") },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = aiState.apiKeyInput,
+                            onValueChange = { viewModel.updateApiKeyInput(it) },
+                            label = { Text("API key") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        )
+                        TextButton(onClick = { viewModel.saveApiKey() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                            Text("Save")
+                        }
+                    }
                 }
             }
         }
