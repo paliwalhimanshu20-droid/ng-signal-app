@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -22,12 +23,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.jarvis.os.app.data.model.ApprovalAuditRecord
 import com.jarvis.os.app.data.model.Connection
 import com.jarvis.os.app.data.model.ConnectionHealth
 import com.jarvis.os.app.data.model.ConnectionStatus
@@ -42,6 +46,7 @@ fun ConnectionsScreen(viewModel: ConnectionsViewModel = hiltViewModel()) {
     val connections by viewModel.connections.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var auditDialogFor by remember { mutableStateOf<Connection?>(null) }
 
     // Sprint-7.1: governance failures (e.g. a stale button firing after
     // status already changed) surface here instead of crashing or
@@ -71,16 +76,52 @@ fun ConnectionsScreen(viewModel: ConnectionsViewModel = hiltViewModel()) {
                         onDisconnect = { viewModel.disconnect(connection.connectionId) },
                         onReconnect = { viewModel.reconnect(connection.connectionId) },
                         onTest = { viewModel.testConnection(connection.connectionId) },
-                        onViewAudit = {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Requires JARVIS Core — audit data isn't available yet.")
-                            }
-                        },
+                        onViewAudit = { auditDialogFor = connection },
                     )
                 }
             }
         }
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+
+        auditDialogFor?.let { connection ->
+            val records = viewModel.auditFor(connection.connectionId)
+            AlertDialog(
+                onDismissRequest = { auditDialogFor = null },
+                title = { Text("${connection.providerName} audit trail") },
+                text = {
+                    if (records.isEmpty()) {
+                        Text("No approval activity recorded for this connection yet.", style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        Column {
+                            records.sortedByDescending { it.timestamp }.forEach { record ->
+                                AuditRecordRow(record)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { auditDialogFor = null }) { Text("Close") }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AuditRecordRow(record: ApprovalAuditRecord) {
+    Column(modifier = Modifier.padding(bottom = JarvisSpacing.sm)) {
+        Text(
+            "${record.newState.name.lowercase().replaceFirstChar { it.uppercase() }} by ${record.actor}",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            record.timestamp.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        record.reason?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -181,10 +222,9 @@ private fun ConnectionCard(
                 }
             }
 
-            // Present on every connection regardless of status — no
-            // audit data is plumbed from the Python side yet (Sprint-6
-            // built no such API surface), so this is honestly labeled
-            // "Backend Pending" rather than left off the screen entirely.
+            // Sprint 12: real data now -- ApprovalRepository.auditLog
+            // filtered to this connection's own approval/rejection/
+            // connect/suspend history (see ConnectionsViewModel.auditFor).
             TextButton(onClick = onViewAudit) { Text("View Audit") }
         }
     }

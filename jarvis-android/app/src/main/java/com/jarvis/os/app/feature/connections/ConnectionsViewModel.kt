@@ -63,4 +63,17 @@ class ConnectionsViewModel @Inject constructor(
     fun disableAll() = runGuarded { core.disableAllConnections() }
 
     fun testConnection(connectionId: String): ConnectionHealth = core.testConnection(connectionId)
+
+    /**
+     * Sprint 12 "Every Button Must Work": real data, not a placeholder
+     * -- ApprovalRepository.auditLog (Sprint 9) already records every
+     * approval/rejection/connect/suspend transition with a
+     * relatedConnectionId, it just had no UI reading it filtered by
+     * connection until now. Not a Flow: the audit log only changes when
+     * an action above actually runs, so a synchronous snapshot read at
+     * the moment "View Audit" is tapped is enough -- no separate
+     * reactive subscription needed for a one-shot dialog.
+     */
+    fun auditFor(connectionId: String): List<com.jarvis.os.app.data.model.ApprovalAuditRecord> =
+        core.approvals.auditLog.value.filter { it.relatedConnectionId == connectionId }
 }
