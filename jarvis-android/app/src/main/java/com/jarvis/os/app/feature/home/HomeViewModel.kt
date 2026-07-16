@@ -125,6 +125,11 @@ class HomeViewModel @Inject constructor(
         speechToText.stopListening()
     }
 
+    /** Sprint 12 "Support interruptions": tapping the avatar while it's speaking stops the TTS output immediately -- see HomeScreen's avatar tap handler. */
+    fun stopSpeaking() {
+        speechSynthesizer.stop()
+    }
+
     /** Home's conversation entry (typed or transcribed voice) -- same JarvisCore.sendChatMessage every other entry point in this app uses. */
     fun send(text: String) {
         if (text.isBlank()) return

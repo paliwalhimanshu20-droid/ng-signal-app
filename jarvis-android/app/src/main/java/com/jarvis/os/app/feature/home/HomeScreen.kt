@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,6 +100,7 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
             accentColor = appearance.accentColor.seed,
             motionIntensity = appearance.motionIntensity,
             modifier = Modifier.fillMaxSize(),
+            avatarState = state.avatarState,
         )
 
         Column(modifier = Modifier.fillMaxSize()) {
@@ -116,6 +118,13 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
                     state = state.avatarState,
                     size = 148.dp,
                     themeColor = appearance.accentColor.seed,
+                    modifier = Modifier.let { base ->
+                        if (state.avatarState == com.jarvis.os.app.designsystem.components.JarvisAvatarState.Speaking) {
+                            base.clickable { viewModel.stopSpeaking() }
+                        } else {
+                            base
+                        }
+                    },
                 )
 
                 Spacer(modifier = Modifier.height(JarvisSpacing.lg))
