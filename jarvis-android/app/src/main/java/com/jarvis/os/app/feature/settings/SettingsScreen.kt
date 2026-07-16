@@ -121,13 +121,53 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             }
         }
 
+        item {
+            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
+                Column {
+                    Text("Motion", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "How alive JARVIS's background and avatar feel -- particle density, glow, and animation speed.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(JarvisSpacing.sm)) {
+                        com.jarvis.os.app.designsystem.JarvisMotionIntensity.values().forEach { intensity ->
+                            FilterChip(
+                                selected = appearance.motionIntensity == intensity,
+                                onClick = { viewModel.setMotionIntensity(intensity) },
+                                label = { Text(intensity.label) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Speak replies aloud", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "JARVIS reads its responses using your device's text-to-speech voice.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = JarvisSpacing.xs),
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = appearance.voiceOutputEnabled,
+                        onCheckedChange = { viewModel.setVoiceOutputEnabled(it) },
+                    )
+                }
+            }
+        }
+
         item { SectionHeader("Other settings") }
         item {
             JarvisCard(modifier = Modifier.fillMaxWidth()) {
                 Column {
-                    ComingSoonSettingsRow("Voice") {
-                        scope.launch { snackbarHostState.showSnackbar("Voice settings will be enabled in a future sprint.") }
-                    }
                     ComingSoonSettingsRow("AI") {
                         scope.launch { snackbarHostState.showSnackbar("AI settings require a connected JARVIS Core backend.") }
                     }

@@ -8,6 +8,7 @@ import com.jarvis.os.app.designsystem.AccentColor
 import com.jarvis.os.app.designsystem.AppearanceMode
 import com.jarvis.os.app.designsystem.JarvisFontFamily
 import com.jarvis.os.app.designsystem.JarvisFontScale
+import com.jarvis.os.app.designsystem.JarvisMotionIntensity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -35,4 +36,6 @@ class SettingsViewModel @Inject constructor(
     fun setFontFamily(family: JarvisFontFamily) = viewModelScope.launch { repository.setFontFamily(family) }
     fun setFontScale(scale: JarvisFontScale) = viewModelScope.launch { repository.setFontScale(scale) }
     fun setBackgroundColorHex(hex: String?) = viewModelScope.launch { repository.setBackgroundColorHex(hex) }
+    fun setMotionIntensity(intensity: JarvisMotionIntensity) = viewModelScope.launch { repository.setMotionIntensity(intensity) }
+    fun setVoiceOutputEnabled(enabled: Boolean) = viewModelScope.launch { repository.setVoiceOutputEnabled(enabled) }
 }
