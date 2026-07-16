@@ -2,6 +2,7 @@ package com.jarvis.os.app.designsystem.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -117,6 +118,12 @@ fun GlassPanel(
  * about the tile's chrome is identical across all of Mission Control's
  * tiles so the grid reads as one coherent instrument panel, not seven
  * differently-styled widgets.
+ *
+ * Sprint 12 "Every Button Must Work": [onClick], when provided, makes
+ * the whole tile a real navigation/action target (e.g. AI Providers ->
+ * Settings' provider picker) instead of a read-only display -- optional
+ * because not every tile has a real destination yet (see this sprint's
+ * integration report for which do).
  */
 @Composable
 fun MissionControlTile(
@@ -125,8 +132,10 @@ fun MissionControlTile(
     detail: String,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
-    GlassPanel(modifier = modifier, borderColor = accentColor.copy(alpha = 0.18f)) {
+    val clickableModifier = if (onClick != null) modifier.then(Modifier.clickable(onClick = onClick)) else modifier
+    GlassPanel(modifier = clickableModifier, borderColor = accentColor.copy(alpha = 0.18f)) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(7.dp).background(accentColor, CircleShape))

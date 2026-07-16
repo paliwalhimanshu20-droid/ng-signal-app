@@ -52,10 +52,33 @@ fun LivingBackground(
     accentColor: Color,
     motionIntensity: JarvisMotionIntensity,
     modifier: Modifier = Modifier,
+    avatarState: JarvisAvatarState = JarvisAvatarState.Idle,
 ) {
     val transition = rememberInfiniteTransition(label = "living-background")
 
-    val driftDurationMs = (22000f / motionIntensity.speedMultiplier).toInt().coerceAtLeast(2000)
+    // Sprint 12 "Background should react to avatar state": a smooth
+    // (not infinitely-looping) boost applied on top of motionIntensity's
+    // own baseline -- animateFloatAsState settles to a new target
+    // whenever avatarState changes, rather than the infiniteRepeatable
+    // animations above which loop forever regardless of state. Thinking
+    // and Working read as the most "alive" moments (JARVIS visibly
+    // working), Listening a smaller lift (attentive, not frantic),
+    // Idle/Waiting/Speaking stay at baseline -- Speaking's own energy
+    // already comes from the avatar's waveform, doubling it here would
+    // compete rather than complement.
+    val stateBoost by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = when (avatarState) {
+            JarvisAvatarState.Thinking -> 1.6f
+            JarvisAvatarState.Working -> 1.5f
+            JarvisAvatarState.Listening -> 1.2f
+            else -> 1f
+        },
+        label = "background-state-boost",
+    )
+    val effectiveGlow = motionIntensity.glowIntensity * stateBoost
+    val effectiveSpeed = motionIntensity.speedMultiplier * stateBoost
+
+    val driftDurationMs = (22000f / effectiveSpeed).toInt().coerceAtLeast(2000)
     val drift by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -63,7 +86,7 @@ fun LivingBackground(
         label = "drift",
     )
 
-    val pulseDurationMs = (7000f / motionIntensity.speedMultiplier).toInt().coerceAtLeast(1000)
+    val pulseDurationMs = (7000f / effectiveSpeed).toInt().coerceAtLeast(1000)
     val pulse by transition.animateFloat(
         initialValue = 0.85f,
         targetValue = 1.15f,
@@ -90,7 +113,7 @@ fun LivingBackground(
         val blob1Radius = size.minDimension * 0.55f
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(accentColor.copy(alpha = 0.14f * motionIntensity.glowIntensity), Color.Transparent),
+                colors = listOf(accentColor.copy(alpha = 0.14f * effectiveGlow), Color.Transparent),
                 center = blob1Center,
                 radius = blob1Radius,
             ),
@@ -105,7 +128,7 @@ fun LivingBackground(
         val blob2Radius = size.minDimension * 0.5f * pulse
         drawCircle(
             brush = Brush.radialGradient(
-                colors = listOf(JarvisBrand.CorePlasma.copy(alpha = 0.09f * motionIntensity.glowIntensity), Color.Transparent),
+                colors = listOf(JarvisBrand.CorePlasma.copy(alpha = 0.09f * effectiveGlow), Color.Transparent),
                 center = blob2Center,
                 radius = blob2Radius,
             ),
@@ -120,7 +143,7 @@ fun LivingBackground(
             val verticalWobble = particle.verticalDrift * sin(Math.toRadians((drift * 360.0 + particle.baseAngleDeg))).toFloat()
             val cy = size.height / 2f + (sin(angle) * orbitRadius).toFloat() + verticalWobble
             drawCircle(
-                color = accentColor.copy(alpha = particle.alpha * motionIntensity.glowIntensity),
+                color = accentColor.copy(alpha = particle.alpha * effectiveGlow),
                 radius = particle.sizePx,
                 center = Offset(cx, cy),
             )
