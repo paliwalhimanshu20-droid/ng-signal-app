@@ -1,6 +1,7 @@
 package com.jarvis.os.app.feature.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -155,6 +156,11 @@ class ChatViewModel @Inject constructor(
         speechToText.stopListening()
     }
 
+    /** Sprint 12 "Support interruptions": tapping the avatar while it's speaking stops the TTS output immediately -- see ChatScreen's avatar tap handler. */
+    fun stopSpeaking() {
+        speechSynthesizer.stop()
+    }
+
     fun send(text: String) {
         if (text.isBlank()) return
         viewModelScope.launch {
@@ -227,7 +233,15 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 com.jarvis.os.app.designsystem.components.JarvisAvatar(
                     state = avatarState,
                     size = 64.dp,
-                    modifier = Modifier.padding(top = JarvisSpacing.md, bottom = JarvisSpacing.sm),
+                    modifier = Modifier
+                        .padding(top = JarvisSpacing.md, bottom = JarvisSpacing.sm)
+                        .let { base ->
+                            if (avatarState == com.jarvis.os.app.designsystem.components.JarvisAvatarState.Speaking) {
+                                base.clickable { viewModel.stopSpeaking() }
+                            } else {
+                                base
+                            }
+                        },
                 )
             }
 
