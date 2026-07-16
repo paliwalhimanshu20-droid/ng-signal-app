@@ -6,6 +6,11 @@
          exists in this codebase (see data/repository's module docstrings). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Sprint 14-16 "Voice Experience": required at runtime (Android 6+)
+         before SpeechToTextController.startListening() can be called --
+         see HomeScreen for the actual runtime request flow, this
+         declaration alone does not grant it. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:name=".JarvisApplication"
