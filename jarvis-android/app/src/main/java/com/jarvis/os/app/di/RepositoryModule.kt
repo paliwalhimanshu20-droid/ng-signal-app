@@ -21,6 +21,8 @@ import com.jarvis.os.app.data.repository.MockConnectionRepository
 import com.jarvis.os.app.data.repository.MockHomeAutomationRepository
 import com.jarvis.os.app.data.repository.MockMemoryRepository
 import com.jarvis.os.app.data.repository.MockNotificationRepository
+import com.jarvis.os.app.data.settings.ApiKeyStore
+import com.jarvis.os.app.data.settings.EncryptedApiKeyStore
 import com.jarvis.os.app.data.repository.MockNgSignalProStatusProvider
 import com.jarvis.os.app.data.repository.MockProjectRepository
 import com.jarvis.os.app.data.repository.MockToolRepository
@@ -110,4 +112,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindNgSignalProStatusProvider(impl: MockNgSignalProStatusProvider): NgSignalProStatusProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindApiKeyStore(impl: EncryptedApiKeyStore): ApiKeyStore
 }
