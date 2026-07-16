@@ -3,11 +3,13 @@ package com.jarvis.os.app.data.settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.jarvis.os.app.designsystem.AccentColor
 import com.jarvis.os.app.designsystem.AppearanceMode
 import com.jarvis.os.app.designsystem.JarvisFontFamily
 import com.jarvis.os.app.designsystem.JarvisFontScale
+import com.jarvis.os.app.designsystem.JarvisMotionIntensity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -40,6 +42,8 @@ interface SettingsRepository {
     suspend fun setFontScale(scale: JarvisFontScale)
     suspend fun setBackgroundColorHex(hex: String?)
     suspend fun setDashboardLayout(layout: DashboardLayout)
+    suspend fun setMotionIntensity(intensity: JarvisMotionIntensity)
+    suspend fun setVoiceOutputEnabled(enabled: Boolean)
 }
 
 @Singleton
@@ -54,6 +58,8 @@ class DataStoreSettingsRepository @Inject constructor(
         val FONT_SCALE = stringPreferencesKey("font_scale")
         val BACKGROUND_COLOR_HEX = stringPreferencesKey("background_color_hex")
         val DASHBOARD_LAYOUT = stringPreferencesKey("dashboard_layout")
+        val MOTION_INTENSITY = stringPreferencesKey("motion_intensity")
+        val VOICE_OUTPUT_ENABLED = booleanPreferencesKey("voice_output_enabled")
     }
 
     override val appearance: Flow<AppearanceSettings> = dataStore.data.map { prefs ->
@@ -67,6 +73,9 @@ class DataStoreSettingsRepository @Inject constructor(
             fontScale = prefs[Keys.FONT_SCALE]?.let { runCatching { JarvisFontScale.valueOf(it) }.getOrNull() }
                 ?: JarvisFontScale.Default,
             backgroundColorHex = prefs[Keys.BACKGROUND_COLOR_HEX],
+            motionIntensity = prefs[Keys.MOTION_INTENSITY]?.let { runCatching { JarvisMotionIntensity.valueOf(it) }.getOrNull() }
+                ?: JarvisMotionIntensity.Standard,
+            voiceOutputEnabled = prefs[Keys.VOICE_OUTPUT_ENABLED] ?: true,
         )
     }
 
@@ -98,5 +107,13 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override suspend fun setDashboardLayout(layout: DashboardLayout) {
         dataStore.edit { it[Keys.DASHBOARD_LAYOUT] = layout.serialize() }
+    }
+
+    override suspend fun setMotionIntensity(intensity: JarvisMotionIntensity) {
+        dataStore.edit { it[Keys.MOTION_INTENSITY] = intensity.name }
+    }
+
+    override suspend fun setVoiceOutputEnabled(enabled: Boolean) {
+        dataStore.edit { it[Keys.VOICE_OUTPUT_ENABLED] = enabled }
     }
 }
