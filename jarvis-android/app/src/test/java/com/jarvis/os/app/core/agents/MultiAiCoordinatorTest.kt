@@ -5,6 +5,7 @@ import com.jarvis.os.app.core.chat.MockChatProvider
 import com.jarvis.os.app.data.model.AgentTask
 import com.jarvis.os.app.data.model.ApprovalKind
 import com.jarvis.os.app.data.repository.MockApprovalRepository
+import com.jarvis.os.app.testutil.FakeSettingsRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,7 +15,7 @@ import org.junit.Test
 class MultiAiCoordinatorTest {
 
     private fun setup(): Triple<DefaultMultiAiCoordinator, MockAgentRegistry, MockApprovalRepository> {
-        val router = AiRouter(setOf(MockChatProvider()))
+        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())))
         val registry = MockAgentRegistry(setOf(ResearchAgent(router)))
         val approvals = MockApprovalRepository()
         return Triple(DefaultMultiAiCoordinator(registry, approvals), registry, approvals)

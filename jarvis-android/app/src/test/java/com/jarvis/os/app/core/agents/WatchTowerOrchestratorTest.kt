@@ -5,6 +5,7 @@ import com.jarvis.os.app.core.chat.MockChatProvider
 import com.jarvis.os.app.data.model.AiCapability
 import com.jarvis.os.app.data.model.ApprovalOutcome
 import com.jarvis.os.app.data.repository.MockApprovalRepository
+import com.jarvis.os.app.testutil.FakeSettingsRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -22,7 +23,7 @@ import org.junit.Test
 class WatchTowerOrchestratorTest {
 
     private fun orchestrator(): Pair<WatchTowerOrchestrator, MockApprovalRepository> {
-        val router = AiRouter(setOf(MockChatProvider()))
+        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())))
         val agents = setOf(
             BatmanAgent(router), FlashAgent(router), IronManAgent(router), DoctorStrangeAgent(router),
             CaptainAmericaAgent(router), SpiderManAgent(router), NickFuryAgent(router), ProfessorXAgent(router),

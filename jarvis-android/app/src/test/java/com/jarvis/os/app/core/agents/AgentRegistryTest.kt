@@ -6,6 +6,7 @@ import com.jarvis.os.app.core.chat.MockClaudeProvider
 import com.jarvis.os.app.core.chat.MockGptProvider
 import com.jarvis.os.app.data.model.AgentTask
 import com.jarvis.os.app.data.model.AiCapability
+import com.jarvis.os.app.testutil.FakeSettingsRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -14,7 +15,7 @@ import org.junit.Test
 
 class AgentRegistryTest {
 
-    private fun router() = AiRouter(setOf(MockChatProvider(), MockClaudeProvider(), MockGptProvider()))
+    private fun router() = AiRouter(setOf(MockChatProvider(FakeSettingsRepository()), MockClaudeProvider(), MockGptProvider()))
 
     private fun registry(router: AiRouter = router()) =
         MockAgentRegistry(setOf(ResearchAgent(router), CodeAgent(router)))
