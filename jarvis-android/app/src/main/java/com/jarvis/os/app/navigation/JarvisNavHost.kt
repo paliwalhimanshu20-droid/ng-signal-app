@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.jarvis.os.app.feature.aiprovider.AIProviderScreen
 import com.jarvis.os.app.feature.approvals.ApprovalCenterScreen
 import com.jarvis.os.app.feature.chat.ChatScreen
 import com.jarvis.os.app.feature.connections.ConnectionsScreen
@@ -27,7 +28,8 @@ fun JarvisNavHost(navController: NavHostController) {
         composable(JarvisDestination.Approvals.route) { ApprovalCenterScreen() }
         composable(JarvisDestination.Notifications.route) { NotificationsScreen() }
         composable(JarvisDestination.HomeAutomation.route) { HomeAutomationScreen() }
-        composable(JarvisDestination.Settings.route) { SettingsScreen() }
+        composable(JarvisDestination.Settings.route) { SettingsScreen(navController) }
+        composable(JarvisDestination.AIProvider.route) { AIProviderScreen() }
         composable(JarvisDestination.MissionControl.route) { MissionControlScreen(navController) }
         composable(JarvisDestination.WatchTower.route) { WatchTowerScreen() }
     }

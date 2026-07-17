@@ -37,6 +37,11 @@ sealed class JarvisDestination(val route: String, val label: String, val icon: I
     data object HomeAutomation : JarvisDestination("home_automation", "Home Automation", Icons.Filled.Home)
     data object MissionControl : JarvisDestination("dashboard", "Mission Control", Icons.Filled.Dashboard)
     data object WatchTower : JarvisDestination("watch_tower", "Watch Tower", Icons.Filled.Groups)
+    // "JARVIS Goes Live": reached only by tapping the AI Provider card
+    // inside Settings -- deliberately not added to drawerOnlyItems/all
+    // below, since it isn't meant to be a separately-discoverable
+    // top-level destination.
+    data object AIProvider : JarvisDestination("ai_provider", "AI Provider", Icons.Filled.Settings)
 
     companion object {
         val bottomBarItems = listOf(Home, Chat, MissionControl, Connections)
