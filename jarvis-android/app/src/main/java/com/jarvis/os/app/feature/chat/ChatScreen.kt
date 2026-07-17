@@ -243,7 +243,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             // real Listening/Thinking/Speaking/Idle state (see
             // ChatViewModel's docstring).
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                com.jarvis.os.app.designsystem.components.JarvisAvatar(
+                com.jarvis.os.app.designsystem.components.JarvisAvatarEngine(
                     state = avatarState,
                     size = 64.dp,
                     modifier = Modifier
