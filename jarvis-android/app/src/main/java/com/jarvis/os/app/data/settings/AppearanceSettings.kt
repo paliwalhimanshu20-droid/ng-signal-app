@@ -4,6 +4,7 @@ import com.jarvis.os.app.designsystem.AccentColor
 import com.jarvis.os.app.designsystem.AppearanceMode
 import com.jarvis.os.app.designsystem.JarvisFontFamily
 import com.jarvis.os.app.designsystem.JarvisFontScale
+import com.jarvis.os.app.designsystem.JarvisLanguage
 import com.jarvis.os.app.designsystem.JarvisMotionIntensity
 
 /** Part 11's full "Appearance" settings group, minus Wallpaper/Background Image asset storage (a real image picker + file storage is a meaningfully separate concern from the rest of this settings group — see delivery notes for why it's deferred rather than half-built). */
@@ -17,4 +18,6 @@ data class AppearanceSettings(
     val motionIntensity: JarvisMotionIntensity = JarvisMotionIntensity.Standard,
     /** Sprint 14-16 "Live Speech Synthesis": whether JARVIS speaks replies aloud via TextToSpeech. Defaults on -- "voice becomes the primary interaction" is this phase's own framing -- but stays a real, persisted Owner choice, not a forced always-on behavior. */
     val voiceOutputEnabled: Boolean = true,
+    /** "JARVIS Personality & Experience Bible": "Base Language: Hinglish (Default)." Drives JarvisPersona's system prompt (real AI provider) and every deterministic template's own phrasing (Executive Briefing, Watch Tower idle lines) -- see JarvisLanguage's own docstring. */
+    val language: JarvisLanguage = JarvisLanguage.Hinglish,
 )

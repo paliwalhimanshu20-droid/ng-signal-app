@@ -9,6 +9,7 @@ import com.jarvis.os.app.designsystem.AccentColor
 import com.jarvis.os.app.designsystem.AppearanceMode
 import com.jarvis.os.app.designsystem.JarvisFontFamily
 import com.jarvis.os.app.designsystem.JarvisFontScale
+import com.jarvis.os.app.designsystem.JarvisLanguage
 import com.jarvis.os.app.designsystem.JarvisMotionIntensity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -44,6 +45,7 @@ interface SettingsRepository {
     suspend fun setDashboardLayout(layout: DashboardLayout)
     suspend fun setMotionIntensity(intensity: JarvisMotionIntensity)
     suspend fun setVoiceOutputEnabled(enabled: Boolean)
+    suspend fun setLanguage(language: JarvisLanguage)
 }
 
 @Singleton
@@ -60,6 +62,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val DASHBOARD_LAYOUT = stringPreferencesKey("dashboard_layout")
         val MOTION_INTENSITY = stringPreferencesKey("motion_intensity")
         val VOICE_OUTPUT_ENABLED = booleanPreferencesKey("voice_output_enabled")
+        val LANGUAGE = stringPreferencesKey("jarvis_language")
     }
 
     override val appearance: Flow<AppearanceSettings> = dataStore.data.map { prefs ->
@@ -76,6 +79,8 @@ class DataStoreSettingsRepository @Inject constructor(
             motionIntensity = prefs[Keys.MOTION_INTENSITY]?.let { runCatching { JarvisMotionIntensity.valueOf(it) }.getOrNull() }
                 ?: JarvisMotionIntensity.Standard,
             voiceOutputEnabled = prefs[Keys.VOICE_OUTPUT_ENABLED] ?: true,
+            language = prefs[Keys.LANGUAGE]?.let { runCatching { JarvisLanguage.valueOf(it) }.getOrNull() }
+                ?: JarvisLanguage.Hinglish,
         )
     }
 
@@ -115,5 +120,9 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override suspend fun setVoiceOutputEnabled(enabled: Boolean) {
         dataStore.edit { it[Keys.VOICE_OUTPUT_ENABLED] = enabled }
+    }
+
+    override suspend fun setLanguage(language: JarvisLanguage) {
+        dataStore.edit { it[Keys.LANGUAGE] = language.name }
     }
 }
