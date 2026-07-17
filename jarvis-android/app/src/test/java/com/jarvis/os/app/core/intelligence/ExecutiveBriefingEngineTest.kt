@@ -9,7 +9,8 @@ import com.jarvis.os.app.data.repository.MockApprovalRepository
 import com.jarvis.os.app.data.repository.MockAuditRepository
 import com.jarvis.os.app.data.repository.MockConnectionRepository
 import com.jarvis.os.app.data.repository.MockMemoryRepository
-import com.jarvis.os.app.data.repository.MockNgSignalProStatusProvider
+import com.jarvis.os.app.testutil.FakeGitHubStatusProvider
+import com.jarvis.os.app.testutil.FakeNgSignalProStatusProvider
 import com.jarvis.os.app.data.repository.MockNotificationRepository
 import com.jarvis.os.app.data.repository.MockProjectRepository
 import com.jarvis.os.app.testutil.FakeSettingsRepository
@@ -41,8 +42,9 @@ class ExecutiveBriefingEngineTest {
         connections = MockConnectionRepository(),
         memory = MockMemoryRepository(),
         agents = agents,
-        ngSignalPro = MockNgSignalProStatusProvider(),
+        ngSignalPro = FakeNgSignalProStatusProvider(),
         settingsRepository = FakeSettingsRepository(),
+        gitHub = FakeGitHubStatusProvider(),
     )
 
     @Test
@@ -96,8 +98,8 @@ class ExecutiveBriefingEngineTest {
             projects = MockProjectRepository(), approvals = approvals,
             notifications = MockNotificationRepository(CoroutineScope(Dispatchers.Unconfined)),
             connections = MockConnectionRepository(), memory = MockMemoryRepository(),
-            agents = MockAgentRegistry(emptySet()), ngSignalPro = MockNgSignalProStatusProvider(),
-            settingsRepository = FakeSettingsRepository(),
+            agents = MockAgentRegistry(emptySet()), ngSignalPro = FakeNgSignalProStatusProvider(),
+            settingsRepository = FakeSettingsRepository(), gitHub = FakeGitHubStatusProvider(),
         )
         val briefing = engineWithSeeded.generateMorningBriefing()
         assertTrue(briefing.lines.any { it.contains("waiting on you") })
