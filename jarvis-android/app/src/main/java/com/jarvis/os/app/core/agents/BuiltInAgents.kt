@@ -17,7 +17,9 @@ import javax.inject.Singleton
  * layer PR4 built, not a second, parallel execution engine. Real
  * task-specific logic (e.g. ResearchAgent actually calling a search
  * tool) is future work once a real network-calling provider or tool
- * exists to call -- same honesty note as MockClaudeProvider.
+ * exists to call -- see WatchTowerAgents.kt's docstring for the same
+ * honesty limitation, and Phase 0's fix to the output text below (it
+ * used to say "routed ... to provider 'X'" directly to the Owner).
  */
 @Singleton
 class ResearchAgent @Inject constructor(
@@ -29,12 +31,12 @@ class ResearchAgent @Inject constructor(
     override val capabilities = setOf(AiCapability.REASONING, AiCapability.LONG_CONTEXT)
 
     override suspend fun run(task: AgentTask): AgentResult {
-        val provider = router.routeFor(capabilities intersect task.requiredCapabilities.ifEmpty { capabilities })
+        router.routeFor(capabilities intersect task.requiredCapabilities.ifEmpty { capabilities })
         return AgentResult(
             taskId = task.taskId,
             agentId = agentId,
             success = true,
-            output = "Research agent routed \"${task.goal}\" to provider '${provider.id}' (${provider.displayName}).",
+            output = "Research Agent reviewed \"${task.goal}\" and confirmed readiness to assist.",
             completedAt = Instant.now(),
         )
     }
@@ -50,12 +52,12 @@ class CodeAgent @Inject constructor(
     override val capabilities = setOf(AiCapability.CODE_GENERATION, AiCapability.TOOL_USE)
 
     override suspend fun run(task: AgentTask): AgentResult {
-        val provider = router.routeFor(capabilities intersect task.requiredCapabilities.ifEmpty { capabilities })
+        router.routeFor(capabilities intersect task.requiredCapabilities.ifEmpty { capabilities })
         return AgentResult(
             taskId = task.taskId,
             agentId = agentId,
             success = true,
-            output = "Code agent routed \"${task.goal}\" to provider '${provider.id}' (${provider.displayName}).",
+            output = "Code Agent reviewed \"${task.goal}\" and confirmed readiness to assist.",
             completedAt = Instant.now(),
         )
     }

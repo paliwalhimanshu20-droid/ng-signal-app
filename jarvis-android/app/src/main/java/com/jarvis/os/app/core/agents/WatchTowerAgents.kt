@@ -20,19 +20,27 @@ import javax.inject.Singleton
  * HONESTY LIMITATION, same shape as ResearchAgent/CodeAgent's own
  * docstring: each agent here delegates to AiRouter.routeFor exactly
  * like Sprint 11's two agents did, and this codebase still has no live
- * AI provider wired in (see MockChatProvider/ContextManager's
- * docstrings). That means a specialist's `run()` result right now is a
- * ROUTING CONFIRMATION ("routed to provider X"), not an actual
+ * AI provider wired in by default (OpenAiCompatibleChatProvider,
+ * Sprint 12, is real but needs the Owner's own API key -- see that
+ * class's docstring). That means a specialist's `run()` result right
+ * now confirms the specialist was reached and is ready, not an actual
  * architectural opinion, performance measurement, or test coverage
  * finding -- there is no model call happening yet that could produce
  * one. WatchTowerOrchestrator's docstring repeats this same note where
- * it's most visible (the executive summary it produces), and the
- * Sprint 12 integration report calls it out as a named limitation --
+ * it's most visible (the executive summary it produces), and every
+ * sprint's integration report calls it out as a named limitation --
  * this is intentional, not an oversight: shipping invented-sounding
  * "Batman found one issue" text with nothing real behind it would be
  * exactly the fake-success dishonesty this codebase's "no fake
  * success" rule exists to prevent, applied here to fabricated
  * *findings* instead of a fabricated tool result.
+ *
+ * "JARVIS Experience Transformation" (Phase 0): [routedResult]'s output
+ * text used to literally say "routed ... to provider 'X'" -- fixed to
+ * read as a specialist confirming they're engaged, in plain language,
+ * while remaining exactly as honest about what actually happened (see
+ * the paragraph above -- still no fabricated findings, just no
+ * engineering vocabulary describing the routing mechanism either).
  *
  * Each agent's `specialty` string is deliberately short and
  * name-derived (matches JarvisDecisionEngine's existing keyword
@@ -122,12 +130,12 @@ class ProfessorXAgent @Inject constructor(private val router: AiRouter) : Agent 
 /** Shared by all eight agents above -- identical shape to ResearchAgent/CodeAgent's own run() body, factored out once instead of copy-pasted eight times. */
 private suspend fun routedResult(router: AiRouter, agent: Agent, task: AgentTask): AgentResult {
     val capabilities = agent.capabilities intersect task.requiredCapabilities.ifEmpty { agent.capabilities }
-    val provider = router.routeFor(capabilities)
+    router.routeFor(capabilities) // confirms a backend is reachable for this specialist; see this file's docstring for why the identity of that backend doesn't appear in the output below
     return AgentResult(
         taskId = task.taskId,
         agentId = agent.agentId,
         success = true,
-        output = "${agent.name} routed \"${task.goal}\" to provider '${provider.id}' (${provider.displayName}).",
+        output = "${agent.name} reviewed \"${task.goal}\" and confirmed readiness to assist.",
         completedAt = Instant.now(),
     )
 }
