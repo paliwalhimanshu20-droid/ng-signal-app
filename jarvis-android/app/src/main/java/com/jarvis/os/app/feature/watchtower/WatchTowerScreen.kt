@@ -78,7 +78,7 @@ class WatchTowerViewModel @Inject constructor(
                 name = descriptor.name,
                 roleTitle = roleTitleFor(descriptor.name),
                 specialty = descriptor.specialty,
-                statusLine = ownResults.firstOrNull()?.let { "Last task: ${it.output}" } ?: "Not yet convened.",
+                statusLine = ownResults.firstOrNull()?.output ?: idleStatusFor(descriptor.name),
                 recentResults = ownResults,
             )
         }
@@ -96,6 +96,31 @@ class WatchTowerViewModel @Inject constructor(
         "Research Agent" -> "Research Specialist"
         "Code Agent" -> "Code Specialist"
         else -> "Specialist"
+    }
+
+    /**
+     * "JARVIS Experience Transformation": "redesign Watch Tower so it
+     * feels alive... even when idle... The Watch Tower should always
+     * feel operational." Real Owner-provided examples for this exact
+     * table ("Awaiting next architecture assignment," "Standing by for
+     * optimization tasks," "Waiting for documentation requests").
+     * Deliberately still not activity -- no specialist here claims to
+     * be doing anything; each line honestly says "ready, not yet
+     * asked," which is the true state whenever [WatchTowerAgentUiState.recentResults]
+     * is empty. This is presence, not fabrication.
+     */
+    private fun idleStatusFor(name: String): String = when (name) {
+        "Batman" -> "Awaiting next architecture assignment."
+        "Flash" -> "Standing by for optimization tasks."
+        "Iron Man" -> "Ready to assist with engineering and build work."
+        "Spider-Man" -> "Standing by for the next code review."
+        "Captain America" -> "Watching for anything that needs approval before it ships."
+        "Doctor Strange" -> "Ready to look into trading intelligence when called."
+        "Professor X" -> "Waiting for documentation requests."
+        "Nick Fury" -> "Keeping an eye on mission priorities."
+        "Research Agent" -> "Ready to dig into research when you need it."
+        "Code Agent" -> "Standing by for code generation or review."
+        else -> "Ready to help when called on."
     }
 }
 
