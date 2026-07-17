@@ -63,7 +63,14 @@ class HomeViewModel @Inject constructor(
     /** Whether this device actually has a speech recognition service -- HomeScreen uses this to decide whether to show the mic button as usable or explain honestly that voice input isn't available here (Sprint 14-16's own "do not invent fake intelligence" rule, applied to a missing platform capability instead of missing data). */
     val voiceInputAvailable: Boolean get() = speechToText.isAvailable
 
-    private val _avatarState = MutableStateFlow(JarvisAvatarState.Idle)
+    // "JARVIS Living Avatar" sprint: "Greeting -- when Daily Focus
+    // opens... warm smile, looks toward the user." Starts at Greeting
+    // rather than Idle, and settles to Idle a few seconds later in the
+    // init block below -- unless a real interaction (voice/typing) has
+    // already taken over avatarState by then, in which case this timer
+    // simply loses the race harmlessly (a genuine event always wins
+    // over a decorative timeout).
+    private val _avatarState = MutableStateFlow(JarvisAvatarState.Greeting)
     private val _voiceTranscript = MutableStateFlow("")
     private val _isListening = MutableStateFlow(false)
 
@@ -86,6 +93,13 @@ class HomeViewModel @Inject constructor(
     private var listeningJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(2_600)
+            if (_avatarState.value == JarvisAvatarState.Greeting) {
+                _avatarState.value = JarvisAvatarState.Idle
+            }
+        }
+
         // "JARVIS Experience Transformation" (Phase 1): every local
         // avatarState change also updates the app-wide JarvisPresence
         // signal, one collector rather than a call at each of the

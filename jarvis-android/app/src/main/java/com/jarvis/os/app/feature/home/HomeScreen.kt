@@ -47,7 +47,6 @@ import androidx.navigation.NavHostController
 import com.jarvis.os.app.designsystem.JarvisBrand
 import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.components.GlassPanel
-import com.jarvis.os.app.designsystem.components.JarvisAvatar
 import com.jarvis.os.app.designsystem.jarvisHeroStyle
 import com.jarvis.os.app.designsystem.jarvisHudLabelStyle
 import com.jarvis.os.app.navigation.JarvisDestination
@@ -111,7 +110,13 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
             ) {
                 Spacer(modifier = Modifier.height(JarvisSpacing.xxl))
 
-                JarvisAvatar(
+                // "JARVIS Living Avatar" sprint: JarvisAvatarEngine is
+                // the new permanent avatar surface (image-based,
+                // falls back to the existing procedural JarvisAvatar
+                // when no real asset exists yet -- see that file's own
+                // docstring). Home is the primary place the avatar
+                // "becomes the visual centerpiece."
+                com.jarvis.os.app.designsystem.components.JarvisAvatarEngine(
                     state = state.avatarState,
                     size = 220.dp,
                     themeColor = appearance.accentColor.seed,
