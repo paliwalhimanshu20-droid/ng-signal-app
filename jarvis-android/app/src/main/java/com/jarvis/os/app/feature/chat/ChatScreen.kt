@@ -96,6 +96,7 @@ class ChatViewModel @Inject constructor(
     private val speechToText: SpeechToTextController,
     private val speechSynthesizer: SpeechSynthesizer,
     private val settingsRepository: SettingsRepository,
+    private val presence: com.jarvis.os.app.core.JarvisPresence,
 ) : ViewModel() {
     val messages = core.chat.messages.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -130,6 +131,14 @@ class ChatViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.jarvis.os.app.designsystem.components.JarvisAvatarState.Idle)
 
     init {
+        // "JARVIS Experience Transformation" (Phase 1): mirrors
+        // HomeViewModel's own forwarding -- see that class's docstring
+        // for why one collector here, not a call at each place that
+        // changes the underlying signals avatarState is derived from.
+        viewModelScope.launch {
+            avatarState.collect { state -> presence.update(state) }
+        }
+
         viewModelScope.launch {
             core.events.collect { event ->
                 if (event is CoreEvent.ChatResponseReceived && event.sessionId == core.chat.activeSessionId) {
@@ -223,7 +232,11 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(com.jarvis.os.app.designsystem.JarvisBrand.Void)) {
+    // "JARVIS Experience Transformation" (Phase 1): no longer paints its
+    // own flat background -- the Living Background now renders once, at
+    // the app root (see JarvisApp.kt), so Chat sits inside the same
+    // continuous environment every other screen does.
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Sprint 13 "Conversation First", extended by Sprint 14-16: a
             // small, persistent avatar above the transcript reflecting
