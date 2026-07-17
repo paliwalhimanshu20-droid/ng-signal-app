@@ -1,6 +1,7 @@
 package com.jarvis.os.app.core.chat.di
 
 import com.jarvis.os.app.core.chat.ChatProvider
+import com.jarvis.os.app.core.chat.GeminiChatProvider
 import com.jarvis.os.app.core.chat.MockChatProvider
 import com.jarvis.os.app.core.chat.MockClaudeProvider
 import com.jarvis.os.app.core.chat.MockGptProvider
@@ -25,6 +26,11 @@ import dagger.multibindings.IntoSet
  * see that class's own docstring for why it degrades to an honest
  * error message (not a crash, not a silent fallback) when the Owner
  * hasn't configured a real API key yet.
+ *
+ * "Universal Connection Ecosystem -- Phase 1": GeminiChatProvider is
+ * the second real, network-calling provider, bound the same one-line
+ * way -- AiRouter now has two genuinely live candidates plus three
+ * honest offline fallbacks to route between.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -44,4 +50,8 @@ abstract class ChatProviderModule {
     @Binds
     @IntoSet
     abstract fun bindOpenAiCompatibleChatProvider(impl: OpenAiCompatibleChatProvider): ChatProvider
+
+    @Binds
+    @IntoSet
+    abstract fun bindGeminiChatProvider(impl: GeminiChatProvider): ChatProvider
 }
