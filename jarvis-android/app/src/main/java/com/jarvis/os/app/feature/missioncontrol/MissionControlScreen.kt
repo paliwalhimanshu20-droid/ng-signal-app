@@ -67,6 +67,7 @@ import javax.inject.Inject
  */
 data class MissionControlState(
     val activeProviderName: String = "",
+    val isOnline: Boolean = false,
     val totalProviders: Int = 0,
     val watchTowerAgentCount: Int = 0,
     val watchTowerLastActivity: String = "No specialists convened yet.",
@@ -125,6 +126,12 @@ class MissionControlViewModel @Inject constructor(
             ?: firstNine.firstEight.activeProviderId
         MissionControlState(
             activeProviderName = activeProviderName,
+            // "JARVIS Goes Live": "Replace 'JARVIS (offline)' with
+            // 'JARVIS Online' when a provider is connected." Real
+            // signal: is the active provider one of the genuinely
+            // network-calling ones (openai-compatible/gemini/anthropic),
+            // not one of the honest offline Mock fallbacks.
+            isOnline = firstNine.firstEight.activeProviderId in setOf("openai-compatible", "gemini", "anthropic"),
             totalProviders = aiRouter.available.size,
             watchTowerAgentCount = agentRegistry.agents.value.size,
             watchTowerLastActivity = agentResults.maxByOrNull { it.completedAt }?.let { latest ->
@@ -169,10 +176,10 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
     ) {
         item {
             MissionControlTile(
-                label = "AI PROVIDERS",
+                label = if (state.isOnline) "JARVIS ONLINE" else "JARVIS OFFLINE",
                 value = if (state.activeProviderName.isNotBlank()) "${state.activeProviderName} is active and ready." else "No provider selected yet.",
-                detail = "${state.totalProviders} available · tap to switch",
-                accentColor = JarvisBrand.CoreCyan,
+                detail = if (state.isOnline) "Conversation ready · ${state.totalProviders} provider(s) available" else "${state.totalProviders} available · tap to connect one",
+                accentColor = if (state.isOnline) JarvisStatusColors.Healthy else JarvisBrand.CoreCyan,
                 onClick = { navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.Settings.route) },
             )
         }
