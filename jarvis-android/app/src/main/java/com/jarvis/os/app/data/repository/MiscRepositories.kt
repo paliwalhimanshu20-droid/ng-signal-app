@@ -256,7 +256,9 @@ class MockChatRepository @Inject constructor(
         listOf(
             ChatMessage(
                 UUID.randomUUID().toString(), MessageAuthor.JARVIS, MessageContentKind.TEXT,
-                "Ready. No live AI provider call happens yet — see ChatProvider's docstring for how a real one gets wired in.",
+                "I'm currently operating in offline mode because no AI provider has been connected yet. " +
+                    "Once you connect Gemini, OpenAI, or Claude from AI Provider Settings, I'll be ready for live conversations. " +
+                    "Until then, I can still help with what's already available here.",
                 timestamp = Instant.now(),
                 sessionId = ChatSession.DEFAULT_SESSION_ID,
             ),
