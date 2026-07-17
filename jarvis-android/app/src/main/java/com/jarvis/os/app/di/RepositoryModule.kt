@@ -132,4 +132,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindGeminiKeyStore(impl: com.jarvis.os.app.data.settings.EncryptedGeminiKeyStore): com.jarvis.os.app.data.settings.GeminiKeyStore
+
+    @Binds
+    @Singleton
+    abstract fun bindAnthropicKeyStore(impl: com.jarvis.os.app.data.settings.EncryptedAnthropicKeyStore): com.jarvis.os.app.data.settings.AnthropicKeyStore
 }
