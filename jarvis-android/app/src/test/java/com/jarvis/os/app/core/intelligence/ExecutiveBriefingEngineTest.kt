@@ -12,6 +12,7 @@ import com.jarvis.os.app.data.repository.MockMemoryRepository
 import com.jarvis.os.app.data.repository.MockNgSignalProStatusProvider
 import com.jarvis.os.app.data.repository.MockNotificationRepository
 import com.jarvis.os.app.data.repository.MockProjectRepository
+import com.jarvis.os.app.testutil.FakeSettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -26,10 +27,10 @@ import org.junit.Test
  * assemble" convention JarvisCoreNotificationTest already established.
  * A plain CoroutineScope(Dispatchers.Unconfined) (not runTest's
  * backgroundScope) is used for MockNotificationRepository's constructor
- * in the non-suspend test methods below -- these don't run inside
- * runTest at all (ExecutiveBriefingEngine's own methods aren't
- * suspend), so there's no UncompletedCoroutinesError risk to guard
- * against here the way JarvisCore's tests must.
+ * -- see JarvisCoreNotificationTest's own docstring for the general
+ * reasoning; here it's paired with runTest(UnconfinedTestDispatcher())
+ * on every test now that generateMorningBriefing is suspend (it reads
+ * the Owner's language preference -- see FakeSettingsRepository).
  */
 class ExecutiveBriefingEngineTest {
 
@@ -41,30 +42,34 @@ class ExecutiveBriefingEngineTest {
         memory = MockMemoryRepository(),
         agents = agents,
         ngSignalPro = MockNgSignalProStatusProvider(),
+        settingsRepository = FakeSettingsRepository(),
     )
 
     @Test
-    fun `briefing always includes a greeting and project status`() {
+    fun `briefing always includes a greeting and project status`() = runTest(UnconfinedTestDispatcher()) {
         val briefing = engine().generateMorningBriefing()
-        assertTrue(briefing.greeting == "Good morning.")
-        assertTrue(briefing.lines.any { it.contains("active project") })
+        // Greeting is genuinely time-of-day dependent now (Personality
+        // Bible: "every morning, every afternoon, every evening") -- no
+        // longer a fixed string a test can assert on directly.
+        assertTrue(briefing.greeting.isNotBlank())
+        assertTrue(briefing.lines.any { it.contains("ProjectOS") })
     }
 
     @Test
-    fun `briefing reports NG Signal Pro honestly when there is no live connection`() {
+    fun `briefing reports NG Signal Pro honestly when there is no live connection`() = runTest(UnconfinedTestDispatcher()) {
         val briefing = engine().generateMorningBriefing()
-        assertTrue(briefing.lines.any { it.contains("no live connection") })
+        assertTrue(briefing.lines.any { it.contains("isn't connected yet") })
     }
 
     @Test
-    fun `briefing has no Watch Tower line when no specialist has ever run`() {
+    fun `briefing has no Watch Tower line when no specialist has ever run`() = runTest(UnconfinedTestDispatcher()) {
         val briefing = engine().generateMorningBriefing()
         assertFalse(briefing.lines.any { it.contains("Batman") })
     }
 
     @Test
     fun `briefing surfaces the latest result per specialist once one has actually run`() = runTest(UnconfinedTestDispatcher()) {
-        val router = AiRouter(setOf(MockChatProvider()))
+        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())))
         val batman = BatmanAgent(router)
         val agentRegistry = MockAgentRegistry(setOf(batman))
         val approvals = MockApprovalRepository()
@@ -85,15 +90,16 @@ class ExecutiveBriefingEngineTest {
     }
 
     @Test
-    fun `pending approvals line only appears when something is actually pending`() {
+    fun `pending approvals line only appears when something is actually pending`() = runTest(UnconfinedTestDispatcher()) {
         val approvals = MockApprovalRepository() // seeds 3 PENDING approvals by construction
         val engineWithSeeded = ExecutiveBriefingEngine(
             projects = MockProjectRepository(), approvals = approvals,
             notifications = MockNotificationRepository(CoroutineScope(Dispatchers.Unconfined)),
             connections = MockConnectionRepository(), memory = MockMemoryRepository(),
             agents = MockAgentRegistry(emptySet()), ngSignalPro = MockNgSignalProStatusProvider(),
+            settingsRepository = FakeSettingsRepository(),
         )
         val briefing = engineWithSeeded.generateMorningBriefing()
-        assertTrue(briefing.lines.any { it.contains("waiting for your review") })
+        assertTrue(briefing.lines.any { it.contains("waiting on you") })
     }
 }

@@ -9,6 +9,7 @@ import com.jarvis.os.app.core.tools.CalculatorTool
 import com.jarvis.os.app.core.tools.ProjectNoteTool
 import com.jarvis.os.app.data.repository.MockApprovalRepository
 import com.jarvis.os.app.data.repository.MockToolRepository
+import com.jarvis.os.app.testutil.FakeSettingsRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -18,7 +19,7 @@ import org.junit.Test
 class JarvisDecisionEngineTest {
 
     private fun engine(): JarvisDecisionEngine {
-        val router = AiRouter(setOf(MockChatProvider()))
+        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())))
         val agentRegistry = MockAgentRegistry(setOf(ResearchAgent(router), CodeAgent(router)))
         val toolRepository = MockToolRepository(setOf(CalculatorTool(), ProjectNoteTool()), MockApprovalRepository())
         return JarvisDecisionEngine(toolRepository, agentRegistry)
