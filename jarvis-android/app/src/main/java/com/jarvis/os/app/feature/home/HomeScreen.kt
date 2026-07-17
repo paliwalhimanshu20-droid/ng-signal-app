@@ -46,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.jarvis.os.app.designsystem.JarvisBrand
 import com.jarvis.os.app.designsystem.JarvisSpacing
+import com.jarvis.os.app.designsystem.JarvisStatusColors
 import com.jarvis.os.app.designsystem.components.GlassPanel
 import com.jarvis.os.app.designsystem.jarvisHeroStyle
 import com.jarvis.os.app.designsystem.jarvisHudLabelStyle
@@ -180,6 +181,77 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
                             }
                         }
                     }
+                }
+
+                if (state.todaysPriorities.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(JarvisSpacing.md))
+                    GlassPanel(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            Text(
+                                text = "TODAY'S PRIORITIES",
+                                style = jarvisHudLabelStyle(),
+                                color = JarvisBrand.CoreCyan,
+                            )
+                            Spacer(modifier = Modifier.height(JarvisSpacing.sm))
+                            state.todaysPriorities.forEach { priority ->
+                                Text(
+                                    text = "• $priority",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(top = JarvisSpacing.xs),
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(JarvisSpacing.md))
+
+                // "JARVIS Comes Alive -- Final Living Experience": "The
+                // Home Screen becomes Mission Control." Reuses
+                // MissionControlTile (already proven in
+                // MissionControlScreen) rather than inventing new tile
+                // UI, for both visual consistency and lower risk.
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(JarvisSpacing.sm)) {
+                    com.jarvis.os.app.designsystem.components.MissionControlTile(
+                        label = "WATCH TOWER",
+                        value = "${state.watchTowerSpecialistCount} specialists",
+                        detail = state.watchTowerSummary,
+                        accentColor = JarvisBrand.CorePlasma,
+                        modifier = Modifier.weight(1f).clickable {
+                            navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.WatchTower.route)
+                        },
+                    )
+                    com.jarvis.os.app.designsystem.components.MissionControlTile(
+                        label = "ACTIVE TASKS",
+                        value = "${state.activeTaskCount} open",
+                        detail = "Across all projects",
+                        accentColor = JarvisStatusColors.Healthy,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(JarvisSpacing.sm))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(JarvisSpacing.sm)) {
+                    com.jarvis.os.app.designsystem.components.MissionControlTile(
+                        label = "CONNECTED SYSTEMS",
+                        value = "${state.connectedSystemsCount} of ${state.totalSystemsCount}",
+                        detail = "Systems online",
+                        accentColor = JarvisBrand.CoreBlue,
+                        modifier = Modifier.weight(1f).clickable {
+                            navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.Connections.route)
+                        },
+                    )
+                    com.jarvis.os.app.designsystem.components.MissionControlTile(
+                        label = "NOTIFICATIONS",
+                        value = if (state.unreadNotificationCount > 0) "${state.unreadNotificationCount} unread" else "All caught up",
+                        detail = if (state.unreadNotificationCount > 0) "Tap to review" else "Nothing pending",
+                        accentColor = if (state.unreadNotificationCount > 0) JarvisStatusColors.Degraded else JarvisStatusColors.Healthy,
+                        modifier = Modifier.weight(1f).clickable {
+                            navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.Notifications.route)
+                        },
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(JarvisSpacing.lg))
