@@ -6,6 +6,8 @@ import com.jarvis.os.app.data.model.ConnectionStatus
 import com.jarvis.os.app.data.model.MemoryTier
 import com.jarvis.os.app.data.repository.ApprovalRepository
 import com.jarvis.os.app.data.repository.ConnectionRepository
+import com.jarvis.os.app.data.repository.GitHubFetchResult
+import com.jarvis.os.app.data.repository.GitHubStatusProvider
 import com.jarvis.os.app.data.repository.MemoryRepository
 import com.jarvis.os.app.data.repository.NgSignalProStatusProvider
 import com.jarvis.os.app.data.repository.NotificationRepository
@@ -77,12 +79,14 @@ class ExecutiveBriefingEngine @Inject constructor(
     private val agents: AgentRegistry,
     private val ngSignalPro: NgSignalProStatusProvider,
     private val settingsRepository: SettingsRepository,
+    private val gitHub: GitHubStatusProvider,
 ) {
     suspend fun generateMorningBriefing(): ExecutiveBriefing {
         val language = settingsRepository.appearance.first().language
         val lines = mutableListOf<String>()
 
         lines += ngSignalProLine(language)
+        githubLine(language)?.let { lines += it }
         lines += projectsLine(language)
         recentDecisionLine(language)?.let { lines += it }
         lines += watchTowerLines()
@@ -91,6 +95,41 @@ class ExecutiveBriefingEngine @Inject constructor(
         unreadNotificationsLine(language)?.let { lines += it }
 
         return ExecutiveBriefing(greeting = greetingFor(language), lines = lines, generatedAt = Instant.now())
+    }
+
+    /**
+     * "Universal Connection Ecosystem -- Phase 1": "GitHub par ek Pull
+     * Request review ke liye ready hai." -- the Bible's own example,
+     * built from GitHubStatusProvider's real, already-fetched status
+     * (see that class's docstring for why this reads the shared
+     * singleton's current snapshot rather than triggering its own
+     * network call on every briefing). Returns null (no line at all,
+     * not a fabricated "not connected" line cluttering every briefing)
+     * when GitHub has never successfully been fetched -- an honestly
+     * absent integration doesn't need to announce its own absence on
+     * every single briefing the way a genuinely broken one would.
+     */
+    private fun githubLine(language: JarvisLanguage): String? {
+        val result = gitHub.status.value as? GitHubFetchResult.Success ?: return null
+        val prCount = result.status.openPullRequestCount
+        if (prCount == 0) return null
+        return when (language) {
+            JarvisLanguage.Hinglish -> if (prCount == 1) {
+                "GitHub par ek Pull Request review ke liye ready hai."
+            } else {
+                "GitHub par $prCount Pull Requests review ke liye ready hain."
+            }
+            JarvisLanguage.Hindi -> if (prCount == 1) {
+                "GitHub पर एक Pull Request review के लिए ready है।"
+            } else {
+                "GitHub पर $prCount Pull Requests review के लिए ready हैं।"
+            }
+            JarvisLanguage.English -> if (prCount == 1) {
+                "One pull request on GitHub is ready for review."
+            } else {
+                "$prCount pull requests on GitHub are ready for review."
+            }
+        }
     }
 
     private fun greetingFor(language: JarvisLanguage): String {
@@ -123,17 +162,23 @@ class ExecutiveBriefingEngine @Inject constructor(
                 JarvisLanguage.English -> "NG Signal Pro isn't connected yet."
             }
         }
-        val sync = status.warehouseSynchronized
-        val telegram = status.telegramHealthy
+        val allHealthy = status.scannerHealthy && status.warehouseSynchronized && status.alertPipelineHealthy
         return when (language) {
-            JarvisLanguage.Hinglish -> "NG Signal Pro ne aaj ka scan complete kar diya -- ${status.marketBias}, " +
-                "${status.confidencePercent}% confidence, ${status.buyCandidateCount} candidate mile." +
-                if (sync && telegram) " Sab kuch healthy hai." else ""
-            JarvisLanguage.Hindi -> "NG Signal Pro ने आज का scan पूरा कर दिया -- ${status.marketBias}, " +
-                "${status.confidencePercent}% confidence, ${status.buyCandidateCount} candidate मिले।"
-            JarvisLanguage.English -> "NG Signal Pro completed today's scan: ${status.marketBias}, " +
-                "${status.confidencePercent}% confidence, ${status.buyCandidateCount} candidate(s) found." +
-                if (sync && telegram) " Everything's healthy there." else ""
+            JarvisLanguage.Hinglish -> if (status.scannerHealthy) {
+                "NG Signal Pro ka overnight scan successfully complete hua." + if (allHealthy) " Sab kuch healthy hai." else " Warehouse ya alerts mein thoda dhyaan dena hoga."
+            } else {
+                "NG Signal Pro ka last scan complete nahi hua -- ek baar dekh lijiye."
+            }
+            JarvisLanguage.Hindi -> if (status.scannerHealthy) {
+                "NG Signal Pro का overnight scan सफलतापूर्वक पूरा हुआ।" + if (allHealthy) " सब कुछ healthy है।" else ""
+            } else {
+                "NG Signal Pro का last scan पूरा नहीं हुआ -- एक बार देख लीजिए।"
+            }
+            JarvisLanguage.English -> if (status.scannerHealthy) {
+                "NG Signal Pro's overnight scan completed successfully." + if (allHealthy) " Everything's healthy there." else " Worth a look at the warehouse or alert pipeline."
+            } else {
+                "NG Signal Pro's last scan didn't complete successfully -- worth a look."
+            }
         }
     }
 
