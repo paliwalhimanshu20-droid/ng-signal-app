@@ -148,6 +148,29 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
         item {
             JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
+                Column {
+                    Text("Language", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "How JARVIS speaks with you by default. She'll still follow you if you switch languages mid-conversation -- this just sets her starting point.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(JarvisSpacing.sm)) {
+                        com.jarvis.os.app.designsystem.JarvisLanguage.values().forEach { language ->
+                            FilterChip(
+                                selected = appearance.language == language,
+                                onClick = { viewModel.setLanguage(language) },
+                                label = { Text(language.label) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Speak replies aloud", style = MaterialTheme.typography.titleMedium)

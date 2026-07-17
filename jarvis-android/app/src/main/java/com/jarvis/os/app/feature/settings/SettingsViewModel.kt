@@ -13,6 +13,7 @@ import com.jarvis.os.app.designsystem.AccentColor
 import com.jarvis.os.app.designsystem.AppearanceMode
 import com.jarvis.os.app.designsystem.JarvisFontFamily
 import com.jarvis.os.app.designsystem.JarvisFontScale
+import com.jarvis.os.app.designsystem.JarvisLanguage
 import com.jarvis.os.app.designsystem.JarvisMotionIntensity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +68,7 @@ class SettingsViewModel @Inject constructor(
     fun setBackgroundColorHex(hex: String?) = viewModelScope.launch { repository.setBackgroundColorHex(hex) }
     fun setMotionIntensity(intensity: JarvisMotionIntensity) = viewModelScope.launch { repository.setMotionIntensity(intensity) }
     fun setVoiceOutputEnabled(enabled: Boolean) = viewModelScope.launch { repository.setVoiceOutputEnabled(enabled) }
+    fun setLanguage(language: JarvisLanguage) = viewModelScope.launch { repository.setLanguage(language) }
 
     // --- Sprint 12 "Real AI Conversation": AI Provider configuration ---
 
