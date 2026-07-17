@@ -2,8 +2,10 @@ package com.jarvis.os.app.core.chat
 
 import com.jarvis.os.app.data.model.AiCapability
 import com.jarvis.os.app.data.settings.ApiKeyStore
+import com.jarvis.os.app.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.MediaType.Companion.toMediaType
@@ -41,10 +43,19 @@ import javax.inject.Singleton
  * (line-by-line, "data: " prefix), not via the separate okhttp-sse
  * artifact -- one fewer library dependency for a wire format simple
  * enough to parse directly and reliably.
+ *
+ * "JARVIS Personality & Experience Bible": every request now leads with
+ * a system-role message built from JarvisPersona.systemPrompt -- see
+ * that object's own docstring for the full reasoning. This is the one
+ * place in the whole app where the Bible actually reaches a real
+ * language model, which is also the only place it fully CAN reach one;
+ * everywhere else in this app that speaks in JARVIS's voice is a
+ * deterministic template approximating it, not the real thing.
  */
 @Singleton
 class OpenAiCompatibleChatProvider @Inject constructor(
     private val apiKeyStore: ApiKeyStore,
+    private val settingsRepository: SettingsRepository,
 ) : ChatProvider {
     override val id: String = "openai-compatible"
     override val displayName: String = "OpenAI-compatible"
@@ -67,17 +78,26 @@ class OpenAiCompatibleChatProvider @Inject constructor(
             return@flow
         }
 
+        val language = settingsRepository.appearance.first().language
+
         val requestJson = JSONObject().apply {
             put("model", config.model)
             put("stream", true)
             put(
                 "messages",
-                JSONArray().put(
-                    JSONObject().apply {
-                        put("role", "user")
-                        put("content", text)
-                    },
-                ),
+                JSONArray()
+                    .put(
+                        JSONObject().apply {
+                            put("role", "system")
+                            put("content", JarvisPersona.systemPrompt(language))
+                        },
+                    )
+                    .put(
+                        JSONObject().apply {
+                            put("role", "user")
+                            put("content", text)
+                        },
+                    ),
             )
         }
         val requestBody = requestJson.toString().toRequestBody("application/json".toMediaType())

@@ -12,15 +12,19 @@ import javax.inject.Singleton
  * candidate to choose between -- the honest gap this closes is stated
  * in AiRouter's own docstring ("nothing here to switch between yet").
  *
- * Still no real network call to Anthropic's API -- that requires a
- * securely stored API key and goes through ConnectionRepository's
- * owner-approval flow (Sprint-6/Sprint 9's whole point), which no
- * screen collects yet. This mock is deliberately honest about that in
- * its own reply text rather than silently pretending. Swapping in a
- * real Anthropic-backed implementation later is: implement
- * ChatProvider with a real HTTP client, delete this class or leave it
- * bound alongside it, done -- same swap point MockChatProvider already
- * established.
+ * Still no real network call to Anthropic's API specifically --
+ * OpenAiCompatibleChatProvider (Sprint 12) is this codebase's one real
+ * provider today, and it can already point at any OpenAI-compatible
+ * endpoint the Owner configures. This class stays bound as a distinct,
+ * honestly-labeled option in the provider picker rather than being
+ * folded into that one.
+ *
+ * "JARVIS Experience Transformation" (Phase 0): this class's reply
+ * text used to name its own implementation details (ConnectionRepository,
+ * "capability-tagged placeholder") directly to the Owner -- fixed to
+ * speak naturally instead, same as MockChatProvider's own reply.
+ * Internal architecture stays internal; only what a real conversational
+ * partner would actually say is user-facing now.
  */
 @Singleton
 class MockClaudeProvider @Inject constructor() : ChatProvider {
@@ -35,10 +39,8 @@ class MockClaudeProvider @Inject constructor() : ChatProvider {
     )
 
     override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
-        val reply = "Routed to the Claude provider slot for: \"$text\". No live Anthropic API " +
-            "call happens yet -- this provider is a capability-tagged placeholder " +
-            "(reasoning, long-context, code) until a real connection is approved " +
-            "via ConnectionRepository and an API key is supplied."
+        val reply = "I'm not connected to Claude yet -- add an API key under Settings, AI Provider, " +
+            "and we can have a real conversation together. For now, here's what I heard: \"$text\"."
         emit(ChatChunk.Complete(reply))
     }
 }

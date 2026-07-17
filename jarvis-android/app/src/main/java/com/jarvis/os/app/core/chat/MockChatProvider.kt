@@ -1,8 +1,11 @@
 package com.jarvis.os.app.core.chat
 
 import com.jarvis.os.app.data.model.AiCapability
+import com.jarvis.os.app.data.settings.SettingsRepository
+import com.jarvis.os.app.designsystem.JarvisLanguage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,21 +20,24 @@ import javax.inject.Singleton
  * OpenAiCompatibleChatProvider is a real one now. This one remains
  * bound as JARVIS's offline fallback (see AiRouter — routeFor always
  * has a valid candidate even with no API key configured, and
- * switchProvider lets the Owner pick this one deliberately). Its reply
- * text was rewritten this sprint to stop saying "no real AI call
- * happens yet" now that a real one exists elsewhere — see this
- * sprint's natural-language rule (section 10): the Owner should be
- * told plainly that JARVIS is running offline, not shown implementation
- * vocabulary about which class is or isn't wired up.
+ * switchProvider lets the Owner pick this one deliberately).
  *
- * The reply is written in Markdown (a bold word, an inline code
- * reference, a short list) specifically so MessageContentKind.MARKDOWN
- * — dormant since Sprint-7, never rendered — has something real to
- * exercise end to end, not just a theoretical code path nobody can see
- * on screen.
+ * "JARVIS Personality & Experience Bible": this is the one place in the
+ * app where JARVIS "speaks" without a real model behind her (see
+ * JarvisPersona's own docstring for that honesty boundary) -- the reply
+ * below is deterministic template text, not generated language, so it
+ * can only carry her voice as far as hand-written copy honestly can.
+ * It stays warm and in-character rather than reading like a system
+ * status message, and follows [JarvisLanguage] the same way the real
+ * provider's system prompt does, but it is still fundamentally a fixed
+ * string, not JARVIS actually thinking -- that distinction matters and
+ * is not hidden from this docstring even though it's invisible to the
+ * Owner.
  */
 @Singleton
-class MockChatProvider @Inject constructor() : ChatProvider {
+class MockChatProvider @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+) : ChatProvider {
     override val id: String = "mock"
     override val displayName: String = "JARVIS (offline)"
 
@@ -39,13 +45,14 @@ class MockChatProvider @Inject constructor() : ChatProvider {
     override val capabilities: Set<AiCapability> = setOf(AiCapability.GENERAL_CHAT)
 
     override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
-        val reply = buildString {
-            append("I heard you say: \"$text\".\n\n")
-            append("I'm currently running **offline** — no AI provider is connected right now. ")
-            append("Add an API key under Settings → AI Provider to have a real conversation with me.\n\n")
-            append("In the meantime, here's what I can still show you:\n\n")
-            append("- Markdown rendering, like this `inline code` and this list\n")
-            append("- Session id for this message: `$sessionId`")
+        val language = settingsRepository.appearance.first().language
+        val reply = when (language) {
+            JarvisLanguage.Hinglish -> "Maine sun liya: \"$text\". Abhi main **offline** hoon -- koi AI provider connect nahi hai. " +
+                "Settings mein, AI Provider ke andar ek API key add kar dijiye, phir hum properly baat kar sakte hain."
+            JarvisLanguage.Hindi -> "मैंने सुन लिया: \"$text\"। अभी मैं **ऑफ़लाइन** हूं -- कोई AI प्रोवाइडर कनेक्ट नहीं है। " +
+                "Settings में, AI Provider के अंदर एक API key जोड़ दीजिए, फिर हम ठीक से बात कर सकते हैं।"
+            JarvisLanguage.English -> "I heard you: \"$text\". I'm running **offline** right now -- no AI provider is connected. " +
+                "Add an API key under Settings, AI Provider, and we can have a real conversation."
         }
         // Word-by-word, not one giant Token: makes the streaming
         // architecture genuinely observable on screen rather than a
