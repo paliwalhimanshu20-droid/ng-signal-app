@@ -82,6 +82,21 @@ enum class JarvisMotionIntensity(
 }
 
 /**
+ * "JARVIS Personality & Experience Bible": "Base Language... Default:
+ * Hinglish... Changing language NEVER changes personality." A curated
+ * enum, same pattern as every other Owner-facing choice in this file --
+ * the Bible's own three named options (Hinglish, English, Hindi) plus
+ * room for more later without touching anything that reads this value
+ * (JarvisPersona's system prompt and every deterministic template in
+ * this app switch on this same enum).
+ */
+enum class JarvisLanguage(val label: String) {
+    Hinglish("Hinglish"),
+    English("English"),
+    Hindi("Hindi"),
+}
+
+/**
  * Sprint 14-16 "Live Facial Animation": an emotional overlay,
  * orthogonal to [com.jarvis.os.app.designsystem.components.JarvisAvatarState]
  * (which governs MOTION -- is JARVIS idle, thinking, speaking) rather
