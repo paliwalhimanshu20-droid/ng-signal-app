@@ -1,5 +1,6 @@
 package com.jarvis.os.app.core.chat.di
 
+import com.jarvis.os.app.core.chat.AnthropicChatProvider
 import com.jarvis.os.app.core.chat.ChatProvider
 import com.jarvis.os.app.core.chat.GeminiChatProvider
 import com.jarvis.os.app.core.chat.MockChatProvider
@@ -54,4 +55,8 @@ abstract class ChatProviderModule {
     @Binds
     @IntoSet
     abstract fun bindGeminiChatProvider(impl: GeminiChatProvider): ChatProvider
+
+    @Binds
+    @IntoSet
+    abstract fun bindAnthropicChatProvider(impl: AnthropicChatProvider): ChatProvider
 }
