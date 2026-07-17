@@ -1,6 +1,7 @@
 package com.jarvis.os.app.core.chat
 
 import com.jarvis.os.app.data.model.AiCapability
+import com.jarvis.os.app.testutil.FakeSettingsRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +14,7 @@ import org.junit.Test
  */
 class AiRouterTest {
 
-    private fun router() = AiRouter(setOf(MockChatProvider(), MockClaudeProvider(), MockGptProvider()))
+    private fun router() = AiRouter(setOf(MockChatProvider(FakeSettingsRepository()), MockClaudeProvider(), MockGptProvider()))
 
     @Test
     fun `routeFor with no requirement returns the active provider`() {
