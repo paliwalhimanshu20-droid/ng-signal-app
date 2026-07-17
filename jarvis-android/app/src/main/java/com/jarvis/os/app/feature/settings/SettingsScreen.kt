@@ -255,6 +255,90 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             }
         }
 
+        item {
+            val geminiState by viewModel.geminiState.collectAsState()
+            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
+                Column {
+                    Text("Gemini", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Connect Google Gemini as an additional AI provider.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
+                    )
+                    if (geminiState.hasStoredKey) {
+                        Text("A Gemini API key is saved (model: ${geminiState.model}).", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        TextButton(onClick = { viewModel.clearGeminiKey() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) { Text("Remove key") }
+                    } else {
+                        OutlinedTextField(
+                            value = geminiState.model,
+                            onValueChange = { viewModel.updateGeminiModel(it) },
+                            label = { Text("Model") },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = geminiState.apiKeyInput,
+                            onValueChange = { viewModel.updateGeminiApiKeyInput(it) },
+                            label = { Text("API key") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        )
+                        TextButton(onClick = { viewModel.saveGeminiKey() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) { Text("Save") }
+                    }
+                }
+            }
+        }
+
+        item {
+            val gitHubState by viewModel.gitHubState.collectAsState()
+            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
+                Column {
+                    Text("GitHub", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Connect GitHub so JARVIS can report real repository, pull request, and NG Signal Pro workflow status.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
+                    )
+                    if (gitHubState.hasStoredToken) {
+                        Text("Connected to ${gitHubState.owner}/${gitHubState.repo}.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        Row(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                            TextButton(onClick = { viewModel.refreshGitHubBackedStatus() }, enabled = !gitHubState.refreshInProgress) {
+                                Text(if (gitHubState.refreshInProgress) "Refreshing…" else "Refresh now")
+                            }
+                            TextButton(onClick = { viewModel.clearGitHubToken() }) { Text("Remove") }
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = gitHubState.owner,
+                            onValueChange = { viewModel.updateGitHubOwner(it) },
+                            label = { Text("Repository owner") },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = gitHubState.repo,
+                            onValueChange = { viewModel.updateGitHubRepo(it) },
+                            label = { Text("Repository name") },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = gitHubState.tokenInput,
+                            onValueChange = { viewModel.updateGitHubTokenInput(it) },
+                            label = { Text("Personal Access Token") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        )
+                        TextButton(onClick = { viewModel.saveGitHubToken() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) { Text("Save") }
+                    }
+                }
+            }
+        }
+
         item { SectionHeader("Other settings") }
         item {
             JarvisCard(modifier = Modifier.fillMaxWidth()) {

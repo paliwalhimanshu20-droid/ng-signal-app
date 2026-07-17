@@ -4,10 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.os.app.core.chat.AiRouter
 import com.jarvis.os.app.core.chat.ChatChunk
+import com.jarvis.os.app.data.repository.GitHubStatusProvider
+import com.jarvis.os.app.data.repository.NgSignalProStatusProvider
 import com.jarvis.os.app.data.settings.AiProviderConfig
 import com.jarvis.os.app.data.settings.ApiKeyStore
 import com.jarvis.os.app.data.settings.AppearanceSettings
 import com.jarvis.os.app.data.settings.EncryptedApiKeyStore
+import com.jarvis.os.app.data.settings.GeminiConfig
+import com.jarvis.os.app.data.settings.GeminiKeyStore
+import com.jarvis.os.app.data.settings.GitHubConfig
+import com.jarvis.os.app.data.settings.GitHubTokenStore
 import com.jarvis.os.app.data.settings.SettingsRepository
 import com.jarvis.os.app.designsystem.AccentColor
 import com.jarvis.os.app.designsystem.AppearanceMode
@@ -31,6 +37,20 @@ data class AiProviderUiState(
     val hasStoredKey: Boolean = false,
     val testInProgress: Boolean = false,
     val testResult: String? = null,
+)
+
+data class GeminiUiState(
+    val model: String = "gemini-2.0-flash",
+    val apiKeyInput: String = "",
+    val hasStoredKey: Boolean = false,
+)
+
+data class GitHubUiState(
+    val owner: String = "",
+    val repo: String = "",
+    val tokenInput: String = "",
+    val hasStoredToken: Boolean = false,
+    val refreshInProgress: Boolean = false,
 )
 
 /**
@@ -57,6 +77,10 @@ class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
     private val apiKeyStore: ApiKeyStore,
     private val aiRouter: AiRouter,
+    private val geminiKeyStore: GeminiKeyStore,
+    private val gitHubTokenStore: GitHubTokenStore,
+    private val gitHubStatusProvider: GitHubStatusProvider,
+    private val ngSignalProStatusProvider: NgSignalProStatusProvider,
 ) : ViewModel() {
 
     val appearance = repository.appearance.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppearanceSettings())
@@ -128,6 +152,81 @@ class SettingsViewModel @Inject constructor(
                 }
             }
             _aiProviderState.value = _aiProviderState.value.copy(testInProgress = false, testResult = outcome)
+        }
+    }
+
+    // --- "Universal Connection Ecosystem -- Phase 1": Gemini configuration ---
+
+    private val _geminiState = MutableStateFlow(loadGeminiState())
+    val geminiState: StateFlow<GeminiUiState> = _geminiState.asStateFlow()
+
+    private fun loadGeminiState(): GeminiUiState {
+        val config = geminiKeyStore.currentConfig() ?: return GeminiUiState()
+        return GeminiUiState(model = config.model, hasStoredKey = true)
+    }
+
+    fun updateGeminiModel(model: String) {
+        _geminiState.value = _geminiState.value.copy(model = model)
+    }
+
+    fun updateGeminiApiKeyInput(key: String) {
+        _geminiState.value = _geminiState.value.copy(apiKeyInput = key)
+    }
+
+    fun saveGeminiKey() {
+        val state = _geminiState.value
+        if (state.apiKeyInput.isBlank()) return
+        geminiKeyStore.save(GeminiConfig(apiKey = state.apiKeyInput, model = state.model))
+        _geminiState.value = state.copy(apiKeyInput = "", hasStoredKey = true)
+    }
+
+    fun clearGeminiKey() {
+        geminiKeyStore.clear()
+        _geminiState.value = GeminiUiState()
+    }
+
+    // --- "Universal Connection Ecosystem -- Phase 1": GitHub configuration ---
+
+    private val _gitHubState = MutableStateFlow(loadGitHubState())
+    val gitHubState: StateFlow<GitHubUiState> = _gitHubState.asStateFlow()
+
+    private fun loadGitHubState(): GitHubUiState {
+        val config = gitHubTokenStore.currentConfig() ?: return GitHubUiState()
+        return GitHubUiState(owner = config.owner, repo = config.repo, hasStoredToken = true)
+    }
+
+    fun updateGitHubOwner(owner: String) {
+        _gitHubState.value = _gitHubState.value.copy(owner = owner)
+    }
+
+    fun updateGitHubRepo(repo: String) {
+        _gitHubState.value = _gitHubState.value.copy(repo = repo)
+    }
+
+    fun updateGitHubTokenInput(token: String) {
+        _gitHubState.value = _gitHubState.value.copy(tokenInput = token)
+    }
+
+    fun saveGitHubToken() {
+        val state = _gitHubState.value
+        if (state.tokenInput.isBlank() || state.owner.isBlank() || state.repo.isBlank()) return
+        gitHubTokenStore.save(GitHubConfig(personalAccessToken = state.tokenInput, owner = state.owner, repo = state.repo))
+        _gitHubState.value = state.copy(tokenInput = "", hasStoredToken = true)
+        refreshGitHubBackedStatus()
+    }
+
+    fun clearGitHubToken() {
+        gitHubTokenStore.clear()
+        _gitHubState.value = GitHubUiState()
+    }
+
+    /** GitHub and NG Signal Pro both read from this same repo/token -- saving the token refreshes both real statuses, not just the one the Owner happened to be looking at. */
+    fun refreshGitHubBackedStatus() {
+        viewModelScope.launch {
+            _gitHubState.value = _gitHubState.value.copy(refreshInProgress = true)
+            gitHubStatusProvider.refresh()
+            ngSignalProStatusProvider.refresh()
+            _gitHubState.value = _gitHubState.value.copy(refreshInProgress = false)
         }
     }
 }
