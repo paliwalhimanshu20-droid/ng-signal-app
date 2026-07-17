@@ -55,7 +55,7 @@ import javax.inject.Inject
  * nothing here is static placeholder text.
  */
 data class MissionControlState(
-    val activeProviderId: String = "",
+    val activeProviderName: String = "",
     val totalProviders: Int = 0,
     val watchTowerAgentCount: Int = 0,
     val watchTowerLastActivity: String = "No specialists convened yet.",
@@ -96,8 +96,15 @@ class MissionControlViewModel @Inject constructor(
         val first = firstEight.firstSeven.firstSix.first
         val agentResults = firstEight.firstSeven.agentResults
         val memoryEntries = firstEight.firstSeven.firstSix.memoryEntries
+        // "JARVIS Experience Transformation" (Phase 0): the Owner never
+        // sees a raw provider id like "openai-compatible" -- displayName
+        // is what a real conversational partner's name actually is.
+        val activeProviderName = aiRouter.available
+            .firstOrNull { it.id == firstEight.activeProviderId }
+            ?.displayName
+            ?: firstEight.activeProviderId
         MissionControlState(
-            activeProviderId = firstEight.activeProviderId,
+            activeProviderName = activeProviderName,
             totalProviders = aiRouter.available.size,
             watchTowerAgentCount = agentRegistry.agents.value.size,
             watchTowerLastActivity = agentResults.maxByOrNull { it.completedAt }?.let { latest ->
@@ -141,8 +148,8 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
         item {
             MissionControlTile(
                 label = "AI PROVIDERS",
-                value = "${state.totalProviders} online",
-                detail = "Active: ${state.activeProviderId.ifBlank { "none" }} · tap to switch",
+                value = if (state.activeProviderName.isNotBlank()) "${state.activeProviderName} is active and ready." else "No provider selected yet.",
+                detail = "${state.totalProviders} available · tap to switch",
                 accentColor = JarvisBrand.CoreCyan,
                 onClick = { navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.Settings.route) },
             )
@@ -150,8 +157,12 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
         item {
             MissionControlTile(
                 label = "WATCH TOWER",
-                value = "${state.watchTowerAgentCount} specialists",
-                detail = state.watchTowerLastActivity,
+                value = if (state.watchTowerAgentCount > 0 && state.watchTowerLastActivity == "No specialists convened yet.") {
+                    "${state.watchTowerAgentCount} specialists are standing by."
+                } else {
+                    state.watchTowerLastActivity
+                },
+                detail = "Tap to see the full team",
                 accentColor = JarvisBrand.CorePlasma,
                 onClick = { navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.WatchTower.route) },
             )
@@ -160,8 +171,12 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
             val dashboard = state.projectDashboard
             MissionControlTile(
                 label = "PROJECTOS",
-                value = if (dashboard != null) "${dashboard.activeProjects}/${dashboard.totalProjects} active" else "—",
-                detail = dashboard?.let { "${it.averageProgressPercent}% avg · ${it.openTaskCount} open tasks" } ?: "No projects tracked",
+                value = if (dashboard != null && dashboard.totalProjects > 0) {
+                    "${dashboard.activeProjects} of ${dashboard.totalProjects} mission(s) in progress."
+                } else {
+                    "No missions tracked yet."
+                },
+                detail = dashboard?.let { "${it.averageProgressPercent}% average progress · ${it.openTaskCount} open task(s)" } ?: "",
                 accentColor = JarvisStatusColors.Healthy,
             )
         }
@@ -169,23 +184,23 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
             val ng = state.ngSignalPro
             MissionControlTile(
                 label = "NG SIGNAL PRO",
-                value = if (ng?.lastUpdated != null) ng.marketBias else "No live connection",
-                detail = if (ng?.lastUpdated != null) "${ng.buyCandidateCount} BUY candidate(s) · ${ng.confidencePercent}% confidence" else "Bridge not connected yet",
+                value = if (ng?.lastUpdated != null) "Completed today's scan: ${ng.marketBias}." else "Not connected yet.",
+                detail = if (ng?.lastUpdated != null) "${ng.buyCandidateCount} candidate(s) found · ${ng.confidencePercent}% confidence" else "Waiting to be connected",
                 accentColor = JarvisStatusColors.Unknown,
             )
         }
         item {
             MissionControlTile(
                 label = "CONNECTED SYSTEMS",
-                value = "${state.connectedCount}/${state.totalConnections}",
-                detail = "Providers, tools, and services online",
+                value = "${state.connectedCount} of ${state.totalConnections} systems online.",
+                detail = "Providers, tools, and services",
                 accentColor = JarvisBrand.CoreBlue,
             )
         }
         item {
             MissionControlTile(
                 label = "MEMORY",
-                value = "${state.memoryEntryCount} entries",
+                value = "I'm holding on to ${state.memoryEntryCount} memories from our conversations.",
                 detail = "Conversation, preference, and project memory",
                 accentColor = JarvisStatusColors.Unknown,
             )
@@ -193,8 +208,8 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
         item {
             MissionControlTile(
                 label = "HEALTH",
-                value = if (state.activeWorkflowCount > 0) "${state.activeWorkflowCount} running" else "All clear",
-                detail = "${state.unreadNotifications} unread notification(s)",
+                value = if (state.activeWorkflowCount > 0) "${state.activeWorkflowCount} task(s) currently in progress." else "Everything running smoothly.",
+                detail = if (state.unreadNotifications > 0) "${state.unreadNotifications} unread notification(s)" else "No open notifications",
                 accentColor = if (state.activeWorkflowCount > 0) JarvisStatusColors.Degraded else JarvisStatusColors.Healthy,
             )
         }
