@@ -48,8 +48,9 @@ import org.junit.Test
 class JarvisCoreApprovalTest {
 
     private fun buildCore(scope: CoroutineScope): JarvisCore {
+        val settingsRepository = com.jarvis.os.app.testutil.FakeSettingsRepository()
         val chatSessionManager = ChatSessionManager()
-        val aiRouter = AiRouter(setOf(MockChatProvider()))
+        val aiRouter = AiRouter(setOf(MockChatProvider(settingsRepository)))
         val approvalsRepo = MockApprovalRepository()
         val memoryRepo = MockMemoryRepository()
         val projectsRepo = MockProjectRepository()
@@ -73,7 +74,7 @@ class JarvisCoreApprovalTest {
             decisionEngine = JarvisDecisionEngine(toolsRepo, agentRegistry),
             watchTower = WatchTowerOrchestrator(multiAiCoordinator, approvalsRepo),
             briefingEngine = ExecutiveBriefingEngine(
-                projectsRepo, approvalsRepo, notificationsRepo, connectionsRepo, memoryRepo, agentRegistry, MockNgSignalProStatusProvider(),
+                projectsRepo, approvalsRepo, notificationsRepo, connectionsRepo, memoryRepo, agentRegistry, MockNgSignalProStatusProvider(), settingsRepository,
             ),
             appScope = scope,
         )
