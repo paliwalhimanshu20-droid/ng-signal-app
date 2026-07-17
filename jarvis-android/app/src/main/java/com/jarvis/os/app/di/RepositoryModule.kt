@@ -23,7 +23,7 @@ import com.jarvis.os.app.data.repository.MockMemoryRepository
 import com.jarvis.os.app.data.repository.MockNotificationRepository
 import com.jarvis.os.app.data.settings.ApiKeyStore
 import com.jarvis.os.app.data.settings.EncryptedApiKeyStore
-import com.jarvis.os.app.data.repository.MockNgSignalProStatusProvider
+import com.jarvis.os.app.data.repository.RealNgSignalProStatusProvider
 import com.jarvis.os.app.data.repository.MockProjectRepository
 import com.jarvis.os.app.data.repository.MockToolRepository
 import com.jarvis.os.app.data.repository.NgSignalProStatusProvider
@@ -111,9 +111,25 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindNgSignalProStatusProvider(impl: MockNgSignalProStatusProvider): NgSignalProStatusProvider
+    abstract fun bindNgSignalProStatusProvider(impl: RealNgSignalProStatusProvider): NgSignalProStatusProvider
 
     @Binds
     @Singleton
     abstract fun bindApiKeyStore(impl: EncryptedApiKeyStore): ApiKeyStore
+
+    @Binds
+    @Singleton
+    abstract fun bindGitHubTokenStore(impl: com.jarvis.os.app.data.settings.EncryptedGitHubTokenStore): com.jarvis.os.app.data.settings.GitHubTokenStore
+
+    @Binds
+    @Singleton
+    abstract fun bindGitHubStatusProvider(impl: com.jarvis.os.app.data.repository.RealGitHubStatusProvider): com.jarvis.os.app.data.repository.GitHubStatusProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindStreamlitStatusProvider(impl: com.jarvis.os.app.data.repository.RealStreamlitStatusProvider): com.jarvis.os.app.data.repository.StreamlitStatusProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindGeminiKeyStore(impl: com.jarvis.os.app.data.settings.EncryptedGeminiKeyStore): com.jarvis.os.app.data.settings.GeminiKeyStore
 }
