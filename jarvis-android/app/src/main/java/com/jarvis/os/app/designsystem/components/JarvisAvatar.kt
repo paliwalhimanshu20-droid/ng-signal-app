@@ -56,7 +56,18 @@ import kotlin.math.sin
  * "at rest" presence, not a specific activity) actually uses
  * [themeColor], and [expression]'s tint, when non-null, overrides both.
  */
-enum class JarvisAvatarState { Idle, Listening, Thinking, Speaking, Working, Waiting }
+/**
+ * "JARVIS Living Avatar" sprint: three states added -- Greeting,
+ * Confirming, Understanding -- additively, not as a replacement.
+ * Idle/Listening/Thinking/Speaking/Working/Waiting are unchanged and
+ * every existing call site (HomeViewModel, ChatViewModel,
+ * JarvisPresence, LivingBackground) keeps working exactly as before;
+ * adding enum entries never breaks a caller that reads this value,
+ * only `when` blocks that switch on it without an `else` -- see this
+ * file's own breatheDuration block below, the one place that needed a
+ * real fix rather than just adding a fallback branch.
+ */
+enum class JarvisAvatarState { Idle, Listening, Thinking, Speaking, Working, Waiting, Greeting, Confirming, Understanding }
 
 @Composable
 fun JarvisAvatar(
@@ -79,6 +90,9 @@ fun JarvisAvatar(
         JarvisAvatarState.Speaking -> 1100
         JarvisAvatarState.Working -> 1600
         JarvisAvatarState.Waiting -> 4600
+        JarvisAvatarState.Greeting -> 2000 // warmer, more present than Idle's resting pace, without Listening's urgency
+        JarvisAvatarState.Confirming -> 1400 // brief, settled -- matches a nod's natural pace
+        JarvisAvatarState.Understanding -> 2200 // calm, attentive -- similar register to Thinking but without its searching quality
     }
     val breatheAmplitude = when (state) {
         JarvisAvatarState.Waiting -> 0.02f
