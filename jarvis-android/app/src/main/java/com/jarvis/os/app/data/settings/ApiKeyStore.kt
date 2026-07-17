@@ -11,6 +11,7 @@ data class AiProviderConfig(
     val baseUrl: String,
     val model: String,
     val apiKey: String,
+    val lastSuccessAt: Long? = null,
 )
 
 /**
@@ -28,10 +29,19 @@ data class AiProviderConfig(
  * whole core/chat package before writing this file (see this sprint's
  * integration report). This is that infrastructure, built for real
  * this time, not an assumption carried forward from a summary.
+ *
+ * DEFAULT_BASE_URL already points at OpenAI's own real endpoint --
+ * "JARVIS Goes Live" presents this class as the Owner-facing "OpenAI"
+ * provider (see OpenAiCompatibleChatProvider's updated displayName),
+ * while the base URL stays configurable underneath for anyone who
+ * wants a different OpenAI-compatible endpoint. [recordSuccess]: "Last
+ * successful connection" means an actual completed conversation, not
+ * just "a key is saved."
  */
 interface ApiKeyStore {
     fun currentConfig(): AiProviderConfig?
     fun save(config: AiProviderConfig)
+    fun recordSuccess()
     fun clear()
 }
 
@@ -55,10 +65,12 @@ class EncryptedApiKeyStore @Inject constructor(
     override fun currentConfig(): AiProviderConfig? {
         val apiKey = prefs.getString(KEY_API_KEY, null)
         if (apiKey.isNullOrBlank()) return null
+        val lastSuccess = prefs.getLong(KEY_LAST_SUCCESS, -1L).takeIf { it > 0 }
         return AiProviderConfig(
             baseUrl = prefs.getString(KEY_BASE_URL, DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL,
             model = prefs.getString(KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL,
             apiKey = apiKey,
+            lastSuccessAt = lastSuccess,
         )
     }
 
@@ -70,6 +82,10 @@ class EncryptedApiKeyStore @Inject constructor(
             .apply()
     }
 
+    override fun recordSuccess() {
+        prefs.edit().putLong(KEY_LAST_SUCCESS, System.currentTimeMillis()).apply()
+    }
+
     override fun clear() {
         prefs.edit().clear().apply()
     }
@@ -78,6 +94,7 @@ class EncryptedApiKeyStore @Inject constructor(
         private const val KEY_BASE_URL = "base_url"
         private const val KEY_MODEL = "model"
         private const val KEY_API_KEY = "api_key"
+        private const val KEY_LAST_SUCCESS = "last_success_at"
         const val DEFAULT_BASE_URL = "https://api.openai.com/v1"
         const val DEFAULT_MODEL = "gpt-4o-mini"
     }
