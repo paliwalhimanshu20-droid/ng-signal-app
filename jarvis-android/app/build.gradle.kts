@@ -47,12 +47,20 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.activity.compose)
 
+    // "JARVIS Living Avatar" sprint: Lottie is the primary asset format
+    // the Avatar Engine renders -- see AvatarAssetProvider's own
+    // docstring for why Lottie over Rive.
     // Sprint 12 "Real AI Conversation": OkHttp for the real streaming
     // ChatProvider (SSE), security-crypto for encrypted API key storage
     // -- see core/chat/OpenAiCompatibleChatProvider.kt and
     // data/settings/ApiKeyStore.kt.
     implementation(libs.okhttp)
     implementation(libs.security.crypto)
+
+    // "JARVIS Living Avatar" sprint: Lottie is the primary asset format
+    // the Avatar Engine renders -- see AvatarAssetProvider's own
+    // docstring for why Lottie over Rive.
+    implementation(libs.lottie.compose)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
