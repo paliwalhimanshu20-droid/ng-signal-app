@@ -9,11 +9,11 @@ package com.jarvis.os.app.designsystem.avatar
  * [JarvisAvatarEngine] only ever depends on this sealed type, never on
  * a concrete image format directly.
  *
- * [None] is not a placeholder value meaning "broken" -- it's the
- * honest, correct answer for every state today, since no real asset
- * exists yet (see AvatarAssetProvider's own docstring). The engine
- * renders a real, working fallback when it sees [None], not an error
- * state.
+ * As of "Avatar V1," [DrawableAvatarAssetProvider] returns
+ * [StaticImage] for every state, not [None] -- see that class's own
+ * docstring for the real asset now registered. [None] remains a real,
+ * meaningful variant of this type (not dead code) for any future state
+ * that doesn't yet have a matching asset.
  *
  * resId/rawResId are plain Int, not @DrawableRes/@RawRes-annotated --
  * those are compile-time lint hints only (no runtime behavior), and
@@ -22,7 +22,16 @@ package com.jarvis.os.app.designsystem.avatar
  * way to verify that here.
  */
 sealed interface JarvisAvatarAsset {
-    /** The honest default until a real asset is provided for a given state -- see this interface's own docstring. */
+    /**
+     * The honest fallback when no asset is configured for a given
+     * state -- not a placeholder meaning "broken." [JarvisAvatarEngine]
+     * renders a real, working procedural avatar (Sprint 13's original
+     * holographic orb) when it sees this, never a blank or error state.
+     * As of "Avatar V1" this is no longer what any state in
+     * [DrawableAvatarAssetProvider] actually returns -- every state has
+     * a real image now -- but the type stays available for any future
+     * state that doesn't have a matching asset yet.
+     */
     data object None : JarvisAvatarAsset
 
     /** A static image (PNG/WebP/etc.) in res/drawable -- the simplest real asset type, useful even before a full animated file exists for every state. */
