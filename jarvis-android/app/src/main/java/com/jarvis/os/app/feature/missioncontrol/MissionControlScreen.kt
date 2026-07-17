@@ -23,6 +23,8 @@ import com.jarvis.os.app.core.workflow.WorkflowEngine
 import com.jarvis.os.app.data.model.AuditEntry
 import com.jarvis.os.app.data.model.ConnectionStatus
 import com.jarvis.os.app.data.model.ProgressDashboard
+import com.jarvis.os.app.data.repository.GitHubFetchResult
+import com.jarvis.os.app.data.repository.GitHubStatusProvider
 import com.jarvis.os.app.data.repository.NgSignalProStatus
 import com.jarvis.os.app.data.repository.NgSignalProStatusProvider
 import com.jarvis.os.app.designsystem.JarvisBrand
@@ -36,6 +38,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -53,6 +56,14 @@ import javax.inject.Inject
  * "Everything displayed as live operational status. Not a settings
  * page. A command center." -- every tile below reads a real StateFlow;
  * nothing here is static placeholder text.
+ *
+ * "Universal Connection Ecosystem -- Phase 1": GitHubStatusProvider and
+ * NgSignalProStatusProvider are now real network-backed classes (see
+ * their own docstrings), not mocks -- neither fetches anything until
+ * [refresh] is actually called, which the init block below does once
+ * when this ViewModel is created. Both fail honestly (an explicit
+ * Failure/summary string) rather than showing stale or fabricated data
+ * if the Owner hasn't configured a GitHub token yet.
  */
 data class MissionControlState(
     val activeProviderName: String = "",
@@ -63,6 +74,7 @@ data class MissionControlState(
     val totalConnections: Int = 0,
     val projectDashboard: ProgressDashboard? = null,
     val ngSignalPro: NgSignalProStatus? = null,
+    val github: GitHubFetchResult? = null,
     val memoryEntryCount: Int = 0,
     val unreadNotifications: Int = 0,
     val activeWorkflowCount: Int = 0,
@@ -76,7 +88,13 @@ class MissionControlViewModel @Inject constructor(
     private val agentRegistry: AgentRegistry,
     private val aiRouter: AiRouter,
     private val ngSignalPro: NgSignalProStatusProvider,
+    private val gitHub: GitHubStatusProvider,
 ) : ViewModel() {
+
+    init {
+        viewModelScope.launch { ngSignalPro.refresh() }
+        viewModelScope.launch { gitHub.refresh() }
+    }
 
     val state = combine(
         core.connections.connections,
@@ -93,16 +111,18 @@ class MissionControlViewModel @Inject constructor(
     }.combine(aiRouter.activeProviderId) { firstSeven, activeProviderId ->
         FirstEight(firstSeven, activeProviderId)
     }.combine(ngSignalPro.status) { firstEight, ngStatus ->
-        val first = firstEight.firstSeven.firstSix.first
-        val agentResults = firstEight.firstSeven.agentResults
-        val memoryEntries = firstEight.firstSeven.firstSix.memoryEntries
+        FirstNine(firstEight, ngStatus)
+    }.combine(gitHub.status) { firstNine, githubStatus ->
+        val first = firstNine.firstEight.firstSeven.firstSix.first
+        val agentResults = firstNine.firstEight.firstSeven.agentResults
+        val memoryEntries = firstNine.firstEight.firstSeven.firstSix.memoryEntries
         // "JARVIS Experience Transformation" (Phase 0): the Owner never
         // sees a raw provider id like "openai-compatible" -- displayName
         // is what a real conversational partner's name actually is.
         val activeProviderName = aiRouter.available
-            .firstOrNull { it.id == firstEight.activeProviderId }
+            .firstOrNull { it.id == firstNine.firstEight.activeProviderId }
             ?.displayName
-            ?: firstEight.activeProviderId
+            ?: firstNine.firstEight.activeProviderId
         MissionControlState(
             activeProviderName = activeProviderName,
             totalProviders = aiRouter.available.size,
@@ -114,7 +134,8 @@ class MissionControlViewModel @Inject constructor(
             connectedCount = first.connections.count { it.status == ConnectionStatus.CONNECTED },
             totalConnections = first.connections.size,
             projectDashboard = first.projectDashboard,
-            ngSignalPro = ngStatus,
+            ngSignalPro = firstNine.ngStatus,
+            github = githubStatus,
             memoryEntryCount = memoryEntries.size,
             unreadNotifications = first.unread,
             activeWorkflowCount = first.workflowRuns.count { it.completedAt == null },
@@ -133,6 +154,7 @@ class MissionControlViewModel @Inject constructor(
     private data class FirstSix(val first: FirstFive, val memoryEntries: List<com.jarvis.os.app.data.model.MemoryEntry>)
     private data class FirstSeven(val firstSix: FirstSix, val agentResults: List<com.jarvis.os.app.data.model.AgentResult>)
     private data class FirstEight(val firstSeven: FirstSeven, val activeProviderId: String)
+    private data class FirstNine(val firstEight: FirstEight, val ngStatus: NgSignalProStatus)
 }
 
 @Composable
@@ -184,9 +206,36 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
             val ng = state.ngSignalPro
             MissionControlTile(
                 label = "NG SIGNAL PRO",
-                value = if (ng?.lastUpdated != null) "Completed today's scan: ${ng.marketBias}." else "Not connected yet.",
-                detail = if (ng?.lastUpdated != null) "${ng.buyCandidateCount} candidate(s) found · ${ng.confidencePercent}% confidence" else "Waiting to be connected",
+                value = if (ng?.lastUpdated != null) ng.scannerStatusSummary else "Not connected yet.",
+                detail = if (ng?.lastUpdated != null) {
+                    "Warehouse: ${if (ng.warehouseSynchronized) "synced" else "out of sync"} · Alerts: ${if (ng.alertPipelineHealthy) "healthy" else "check needed"}"
+                } else {
+                    "Waiting to be connected"
+                },
                 accentColor = JarvisStatusColors.Unknown,
+            )
+        }
+        item {
+            val github = state.github
+            MissionControlTile(
+                label = "GITHUB",
+                value = when (github) {
+                    is com.jarvis.os.app.data.repository.GitHubFetchResult.Success ->
+                        if (github.status.openPullRequestCount > 0) {
+                            "${github.status.openPullRequestCount} pull request(s) awaiting review."
+                        } else {
+                            "No pull requests waiting."
+                        }
+                    is com.jarvis.os.app.data.repository.GitHubFetchResult.Failure -> "Not connected yet."
+                    null -> "Checking…"
+                },
+                detail = when (github) {
+                    is com.jarvis.os.app.data.repository.GitHubFetchResult.Success ->
+                        "${github.status.repoFullName} · ${github.status.openIssueCount} open issue(s)"
+                    is com.jarvis.os.app.data.repository.GitHubFetchResult.Failure -> github.message
+                    null -> ""
+                },
+                accentColor = JarvisBrand.CoreBlue,
             )
         }
         item {
