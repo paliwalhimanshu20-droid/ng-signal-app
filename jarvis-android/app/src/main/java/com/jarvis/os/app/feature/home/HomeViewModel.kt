@@ -54,6 +54,7 @@ class HomeViewModel @Inject constructor(
     private val speechToText: SpeechToTextController,
     private val speechSynthesizer: SpeechSynthesizer,
     private val settingsRepository: SettingsRepository,
+    private val presence: com.jarvis.os.app.core.JarvisPresence,
 ) : ViewModel() {
 
     val appearance: StateFlow<AppearanceSettings> = settingsRepository.appearance
@@ -85,6 +86,17 @@ class HomeViewModel @Inject constructor(
     private var listeningJob: Job? = null
 
     init {
+        // "JARVIS Experience Transformation" (Phase 1): every local
+        // avatarState change also updates the app-wide JarvisPresence
+        // signal, one collector rather than a call at each of the
+        // several places below that set _avatarState -- so the Living
+        // Background (rendered once, at the app root) reacts to Home's
+        // real state even if the Owner has navigated to another screen
+        // while a voice session or reply is still in flight.
+        viewModelScope.launch {
+            _avatarState.collect { state -> presence.update(state) }
+        }
+
         // Speaking state driven by SpeechSynthesizer's real callback, not
         // a guessed duration -- see that interface's docstring.
         viewModelScope.launch {

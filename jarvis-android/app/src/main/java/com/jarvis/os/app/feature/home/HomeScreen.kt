@@ -48,7 +48,6 @@ import com.jarvis.os.app.designsystem.JarvisBrand
 import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.components.GlassPanel
 import com.jarvis.os.app.designsystem.components.JarvisAvatar
-import com.jarvis.os.app.designsystem.components.LivingBackground
 import com.jarvis.os.app.designsystem.jarvisHeroStyle
 import com.jarvis.os.app.designsystem.jarvisHudLabelStyle
 import com.jarvis.os.app.navigation.JarvisDestination
@@ -95,14 +94,12 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
         navController.navigate(JarvisDestination.Chat.route)
     }
 
+    // "JARVIS Experience Transformation" (Phase 1): the Living
+    // Background now renders once, at the app root (see JarvisApp.kt),
+    // not per-screen -- Home's own copy of this call is gone; this
+    // Box only provides layout structure now, the environment behind
+    // it is already there.
     Box(modifier = Modifier.fillMaxSize()) {
-        LivingBackground(
-            accentColor = appearance.accentColor.seed,
-            motionIntensity = appearance.motionIntensity,
-            modifier = Modifier.fillMaxSize(),
-            avatarState = state.avatarState,
-        )
-
         Column(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -116,7 +113,7 @@ fun HomeScreen(navController: NavHostController, viewModel: HomeViewModel = hilt
 
                 JarvisAvatar(
                     state = state.avatarState,
-                    size = 148.dp,
+                    size = 220.dp,
                     themeColor = appearance.accentColor.seed,
                     modifier = Modifier.let { base ->
                         if (state.avatarState == com.jarvis.os.app.designsystem.components.JarvisAvatarState.Speaking) {
