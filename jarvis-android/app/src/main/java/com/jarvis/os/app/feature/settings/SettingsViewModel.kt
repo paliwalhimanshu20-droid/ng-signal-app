@@ -7,6 +7,8 @@ import com.jarvis.os.app.core.chat.ChatChunk
 import com.jarvis.os.app.data.repository.GitHubStatusProvider
 import com.jarvis.os.app.data.repository.NgSignalProStatusProvider
 import com.jarvis.os.app.data.settings.AiProviderConfig
+import com.jarvis.os.app.data.settings.AnthropicConfig
+import com.jarvis.os.app.data.settings.AnthropicKeyStore
 import com.jarvis.os.app.data.settings.ApiKeyStore
 import com.jarvis.os.app.data.settings.AppearanceSettings
 import com.jarvis.os.app.data.settings.EncryptedApiKeyStore
@@ -37,12 +39,21 @@ data class AiProviderUiState(
     val hasStoredKey: Boolean = false,
     val testInProgress: Boolean = false,
     val testResult: String? = null,
+    val lastSuccessAt: Long? = null,
 )
 
 data class GeminiUiState(
     val model: String = "gemini-2.0-flash",
     val apiKeyInput: String = "",
     val hasStoredKey: Boolean = false,
+    val lastSuccessAt: Long? = null,
+)
+
+data class AnthropicUiState(
+    val model: String = "claude-sonnet-4-5",
+    val apiKeyInput: String = "",
+    val hasStoredKey: Boolean = false,
+    val lastSuccessAt: Long? = null,
 )
 
 data class GitHubUiState(
@@ -78,6 +89,7 @@ class SettingsViewModel @Inject constructor(
     private val apiKeyStore: ApiKeyStore,
     private val aiRouter: AiRouter,
     private val geminiKeyStore: GeminiKeyStore,
+    private val anthropicKeyStore: AnthropicKeyStore,
     private val gitHubTokenStore: GitHubTokenStore,
     private val gitHubStatusProvider: GitHubStatusProvider,
     private val ngSignalProStatusProvider: NgSignalProStatusProvider,
@@ -104,7 +116,7 @@ class SettingsViewModel @Inject constructor(
 
     private fun loadStoredState(): AiProviderUiState {
         val config = apiKeyStore.currentConfig() ?: return AiProviderUiState()
-        return AiProviderUiState(baseUrl = config.baseUrl, model = config.model, hasStoredKey = true)
+        return AiProviderUiState(baseUrl = config.baseUrl, model = config.model, hasStoredKey = true, lastSuccessAt = config.lastSuccessAt)
     }
 
     fun updateBaseUrl(url: String) {
@@ -135,11 +147,17 @@ class SettingsViewModel @Inject constructor(
         aiRouter.switchProvider(providerId)
     }
 
-    /** A REAL call through the real provider -- confirms the key actually works, not a local format check. */
-    fun testConnection() {
+    /**
+     * A REAL call through the real provider -- confirms the key
+     * actually works, not a local format check. Generalized to any
+     * bound provider id ("JARVIS Goes Live": the dedicated AI Provider
+     * screen needs Test Connection for Gemini and Claude too, not just
+     * the original OpenAI-compatible card this started on).
+     */
+    fun testConnection(providerId: String = "openai-compatible") {
         viewModelScope.launch {
-            _aiProviderState.value = _aiProviderState.value.copy(testInProgress = true, testResult = null)
-            val provider = aiRouter.available.firstOrNull { it.id == "openai-compatible" }
+            if (providerId == "openai-compatible") _aiProviderState.value = _aiProviderState.value.copy(testInProgress = true, testResult = null)
+            val provider = aiRouter.available.firstOrNull { it.id == providerId }
             var outcome = "That provider isn't available."
             if (provider != null) {
                 outcome = "No response received."
@@ -151,9 +169,19 @@ class SettingsViewModel @Inject constructor(
                     }
                 }
             }
-            _aiProviderState.value = _aiProviderState.value.copy(testInProgress = false, testResult = outcome)
+            when (providerId) {
+                "openai-compatible" -> _aiProviderState.value = _aiProviderState.value.copy(testInProgress = false, testResult = outcome, lastSuccessAt = apiKeyStore.currentConfig()?.lastSuccessAt)
+                "gemini" -> _geminiTestResult.value = outcome
+                "anthropic" -> _anthropicTestResult.value = outcome
+            }
         }
     }
+
+    private val _geminiTestResult = MutableStateFlow<String?>(null)
+    val geminiTestResult: StateFlow<String?> = _geminiTestResult.asStateFlow()
+
+    private val _anthropicTestResult = MutableStateFlow<String?>(null)
+    val anthropicTestResult: StateFlow<String?> = _anthropicTestResult.asStateFlow()
 
     // --- "Universal Connection Ecosystem -- Phase 1": Gemini configuration ---
 
@@ -162,7 +190,7 @@ class SettingsViewModel @Inject constructor(
 
     private fun loadGeminiState(): GeminiUiState {
         val config = geminiKeyStore.currentConfig() ?: return GeminiUiState()
-        return GeminiUiState(model = config.model, hasStoredKey = true)
+        return GeminiUiState(model = config.model, hasStoredKey = true, lastSuccessAt = config.lastSuccessAt)
     }
 
     fun updateGeminiModel(model: String) {
@@ -183,6 +211,36 @@ class SettingsViewModel @Inject constructor(
     fun clearGeminiKey() {
         geminiKeyStore.clear()
         _geminiState.value = GeminiUiState()
+    }
+
+    // --- "JARVIS Goes Live": Claude (Anthropic) configuration, same shape as Gemini's ---
+
+    private val _anthropicState = MutableStateFlow(loadAnthropicState())
+    val anthropicState: StateFlow<AnthropicUiState> = _anthropicState.asStateFlow()
+
+    private fun loadAnthropicState(): AnthropicUiState {
+        val config = anthropicKeyStore.currentConfig() ?: return AnthropicUiState()
+        return AnthropicUiState(model = config.model, hasStoredKey = true, lastSuccessAt = config.lastSuccessAt)
+    }
+
+    fun updateAnthropicModel(model: String) {
+        _anthropicState.value = _anthropicState.value.copy(model = model)
+    }
+
+    fun updateAnthropicApiKeyInput(key: String) {
+        _anthropicState.value = _anthropicState.value.copy(apiKeyInput = key)
+    }
+
+    fun saveAnthropicKey() {
+        val state = _anthropicState.value
+        if (state.apiKeyInput.isBlank()) return
+        anthropicKeyStore.save(AnthropicConfig(apiKey = state.apiKeyInput, model = state.model))
+        _anthropicState.value = state.copy(apiKeyInput = "", hasStoredKey = true)
+    }
+
+    fun clearAnthropicKey() {
+        anthropicKeyStore.clear()
+        _anthropicState.value = AnthropicUiState()
     }
 
     // --- "Universal Connection Ecosystem -- Phase 1": GitHub configuration ---

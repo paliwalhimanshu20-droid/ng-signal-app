@@ -47,7 +47,7 @@ import com.jarvis.os.app.designsystem.components.JarvisCard
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(navController: androidx.navigation.NavHostController, viewModel: SettingsViewModel = hiltViewModel()) {
     val appearance by viewModel.appearance.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -190,103 +190,34 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         }
 
         item {
+            // "JARVIS Goes Live": "Tapping the AI Provider card should
+            // open a dedicated AI Provider screen." The full Gemini/
+            // OpenAI/Claude configuration (Connect, Test Connection,
+            // Status, Health, Last successful connection, Preferred
+            // provider) lives there now -- see AIProviderScreen.kt --
+            // this card is a real, live summary, not a static link.
             val aiState by viewModel.aiProviderState.collectAsState()
-            val activeProviderId by viewModel.activeProviderId.collectAsState()
-            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
-                Column {
-                    Text("AI Provider", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Connect a real AI provider so JARVIS can actually converse, instead of running offline.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
-                    )
-
-                    Text("Active provider", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(JarvisSpacing.sm), modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.md)) {
-                        viewModel.availableProviderIds.forEach { (id, label) ->
-                            FilterChip(
-                                selected = activeProviderId == id,
-                                onClick = { viewModel.switchProvider(id) },
-                                label = { Text(label) },
-                            )
-                        }
-                    }
-
-                    if (aiState.hasStoredKey) {
-                        Text("An API key is saved.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                        Row(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
-                            TextButton(onClick = { viewModel.testConnection() }, enabled = !aiState.testInProgress) {
-                                Text(if (aiState.testInProgress) "Testing…" else "Test connection")
-                            }
-                            TextButton(onClick = { viewModel.clearApiKey() }) { Text("Remove key") }
-                        }
-                        aiState.testResult?.let {
-                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = JarvisSpacing.xs))
-                        }
-                    } else {
-                        OutlinedTextField(
-                            value = aiState.baseUrl,
-                            onValueChange = { viewModel.updateBaseUrl(it) },
-                            label = { Text("Base URL") },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
-                            singleLine = true,
-                        )
-                        OutlinedTextField(
-                            value = aiState.model,
-                            onValueChange = { viewModel.updateModel(it) },
-                            label = { Text("Model") },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
-                            singleLine = true,
-                        )
-                        OutlinedTextField(
-                            value = aiState.apiKeyInput,
-                            onValueChange = { viewModel.updateApiKeyInput(it) },
-                            label = { Text("API key") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        )
-                        TextButton(onClick = { viewModel.saveApiKey() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) {
-                            Text("Save")
-                        }
-                    }
-                }
-            }
-        }
-
-        item {
             val geminiState by viewModel.geminiState.collectAsState()
-            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
-                Column {
-                    Text("Gemini", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Connect Google Gemini as an additional AI provider.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
-                    )
-                    if (geminiState.hasStoredKey) {
-                        Text("A Gemini API key is saved (model: ${geminiState.model}).", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                        TextButton(onClick = { viewModel.clearGeminiKey() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) { Text("Remove key") }
-                    } else {
-                        OutlinedTextField(
-                            value = geminiState.model,
-                            onValueChange = { viewModel.updateGeminiModel(it) },
-                            label = { Text("Model") },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
-                            singleLine = true,
+            val anthropicState by viewModel.anthropicState.collectAsState()
+            val activeProviderId by viewModel.activeProviderId.collectAsState()
+            val connectedCount = listOf(aiState.hasStoredKey, geminiState.hasStoredKey, anthropicState.hasStoredKey).count { it }
+            val activeLabel = viewModel.availableProviderIds.firstOrNull { it.first == activeProviderId }?.second ?: activeProviderId
+
+            JarvisCard(
+                modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)
+                    .clickable { navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.AIProvider.route) },
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("AI Provider", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (connectedCount > 0) "$connectedCount connected · currently talking through $activeLabel" else "Not connected -- tap to connect Gemini, OpenAI, or Claude",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = JarvisSpacing.xs),
                         )
-                        OutlinedTextField(
-                            value = geminiState.apiKeyInput,
-                            onValueChange = { viewModel.updateGeminiApiKeyInput(it) },
-                            label = { Text("API key") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        )
-                        TextButton(onClick = { viewModel.saveGeminiKey() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) { Text("Save") }
                     }
+                    Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -343,17 +274,20 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
         item {
             JarvisCard(modifier = Modifier.fillMaxWidth()) {
                 Column {
-                    ComingSoonSettingsRow("AI") {
-                        scope.launch { snackbarHostState.showSnackbar("AI settings require a connected JARVIS Core backend.") }
+                    // "JARVIS Goes Live": the "AI" row that used to live here
+                    // said "AI settings require a connected JARVIS Core
+                    // backend" -- stale and actively wrong now that real
+                    // AI Provider settings exist above on this same screen.
+                    // Removed rather than reworded, since there's nothing
+                    // left for a separate row to say.
+                    SettingsLinkRow(label = "Connected Systems", trailing = "›") {
+                        navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.Connections.route)
                     }
-                    ComingSoonSettingsRow("Connections") {
-                        scope.launch { snackbarHostState.showSnackbar("Manage connections from the Connections tab; deeper settings are a future sprint.") }
+                    SettingsLinkRow(label = "Notifications", trailing = "›", showDivider = true) {
+                        navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.Notifications.route)
                     }
-                    ComingSoonSettingsRow("Notifications", showDivider = true) {
-                        scope.launch { snackbarHostState.showSnackbar("Notification settings will be enabled once push is wired in a future sprint.") }
-                    }
-                    ComingSoonSettingsRow("Privacy", showDivider = false) {
-                        scope.launch { snackbarHostState.showSnackbar("Privacy settings are under development.") }
+                    SettingsLinkRow(label = "Privacy", trailing = "Not yet available", showDivider = false) {
+                        scope.launch { snackbarHostState.showSnackbar("Privacy controls aren't built yet -- nothing is collected beyond what you can already see in Memory and Connected Systems.") }
                     }
                 }
             }
@@ -373,7 +307,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
  * row surfaces its status, it does not navigate anywhere.
  */
 @Composable
-private fun ComingSoonSettingsRow(label: String, showDivider: Boolean = true, onClick: () -> Unit) {
+private fun SettingsLinkRow(label: String, trailing: String, showDivider: Boolean = true, onClick: () -> Unit) {
     Column {
         Row(
             modifier = Modifier
@@ -384,7 +318,7 @@ private fun ComingSoonSettingsRow(label: String, showDivider: Boolean = true, on
         ) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
             Text(
-                "Coming soon",
+                trailing,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
