@@ -58,7 +58,7 @@ class OpenAiCompatibleChatProvider @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) : ChatProvider {
     override val id: String = "openai-compatible"
-    override val displayName: String = "OpenAI-compatible"
+    override val displayName: String = "OpenAI"
     override val capabilities: Set<AiCapability> = setOf(
         AiCapability.GENERAL_CHAT,
         AiCapability.REASONING,
@@ -140,6 +140,7 @@ class OpenAiCompatibleChatProvider @Inject constructor(
                 }
             }
             emit(ChatChunk.Complete(accumulated.toString()))
+            if (accumulated.isNotEmpty()) apiKeyStore.recordSuccess()
         } catch (e: Exception) {
             emit(ChatChunk.Error(e.message ?: "A network error occurred while contacting the AI provider."))
         }

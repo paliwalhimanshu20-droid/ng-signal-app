@@ -122,6 +122,7 @@ class GeminiChatProvider @Inject constructor(
                 }
             }
             emit(ChatChunk.Complete(accumulated.toString()))
+            if (accumulated.isNotEmpty()) keyStore.recordSuccess()
         } catch (e: Exception) {
             emit(ChatChunk.Error(e.message ?: "A network error occurred while contacting Gemini."))
         }

@@ -47,12 +47,12 @@ class MockChatProvider @Inject constructor(
     override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
         val language = settingsRepository.appearance.first().language
         val reply = when (language) {
-            JarvisLanguage.Hinglish -> "Maine sun liya: \"$text\". Abhi main **offline** hoon -- koi AI provider connect nahi hai. " +
-                "Settings mein, AI Provider ke andar ek API key add kar dijiye, phir hum properly baat kar sakte hain."
-            JarvisLanguage.Hindi -> "मैंने सुन लिया: \"$text\"। अभी मैं **ऑफ़लाइन** हूं -- कोई AI प्रोवाइडर कनेक्ट नहीं है। " +
-                "Settings में, AI Provider के अंदर एक API key जोड़ दीजिए, फिर हम ठीक से बात कर सकते हैं।"
-            JarvisLanguage.English -> "I heard you: \"$text\". I'm running **offline** right now -- no AI provider is connected. " +
-                "Add an API key under Settings, AI Provider, and we can have a real conversation."
+            JarvisLanguage.Hinglish -> "Maine sun liya: \"$text\". Main abhi **offline mode** mein hoon kyunki koi AI provider connect nahi hua hai. " +
+                "AI Provider Settings se Gemini, OpenAI, ya Claude connect kar dijiye, phir hum properly baat kar sakte hain."
+            JarvisLanguage.Hindi -> "मैंने सुन लिया: \"$text\"। मैं अभी **ऑफ़लाइन मोड** में हूं क्योंकि कोई AI प्रोवाइडर कनेक्ट नहीं हुआ है। " +
+                "AI Provider Settings से Gemini, OpenAI, या Claude कनेक्ट कर दीजिए, फिर हम ठीक से बात कर सकते हैं।"
+            JarvisLanguage.English -> "I heard you: \"$text\". I'm currently operating in **offline mode** because no AI provider has been connected yet. " +
+                "Once you connect Gemini, OpenAI, or Claude from AI Provider Settings, I'll be ready for live conversations."
         }
         // Word-by-word, not one giant Token: makes the streaming
         // architecture genuinely observable on screen rather than a
