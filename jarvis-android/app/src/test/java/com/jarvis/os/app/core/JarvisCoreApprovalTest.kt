@@ -22,7 +22,7 @@ import com.jarvis.os.app.data.repository.MockAuditRepository
 import com.jarvis.os.app.data.repository.MockChatRepository
 import com.jarvis.os.app.data.repository.MockConnectionRepository
 import com.jarvis.os.app.data.repository.MockMemoryRepository
-import com.jarvis.os.app.data.repository.MockNgSignalProStatusProvider
+import com.jarvis.os.app.testutil.FakeNgSignalProStatusProvider
 import com.jarvis.os.app.data.repository.MockNotificationRepository
 import com.jarvis.os.app.data.repository.MockProjectRepository
 import com.jarvis.os.app.data.repository.MockToolRepository
@@ -74,7 +74,7 @@ class JarvisCoreApprovalTest {
             decisionEngine = JarvisDecisionEngine(toolsRepo, agentRegistry),
             watchTower = WatchTowerOrchestrator(multiAiCoordinator, approvalsRepo),
             briefingEngine = ExecutiveBriefingEngine(
-                projectsRepo, approvalsRepo, notificationsRepo, connectionsRepo, memoryRepo, agentRegistry, MockNgSignalProStatusProvider(), settingsRepository,
+                projectsRepo, approvalsRepo, notificationsRepo, connectionsRepo, memoryRepo, agentRegistry, FakeNgSignalProStatusProvider(), settingsRepository, com.jarvis.os.app.testutil.FakeGitHubStatusProvider(),
             ),
             appScope = scope,
         )
