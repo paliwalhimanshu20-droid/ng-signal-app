@@ -148,7 +148,7 @@ fun MissionControlTile(
             }
             Text(
                 text = value,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = JarvisSpacing.sm),
             )
