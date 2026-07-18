@@ -50,7 +50,7 @@ class JarvisCoreApprovalTest {
     private fun buildCore(scope: CoroutineScope): JarvisCore {
         val settingsRepository = com.jarvis.os.app.testutil.FakeSettingsRepository()
         val chatSessionManager = ChatSessionManager()
-        val aiRouter = AiRouter(setOf(MockChatProvider(settingsRepository)))
+        val aiRouter = AiRouter(setOf(MockChatProvider(settingsRepository)), com.jarvis.os.app.testutil.FakePreferredProviderStore())
         val approvalsRepo = MockApprovalRepository()
         val memoryRepo = MockMemoryRepository()
         val projectsRepo = MockProjectRepository()
