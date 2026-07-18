@@ -23,7 +23,7 @@ import org.junit.Test
 class WatchTowerOrchestratorTest {
 
     private fun orchestrator(): Pair<WatchTowerOrchestrator, MockApprovalRepository> {
-        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())))
+        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())), com.jarvis.os.app.testutil.FakePreferredProviderStore())
         val agents = setOf(
             BatmanAgent(router), FlashAgent(router), IronManAgent(router), DoctorStrangeAgent(router),
             CaptainAmericaAgent(router), SpiderManAgent(router), NickFuryAgent(router), ProfessorXAgent(router),

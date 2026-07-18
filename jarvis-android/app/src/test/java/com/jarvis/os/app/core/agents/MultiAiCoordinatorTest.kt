@@ -15,7 +15,7 @@ import org.junit.Test
 class MultiAiCoordinatorTest {
 
     private fun setup(): Triple<DefaultMultiAiCoordinator, MockAgentRegistry, MockApprovalRepository> {
-        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())))
+        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())), com.jarvis.os.app.testutil.FakePreferredProviderStore())
         val registry = MockAgentRegistry(setOf(ResearchAgent(router)))
         val approvals = MockApprovalRepository()
         return Triple(DefaultMultiAiCoordinator(registry, approvals), registry, approvals)

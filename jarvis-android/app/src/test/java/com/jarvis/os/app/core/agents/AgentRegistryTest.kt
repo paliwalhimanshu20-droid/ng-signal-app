@@ -15,7 +15,7 @@ import org.junit.Test
 
 class AgentRegistryTest {
 
-    private fun router() = AiRouter(setOf(MockChatProvider(FakeSettingsRepository()), MockClaudeProvider(), MockGptProvider()))
+    private fun router() = AiRouter(setOf(MockChatProvider(FakeSettingsRepository()), MockClaudeProvider(), MockGptProvider()), com.jarvis.os.app.testutil.FakePreferredProviderStore())
 
     private fun registry(router: AiRouter = router()) =
         MockAgentRegistry(setOf(ResearchAgent(router), CodeAgent(router)))
