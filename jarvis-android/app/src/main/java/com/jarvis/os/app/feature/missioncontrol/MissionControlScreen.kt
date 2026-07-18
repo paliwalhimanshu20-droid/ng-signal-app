@@ -27,6 +27,9 @@ import com.jarvis.os.app.data.repository.GitHubFetchResult
 import com.jarvis.os.app.data.repository.GitHubStatusProvider
 import com.jarvis.os.app.data.repository.NgSignalProStatus
 import com.jarvis.os.app.data.repository.NgSignalProStatusProvider
+import com.jarvis.os.app.data.settings.AnthropicKeyStore
+import com.jarvis.os.app.data.settings.ApiKeyStore
+import com.jarvis.os.app.data.settings.GeminiKeyStore
 import com.jarvis.os.app.designsystem.JarvisBrand
 import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.JarvisStatusColors
@@ -90,6 +93,9 @@ class MissionControlViewModel @Inject constructor(
     private val aiRouter: AiRouter,
     private val ngSignalPro: NgSignalProStatusProvider,
     private val gitHub: GitHubStatusProvider,
+    private val apiKeyStore: ApiKeyStore,
+    private val geminiKeyStore: GeminiKeyStore,
+    private val anthropicKeyStore: AnthropicKeyStore,
 ) : ViewModel() {
 
     init {
@@ -126,12 +132,20 @@ class MissionControlViewModel @Inject constructor(
             ?: firstNine.firstEight.activeProviderId
         MissionControlState(
             activeProviderName = activeProviderName,
-            // "JARVIS Goes Live": "Replace 'JARVIS (offline)' with
-            // 'JARVIS Online' when a provider is connected." Real
-            // signal: is the active provider one of the genuinely
-            // network-calling ones (openai-compatible/gemini/anthropic),
-            // not one of the honest offline Mock fallbacks.
-            isOnline = firstNine.firstEight.activeProviderId in setOf("openai-compatible", "gemini", "anthropic"),
+            // "AI Provider Stabilization & Truthfulness Audit": the old
+            // check only asked "is the active provider one of the real
+            // ones," never whether it had actually succeeded -- the same
+            // class of bug Requirement 1 named for Settings. Now checks
+            // the same real signal (lastSuccessAt from that provider's
+            // own KeyStore) SettingsViewModel's ProviderConnectionState
+            // uses, so Mission Control can't claim "Online" for a
+            // provider that's never actually completed a real reply.
+            isOnline = when (firstNine.firstEight.activeProviderId) {
+                "openai-compatible" -> apiKeyStore.currentConfig()?.lastSuccessAt != null
+                "gemini" -> geminiKeyStore.currentConfig()?.lastSuccessAt != null
+                "anthropic" -> anthropicKeyStore.currentConfig()?.lastSuccessAt != null
+                else -> false
+            },
             totalProviders = aiRouter.available.size,
             watchTowerAgentCount = agentRegistry.agents.value.size,
             watchTowerLastActivity = agentResults.maxByOrNull { it.completedAt }?.let { latest ->
