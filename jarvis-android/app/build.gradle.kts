@@ -18,6 +18,14 @@ android {
         versionName = "0.1.0-sprint7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Sprint 13 "Production Google Workspace Authentication": AppAuth's
+        // RedirectUriReceiverActivity is merged in from its own manifest
+        // (see the appauth dependency below) -- it reads this placeholder
+        // to build its intent-filter, so no manual AndroidManifest.xml
+        // edit is needed for the OAuth redirect itself. Must match
+        // GoogleOAuthConfig.REDIRECT_URI's scheme exactly.
+        manifestPlaceholders["appAuthRedirectScheme"] = "com.jarvis.os.app"
     }
 
     buildTypes {
@@ -56,6 +64,13 @@ dependencies {
     // data/settings/ApiKeyStore.kt.
     implementation(libs.okhttp)
     implementation(libs.security.crypto)
+
+    // Sprint 13 "Production Google Workspace Authentication": AppAuth is
+    // the standard, actively-maintained OAuth2/OIDC client for Android
+    // (Chrome Custom Tabs + PKCE) -- the official Google Identity/OAuth
+    // library for this exact "native app, no client secret, real
+    // refresh-token storage" flow. See core/security/GoogleAuthManager.kt.
+    implementation("net.openid:appauth:0.11.1")
 
     // "JARVIS Living Avatar" sprint: Lottie is the primary asset format
     // the Avatar Engine renders -- see AvatarAssetProvider's own
