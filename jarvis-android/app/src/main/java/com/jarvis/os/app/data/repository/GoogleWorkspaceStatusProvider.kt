@@ -1,5 +1,6 @@
 package com.jarvis.os.app.data.repository
 
+import com.jarvis.os.app.core.security.AuthenticationProvider
 import com.jarvis.os.app.data.settings.GoogleWorkspaceTokenStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,9 +51,11 @@ sealed interface GoogleWorkspaceFetchResult {
 /**
  * Sprint 13 Part 4: real REST calls to gmail.googleapis.com,
  * www.googleapis.com/calendar/v3, and www.googleapis.com/drive/v3 --
- * not a simulation. Requires an access token from
- * GoogleWorkspaceTokenStore (see that file's docstring for the honest
- * "paste a token" limitation until a real OAuth client is registered).
+ * not a simulation. Every call goes through
+ * GoogleAuthManager.getFreshAccessToken(), which silently refreshes an
+ * expired token using the stored refresh token before this class ever
+ * sees it -- this class never reads or caches a token itself (see that
+ * interface's own docstring for why it's the only allowed path).
  *
  * Read-only by construction (Part 4's own requirement: "Never send
  * email or modify calendar events without owner approval" -- this
@@ -60,10 +63,19 @@ sealed interface GoogleWorkspaceFetchResult {
  * a caller to accidentally invoke without going through a separate,
  * explicitly write-capable class this sprint does not build).
  *
- * Same honest-failure shape as GitHubStatusProvider: no token
- * configured, an expired/invalid token, or any network failure all
- * produce a Failure with a real, specific message -- never a fabricated
- * Success.
+ * Same honest-failure shape as GitHubStatusProvider: not connected, a
+ * refresh token that's been revoked/expired (surfaced by
+ * GoogleAuthManager as a Result.failure, not a crash), or any network
+ * failure all produce a Failure with a real, specific message -- never
+ * a fabricated Success. A successful refresh here also stamps
+ * GoogleWorkspaceTokenStore.markSynced(), which is what "Last
+ * synchronization time" in Owner Controls actually reads.
+ * Depends on AuthenticationProvider, not GoogleAuthManager -- AUTH-001
+ * Section 3: this class has no reason to know it's running on Android,
+ * so it only asks for the platform-agnostic token/health/scope
+ * surface. A future desktop or web build reuses this exact class
+ * unmodified, wired to that platform's own AuthenticationProvider
+ * implementation instead.
  */
 interface GoogleWorkspaceStatusProvider {
     val status: StateFlow<GoogleWorkspaceFetchResult?>
@@ -72,6 +84,7 @@ interface GoogleWorkspaceStatusProvider {
 
 @Singleton
 class RealGoogleWorkspaceStatusProvider @Inject constructor(
+    private val authManager: AuthenticationProvider,
     private val tokenStore: GoogleWorkspaceTokenStore,
 ) : GoogleWorkspaceStatusProvider {
 
@@ -84,9 +97,9 @@ class RealGoogleWorkspaceStatusProvider @Inject constructor(
         .build()
 
     override suspend fun refresh() {
-        val config = tokenStore.currentConfig()
-        if (config == null) {
-            _status.value = GoogleWorkspaceFetchResult.Failure("Google Workspace isn't connected yet. Add an access token under Settings, Google Workspace.")
+        val tokenResult = authManager.getFreshAccessToken()
+        val accessToken = tokenResult.getOrElse { error ->
+            _status.value = GoogleWorkspaceFetchResult.Failure(error.message ?: "Google Workspace isn't connected yet. Connect it under Settings, Google Workspace.")
             return
         }
 
@@ -94,7 +107,7 @@ class RealGoogleWorkspaceStatusProvider @Inject constructor(
             try {
                 val unreadJson = getJson(
                     "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5&q=is:unread+is:important",
-                    config.accessToken,
+                    accessToken,
                 )
                 val unreadIds = unreadJson.optJSONArray("messages")
                 val importantEmails = mutableListOf<GoogleEmailSummary>()
@@ -102,7 +115,7 @@ class RealGoogleWorkspaceStatusProvider @Inject constructor(
                     for (i in 0 until unreadIds.length()) {
                         val id = unreadIds.getJSONObject(i).optString("id")
                         val detail = runCatching {
-                            getJson("https://gmail.googleapis.com/gmail/v1/users/me/messages/$id?format=metadata&metadataHeaders=Subject&metadataHeaders=From", config.accessToken)
+                            getJson("https://gmail.googleapis.com/gmail/v1/users/me/messages/$id?format=metadata&metadataHeaders=Subject&metadataHeaders=From", accessToken)
                         }.getOrNull() ?: continue
                         val headers = detail.optJSONObject("payload")?.optJSONArray("headers")
                         var subject = "(no subject)"
@@ -120,7 +133,7 @@ class RealGoogleWorkspaceStatusProvider @Inject constructor(
                     }
                 }
 
-                val unreadCountJson = getJson("https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1&q=is:unread", config.accessToken)
+                val unreadCountJson = getJson("https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1&q=is:unread", accessToken)
                 val unreadCount = unreadCountJson.optInt("resultSizeEstimate", importantEmails.size)
 
                 val today = LocalDate.now(ZoneId.systemDefault())
@@ -129,7 +142,7 @@ class RealGoogleWorkspaceStatusProvider @Inject constructor(
                 val eventsJson = getJson(
                     "https://www.googleapis.com/calendar/v3/calendars/primary/events" +
                         "?timeMin=$startOfDay&timeMax=$endOfDay&singleEvents=true&orderBy=startTime",
-                    config.accessToken,
+                    accessToken,
                 )
                 val eventsArray = eventsJson.optJSONArray("items")
                 val todaysEvents = mutableListOf<GoogleCalendarEventSummary>()
@@ -149,7 +162,7 @@ class RealGoogleWorkspaceStatusProvider @Inject constructor(
 
                 val driveJson = getJson(
                     "https://www.googleapis.com/drive/v3/files?pageSize=5&orderBy=modifiedTime desc&fields=files(name,modifiedTime)",
-                    config.accessToken,
+                    accessToken,
                 )
                 val filesArray = driveJson.optJSONArray("files")
                 val recentFiles = mutableListOf<GoogleDriveFileSummary>()
@@ -163,9 +176,11 @@ class RealGoogleWorkspaceStatusProvider @Inject constructor(
                     }
                 }
 
+                tokenStore.markSynced()
+
                 GoogleWorkspaceFetchResult.Success(
                     GoogleWorkspaceStatus(
-                        accountEmail = config.accountEmail,
+                        accountEmail = tokenStore.currentConnectionInfo()?.accountEmail.orEmpty(),
                         unreadEmailCount = unreadCount,
                         importantEmails = importantEmails,
                         todaysEvents = todaysEvents,
@@ -189,8 +204,8 @@ class RealGoogleWorkspaceStatusProvider @Inject constructor(
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
                 val message = when (response.code) {
-                    401 -> "Google rejected that access token -- it has likely expired. Get a new one and reconnect."
-                    403 -> "Google denied that request -- check the token has gmail.readonly, calendar.readonly, and drive.readonly scopes."
+                    401 -> "Google rejected that access token -- it has likely expired or been revoked. Reconnect Google Workspace under Settings."
+                    403 -> "Google denied that request -- check the granted permissions under Settings, Google Workspace."
                     else -> "Google returned an error (HTTP ${response.code})."
                 }
                 throw IllegalStateException(message)
