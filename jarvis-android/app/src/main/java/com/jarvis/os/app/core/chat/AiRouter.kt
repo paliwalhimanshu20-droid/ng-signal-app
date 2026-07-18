@@ -1,6 +1,7 @@
 package com.jarvis.os.app.core.chat
 
 import com.jarvis.os.app.data.model.AiCapability
+import com.jarvis.os.app.data.settings.PreferredProviderStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
@@ -22,15 +23,29 @@ import javax.inject.Singleton
  * `null` (no requirement) or an empty requirement set both mean "any
  * provider is fine" and return the currently active one, so routeFor
  * is a safe default even for capability-agnostic callers.
+ *
+ * "Why this is not selecting the AI key which is verified": the active
+ * provider used to be pure in-memory state, reset to
+ * `providers.firstOrNull()` (an unordered Set -- never reliably any
+ * specific provider) on every app process restart, silently discarding
+ * a real, verified selection every single time the app was closed and
+ * reopened. Now seeded from [PreferredProviderStore] at construction,
+ * and every switchProvider() call (manual, or automatic after a
+ * successful test -- see SettingsViewModel) writes through to it, so
+ * the choice survives exactly the way every other durable Owner
+ * preference in this app does.
  */
 @Singleton
 class AiRouter @Inject constructor(
     private val providers: Set<@JvmSuppressWildcards ChatProvider>,
+    private val preferredProviderStore: PreferredProviderStore,
 ) {
     val available: List<ChatProvider> get() = providers.toList()
 
     private val _activeProviderId = MutableStateFlow(
-        providers.firstOrNull()?.id ?: error("No ChatProvider bound -- check ChatProviderModule"),
+        preferredProviderStore.currentProviderId()?.takeIf { id -> providers.any { it.id == id } }
+            ?: providers.firstOrNull()?.id
+            ?: error("No ChatProvider bound -- check ChatProviderModule"),
     )
     val activeProviderId: StateFlow<String> = _activeProviderId
 
@@ -40,7 +55,10 @@ class AiRouter @Inject constructor(
     /** Returns false and leaves the active provider unchanged if providerId isn't bound. */
     fun switchProvider(providerId: String): Boolean {
         val found = providers.any { it.id == providerId }
-        if (found) _activeProviderId.value = providerId
+        if (found) {
+            _activeProviderId.value = providerId
+            preferredProviderStore.save(providerId)
+        }
         return found
     }
 
