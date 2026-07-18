@@ -19,6 +19,10 @@ import androidx.lifecycle.viewModelScope
 import com.jarvis.os.app.core.JarvisCore
 import com.jarvis.os.app.core.agents.AgentRegistry
 import com.jarvis.os.app.core.chat.AiRouter
+import com.jarvis.os.app.core.chat.AnthropicChatProvider
+import com.jarvis.os.app.core.chat.GeminiChatProvider
+import com.jarvis.os.app.core.chat.OpenAiCompatibleChatProvider
+import com.jarvis.os.app.core.chat.ProviderConnectionState
 import com.jarvis.os.app.core.workflow.WorkflowEngine
 import com.jarvis.os.app.data.model.AuditEntry
 import com.jarvis.os.app.data.model.ConnectionStatus
@@ -70,7 +74,15 @@ import javax.inject.Inject
  */
 data class MissionControlState(
     val activeProviderName: String = "",
-    val isOnline: Boolean = false,
+    // "Fix Mission Control -- Critical": "Mission Control must always
+    // display the real ProviderConnectionState... No custom wording."
+    // Replaces the old isOnline: Boolean (which produced the exact
+    // contradiction reported -- "JARVIS OFFLINE" next to "OpenAI is
+    // active and ready," two independently-computed pieces of text
+    // that could disagree). This is the same enum SettingsViewModel
+    // computes for the AI Provider screen -- one shared source, read
+    // here, not reinterpreted.
+    val providerConnectionState: ProviderConnectionState = ProviderConnectionState.NOT_CONFIGURED,
     val totalProviders: Int = 0,
     val watchTowerAgentCount: Int = 0,
     val watchTowerLastActivity: String = "No specialists convened yet.",
@@ -96,6 +108,9 @@ class MissionControlViewModel @Inject constructor(
     private val apiKeyStore: ApiKeyStore,
     private val geminiKeyStore: GeminiKeyStore,
     private val anthropicKeyStore: AnthropicKeyStore,
+    private val geminiChatProvider: GeminiChatProvider,
+    private val openAiChatProvider: OpenAiCompatibleChatProvider,
+    private val anthropicChatProvider: AnthropicChatProvider,
 ) : ViewModel() {
 
     init {
@@ -120,32 +135,48 @@ class MissionControlViewModel @Inject constructor(
     }.combine(ngSignalPro.status) { firstEight, ngStatus ->
         FirstNine(firstEight, ngStatus)
     }.combine(gitHub.status) { firstNine, githubStatus ->
+        FirstTen(firstNine, githubStatus)
+    }.combine(
+        combine(
+            geminiChatProvider.lastOutcome,
+            openAiChatProvider.lastOutcome,
+            anthropicChatProvider.lastOutcome,
+        ) { geminiOutcome, openAiOutcome, anthropicOutcome ->
+            Triple(geminiOutcome, openAiOutcome, anthropicOutcome)
+        },
+    ) { firstTen, outcomes ->
+        val firstNine = firstTen.firstNine
+        val githubStatus = firstTen.githubStatus
         val first = firstNine.firstEight.firstSeven.firstSix.first
         val agentResults = firstNine.firstEight.firstSeven.agentResults
         val memoryEntries = firstNine.firstEight.firstSeven.firstSix.memoryEntries
+        val activeProviderId = firstNine.firstEight.activeProviderId
         // "JARVIS Experience Transformation" (Phase 0): the Owner never
         // sees a raw provider id like "openai-compatible" -- displayName
         // is what a real conversational partner's name actually is.
         val activeProviderName = aiRouter.available
-            .firstOrNull { it.id == firstNine.firstEight.activeProviderId }
+            .firstOrNull { it.id == activeProviderId }
             ?.displayName
-            ?: firstNine.firstEight.activeProviderId
+            ?: activeProviderId
+
+        // "Fix Mission Control -- Critical": the exact same
+        // ProviderConnectionState.compute() SettingsViewModel uses,
+        // fed the exact same three inputs (hasStoredKey, lastSuccessAt,
+        // live AttemptOutcome) for whichever provider is currently
+        // active. One shared function, one shared truth -- Mission
+        // Control cannot say something different from Settings anymore
+        // because they're not two interpretations, they're the same
+        // calculation.
+        val providerConnectionState = when (activeProviderId) {
+            "openai-compatible" -> ProviderConnectionState.compute(apiKeyStore.currentConfig() != null, apiKeyStore.currentConfig()?.lastSuccessAt, outcomes.second)
+            "gemini" -> ProviderConnectionState.compute(geminiKeyStore.currentConfig() != null, geminiKeyStore.currentConfig()?.lastSuccessAt, outcomes.first)
+            "anthropic" -> ProviderConnectionState.compute(anthropicKeyStore.currentConfig() != null, anthropicKeyStore.currentConfig()?.lastSuccessAt, outcomes.third)
+            else -> ProviderConnectionState.OFFLINE
+        }
+
         MissionControlState(
             activeProviderName = activeProviderName,
-            // "AI Provider Stabilization & Truthfulness Audit": the old
-            // check only asked "is the active provider one of the real
-            // ones," never whether it had actually succeeded -- the same
-            // class of bug Requirement 1 named for Settings. Now checks
-            // the same real signal (lastSuccessAt from that provider's
-            // own KeyStore) SettingsViewModel's ProviderConnectionState
-            // uses, so Mission Control can't claim "Online" for a
-            // provider that's never actually completed a real reply.
-            isOnline = when (firstNine.firstEight.activeProviderId) {
-                "openai-compatible" -> apiKeyStore.currentConfig()?.lastSuccessAt != null
-                "gemini" -> geminiKeyStore.currentConfig()?.lastSuccessAt != null
-                "anthropic" -> anthropicKeyStore.currentConfig()?.lastSuccessAt != null
-                else -> false
-            },
+            providerConnectionState = providerConnectionState,
             totalProviders = aiRouter.available.size,
             watchTowerAgentCount = agentRegistry.agents.value.size,
             watchTowerLastActivity = agentResults.maxByOrNull { it.completedAt }?.let { latest ->
@@ -176,6 +207,7 @@ class MissionControlViewModel @Inject constructor(
     private data class FirstSeven(val firstSix: FirstSix, val agentResults: List<com.jarvis.os.app.data.model.AgentResult>)
     private data class FirstEight(val firstSeven: FirstSeven, val activeProviderId: String)
     private data class FirstNine(val firstEight: FirstEight, val ngStatus: NgSignalProStatus)
+    private data class FirstTen(val firstNine: FirstNine, val githubStatus: GitHubFetchResult?)
 }
 
 @Composable
@@ -189,11 +221,25 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
         verticalArrangement = Arrangement.spacedBy(JarvisSpacing.sm),
     ) {
         item {
+            // "Fix Mission Control -- Critical": "Mission Control must
+            // always display the real ProviderConnectionState... No
+            // custom wording." label is now literally
+            // state.providerConnectionState.label -- the exact same
+            // text ProviderConnectionState's own docstring defines and
+            // AIProviderScreen shows -- not a second, independently
+            // worded description that could ever disagree with it
+            // again.
+            val pcs = state.providerConnectionState
             MissionControlTile(
-                label = if (state.isOnline) "JARVIS ONLINE" else "JARVIS OFFLINE",
-                value = if (state.activeProviderName.isNotBlank()) "${state.activeProviderName} is active and ready." else "No provider selected yet.",
-                detail = if (state.isOnline) "Conversation ready · ${state.totalProviders} provider(s) available" else "${state.totalProviders} available · tap to connect one",
-                accentColor = if (state.isOnline) JarvisStatusColors.Healthy else JarvisBrand.CoreCyan,
+                label = pcs.label.uppercase(),
+                value = if (state.activeProviderName.isNotBlank()) state.activeProviderName else "No provider selected yet.",
+                detail = "${state.totalProviders} provider(s) available",
+                accentColor = when (pcs) {
+                    com.jarvis.os.app.core.chat.ProviderConnectionState.VERIFIED, com.jarvis.os.app.core.chat.ProviderConnectionState.CONNECTED -> JarvisStatusColors.Healthy
+                    com.jarvis.os.app.core.chat.ProviderConnectionState.RATE_LIMITED -> JarvisStatusColors.Degraded
+                    com.jarvis.os.app.core.chat.ProviderConnectionState.ERROR -> JarvisStatusColors.Unhealthy
+                    else -> JarvisBrand.CoreCyan
+                },
                 onClick = { navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.Settings.route) },
             )
         }
