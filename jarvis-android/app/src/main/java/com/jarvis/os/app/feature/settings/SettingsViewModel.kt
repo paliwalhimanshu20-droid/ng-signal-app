@@ -144,6 +144,16 @@ class SettingsViewModel @Inject constructor(
         if (state.apiKeyInput.isBlank()) return
         apiKeyStore.save(AiProviderConfig(baseUrl = state.baseUrl, model = state.model, apiKey = state.apiKeyInput))
         _aiProviderState.value = state.copy(apiKeyInput = "", hasStoredKey = true, testResult = null)
+        // "Fix AI Response Parsing -- Critical": saving a key must
+        // actually put JARVIS on that provider. AiRouter's active
+        // provider previously defaulted to whichever provider happened
+        // to be first in an unordered Set -- almost never the one the
+        // Owner just configured -- so chat kept silently talking to the
+        // offline Mock even with a working key saved, regardless of
+        // whether the API call itself worked. "Preferred provider" as a
+        // separate manual step remains available for switching away
+        // from this default later.
+        aiRouter.switchProvider("openai-compatible")
     }
 
     fun clearApiKey() {
@@ -228,6 +238,8 @@ class SettingsViewModel @Inject constructor(
         if (state.apiKeyInput.isBlank()) return
         geminiKeyStore.save(GeminiConfig(apiKey = state.apiKeyInput, model = state.model))
         _geminiState.value = state.copy(apiKeyInput = "", hasStoredKey = true)
+        // See saveApiKey()'s own comment -- same real bug, same fix, for Gemini specifically.
+        aiRouter.switchProvider("gemini")
     }
 
     fun clearGeminiKey() {
@@ -258,6 +270,8 @@ class SettingsViewModel @Inject constructor(
         if (state.apiKeyInput.isBlank()) return
         anthropicKeyStore.save(AnthropicConfig(apiKey = state.apiKeyInput, model = state.model))
         _anthropicState.value = state.copy(apiKeyInput = "", hasStoredKey = true)
+        // See saveApiKey()'s own comment -- same real bug, same fix, for Claude specifically.
+        aiRouter.switchProvider("anthropic")
     }
 
     fun clearAnthropicKey() {
