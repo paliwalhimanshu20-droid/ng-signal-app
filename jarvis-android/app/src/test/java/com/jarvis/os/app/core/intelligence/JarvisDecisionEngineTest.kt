@@ -19,7 +19,7 @@ import org.junit.Test
 class JarvisDecisionEngineTest {
 
     private fun engine(): JarvisDecisionEngine {
-        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())))
+        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())), com.jarvis.os.app.testutil.FakePreferredProviderStore())
         val agentRegistry = MockAgentRegistry(setOf(ResearchAgent(router), CodeAgent(router)))
         val toolRepository = MockToolRepository(setOf(CalculatorTool(), ProjectNoteTool()), MockApprovalRepository())
         return JarvisDecisionEngine(toolRepository, agentRegistry)

@@ -71,7 +71,7 @@ class ExecutiveBriefingEngineTest {
 
     @Test
     fun `briefing surfaces the latest result per specialist once one has actually run`() = runTest(UnconfinedTestDispatcher()) {
-        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())))
+        val router = AiRouter(setOf(MockChatProvider(FakeSettingsRepository())), com.jarvis.os.app.testutil.FakePreferredProviderStore())
         val batman = BatmanAgent(router)
         val agentRegistry = MockAgentRegistry(setOf(batman))
         val approvals = MockApprovalRepository()
