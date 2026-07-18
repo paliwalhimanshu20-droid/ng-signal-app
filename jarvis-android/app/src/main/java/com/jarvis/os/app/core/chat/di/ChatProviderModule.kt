@@ -3,6 +3,7 @@ package com.jarvis.os.app.core.chat.di
 import com.jarvis.os.app.core.chat.AnthropicChatProvider
 import com.jarvis.os.app.core.chat.ChatProvider
 import com.jarvis.os.app.core.chat.GeminiChatProvider
+import com.jarvis.os.app.core.chat.GroqChatProvider
 import com.jarvis.os.app.core.chat.MockChatProvider
 import com.jarvis.os.app.core.chat.MockClaudeProvider
 import com.jarvis.os.app.core.chat.MockGptProvider
@@ -59,4 +60,8 @@ abstract class ChatProviderModule {
     @Binds
     @IntoSet
     abstract fun bindAnthropicChatProvider(impl: AnthropicChatProvider): ChatProvider
+
+    @Binds
+    @IntoSet
+    abstract fun bindGroqChatProvider(impl: GroqChatProvider): ChatProvider
 }
