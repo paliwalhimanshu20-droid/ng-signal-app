@@ -23,6 +23,11 @@ import com.jarvis.os.app.data.settings.GitHubConfig
 import com.jarvis.os.app.data.settings.GitHubTokenStore
 import com.jarvis.os.app.data.settings.GroqConfig
 import com.jarvis.os.app.data.settings.GroqKeyStore
+import com.jarvis.os.app.data.settings.GoogleWorkspaceConfig
+import com.jarvis.os.app.data.settings.GoogleWorkspaceTokenStore
+import com.jarvis.os.app.data.settings.StreamlitDeploymentStore
+import com.jarvis.os.app.data.repository.GoogleWorkspaceStatusProvider
+import com.jarvis.os.app.data.repository.StreamlitStatusProvider
 import com.jarvis.os.app.data.settings.SettingsRepository
 import com.jarvis.os.app.designsystem.AccentColor
 import com.jarvis.os.app.designsystem.AppearanceMode
@@ -79,6 +84,22 @@ data class GitHubUiState(
     val refreshInProgress: Boolean = false,
 )
 
+/** Sprint 13 Part 3: Streamlit deployment URL configuration -- no secret token, just a public URL. */
+data class StreamlitUiState(
+    val urlInput: String = "",
+    val hasStoredUrl: Boolean = false,
+    val refreshInProgress: Boolean = false,
+)
+
+/** Sprint 13 Part 4: Google Workspace, paste-a-token flow -- see GoogleWorkspaceTokenStore's docstring for why. */
+data class GoogleWorkspaceUiState(
+    val accountEmailInput: String = "",
+    val tokenInput: String = "",
+    val hasStoredToken: Boolean = false,
+    val storedAccountEmail: String = "",
+    val refreshInProgress: Boolean = false,
+)
+
 /**
  * Acceptance Scenario 2: "Owner customizes Accent Color, Font,
  * Background, Dashboard. Changes persist after restart." Every setter
@@ -109,6 +130,10 @@ class SettingsViewModel @Inject constructor(
     private val gitHubTokenStore: GitHubTokenStore,
     private val gitHubStatusProvider: GitHubStatusProvider,
     private val ngSignalProStatusProvider: NgSignalProStatusProvider,
+    private val streamlitDeploymentStore: StreamlitDeploymentStore,
+    private val streamlitStatusProvider: StreamlitStatusProvider,
+    private val googleWorkspaceTokenStore: GoogleWorkspaceTokenStore,
+    private val googleWorkspaceStatusProvider: GoogleWorkspaceStatusProvider,
     private val geminiChatProvider: GeminiChatProvider,
     private val openAiChatProvider: OpenAiCompatibleChatProvider,
     private val anthropicChatProvider: AnthropicChatProvider,
@@ -445,6 +470,81 @@ class SettingsViewModel @Inject constructor(
             gitHubStatusProvider.refresh()
             ngSignalProStatusProvider.refresh()
             _gitHubState.value = _gitHubState.value.copy(refreshInProgress = false)
+        }
+    }
+
+    // --- Sprint 13 Part 3: Streamlit deployment URL ---
+
+    private val _streamlitState = MutableStateFlow(loadStreamlitState())
+    val streamlitState: StateFlow<StreamlitUiState> = _streamlitState.asStateFlow()
+
+    private fun loadStreamlitState(): StreamlitUiState {
+        val url = streamlitDeploymentStore.currentUrl() ?: return StreamlitUiState()
+        return StreamlitUiState(urlInput = url, hasStoredUrl = true)
+    }
+
+    fun updateStreamlitUrlInput(url: String) {
+        _streamlitState.value = _streamlitState.value.copy(urlInput = url)
+    }
+
+    fun saveStreamlitUrl() {
+        val state = _streamlitState.value
+        if (state.urlInput.isBlank()) return
+        streamlitDeploymentStore.save(state.urlInput)
+        _streamlitState.value = state.copy(hasStoredUrl = true)
+        refreshStreamlitStatus()
+    }
+
+    fun clearStreamlitUrl() {
+        streamlitDeploymentStore.clear()
+        _streamlitState.value = StreamlitUiState()
+    }
+
+    fun refreshStreamlitStatus() {
+        viewModelScope.launch {
+            val url = streamlitDeploymentStore.currentUrl() ?: return@launch
+            _streamlitState.value = _streamlitState.value.copy(refreshInProgress = true)
+            streamlitStatusProvider.refresh(url)
+            _streamlitState.value = _streamlitState.value.copy(refreshInProgress = false)
+        }
+    }
+
+    // --- Sprint 13 Part 4: Google Workspace (paste-a-token flow -- see GoogleWorkspaceTokenStore's docstring) ---
+
+    private val _googleWorkspaceState = MutableStateFlow(loadGoogleWorkspaceState())
+    val googleWorkspaceState: StateFlow<GoogleWorkspaceUiState> = _googleWorkspaceState.asStateFlow()
+
+    private fun loadGoogleWorkspaceState(): GoogleWorkspaceUiState {
+        val config = googleWorkspaceTokenStore.currentConfig() ?: return GoogleWorkspaceUiState()
+        return GoogleWorkspaceUiState(hasStoredToken = true, storedAccountEmail = config.accountEmail)
+    }
+
+    fun updateGoogleAccountEmailInput(email: String) {
+        _googleWorkspaceState.value = _googleWorkspaceState.value.copy(accountEmailInput = email)
+    }
+
+    fun updateGoogleTokenInput(token: String) {
+        _googleWorkspaceState.value = _googleWorkspaceState.value.copy(tokenInput = token)
+    }
+
+    fun saveGoogleToken() {
+        val state = _googleWorkspaceState.value
+        if (state.tokenInput.isBlank()) return
+        googleWorkspaceTokenStore.save(GoogleWorkspaceConfig(accessToken = state.tokenInput, accountEmail = state.accountEmailInput))
+        _googleWorkspaceState.value = GoogleWorkspaceUiState(hasStoredToken = true, storedAccountEmail = state.accountEmailInput)
+        refreshGoogleWorkspaceStatus()
+    }
+
+    fun clearGoogleToken() {
+        googleWorkspaceTokenStore.clear()
+        _googleWorkspaceState.value = GoogleWorkspaceUiState()
+    }
+
+    fun refreshGoogleWorkspaceStatus() {
+        viewModelScope.launch {
+            _googleWorkspaceState.value = _googleWorkspaceState.value.copy(refreshInProgress = true)
+            googleWorkspaceStatusProvider.refresh()
+            _googleWorkspaceState.value = _googleWorkspaceState.value.copy(refreshInProgress = false)
         }
     }
 }

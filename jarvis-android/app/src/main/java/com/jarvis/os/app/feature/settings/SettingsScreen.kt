@@ -270,6 +270,85 @@ fun SettingsScreen(navController: androidx.navigation.NavHostController, viewMod
             }
         }
 
+        item {
+            val streamlitState by viewModel.streamlitState.collectAsState()
+            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
+                Column {
+                    Text("Streamlit", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Connect your deployed Streamlit app's URL so JARVIS can check whether NG Signal Pro's dashboard is reachable.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
+                    )
+                    if (streamlitState.hasStoredUrl) {
+                        Text(streamlitState.urlInput, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        Row(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                            TextButton(onClick = { viewModel.refreshStreamlitStatus() }, enabled = !streamlitState.refreshInProgress) {
+                                Text(if (streamlitState.refreshInProgress) "Checking…" else "Check now")
+                            }
+                            TextButton(onClick = { viewModel.clearStreamlitUrl() }) { Text("Remove") }
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = streamlitState.urlInput,
+                            onValueChange = { viewModel.updateStreamlitUrlInput(it) },
+                            label = { Text("Deployment URL") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                        )
+                        TextButton(onClick = { viewModel.saveStreamlitUrl() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) { Text("Save") }
+                    }
+                }
+            }
+        }
+
+        item {
+            val googleState by viewModel.googleWorkspaceState.collectAsState()
+            JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
+                Column {
+                    Text("Google Workspace", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Connect Gmail, Calendar, and Drive so JARVIS can summarize today's agenda and important email. " +
+                            "Generate an access token with gmail.readonly, calendar.readonly, and drive.readonly scopes (e.g. via Google's OAuth 2.0 Playground) and paste it below.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
+                    )
+                    if (googleState.hasStoredToken) {
+                        Text(
+                            googleState.storedAccountEmail.ifBlank { "Connected." },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Row(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                            TextButton(onClick = { viewModel.refreshGoogleWorkspaceStatus() }, enabled = !googleState.refreshInProgress) {
+                                Text(if (googleState.refreshInProgress) "Refreshing…" else "Refresh now")
+                            }
+                            TextButton(onClick = { viewModel.clearGoogleToken() }) { Text("Remove") }
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = googleState.accountEmailInput,
+                            onValueChange = { viewModel.updateGoogleAccountEmailInput(it) },
+                            label = { Text("Account email (optional label)") },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = googleState.tokenInput,
+                            onValueChange = { viewModel.updateGoogleTokenInput(it) },
+                            label = { Text("Access token") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        )
+                        TextButton(onClick = { viewModel.saveGoogleToken() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) { Text("Save") }
+                    }
+                }
+            }
+        }
+
         item { SectionHeader("Other settings") }
         item {
             JarvisCard(modifier = Modifier.fillMaxWidth()) {
