@@ -140,4 +140,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindGroqKeyStore(impl: com.jarvis.os.app.data.settings.EncryptedGroqKeyStore): com.jarvis.os.app.data.settings.GroqKeyStore
+
+    @Binds
+    @Singleton
+    abstract fun bindPreferredProviderStore(impl: com.jarvis.os.app.data.settings.SharedPrefsPreferredProviderStore): com.jarvis.os.app.data.settings.PreferredProviderStore
 }
