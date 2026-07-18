@@ -252,18 +252,32 @@ class MockChatRepository @Inject constructor(
 
     override val activeSessionId: String get() = sessionManager.activeSessionId.value
 
-    private val _messages = MutableStateFlow(
-        listOf(
-            ChatMessage(
-                UUID.randomUUID().toString(), MessageAuthor.JARVIS, MessageContentKind.TEXT,
-                "I'm currently operating in offline mode because no AI provider has been connected yet. " +
-                    "Once you connect Gemini, OpenAI, or Claude from AI Provider Settings, I'll be ready for live conversations. " +
-                    "Until then, I can still help with what's already available here.",
-                timestamp = Instant.now(),
-                sessionId = ChatSession.DEFAULT_SESSION_ID,
-            ),
-        ),
-    )
+    /**
+     * "What exactly you are doing wrong": a real, serious bug traced to
+     * its exact mechanism. This used to seed a fake JARVIS-authored
+     * ChatMessage here ("I'm currently operating in offline mode...").
+     * That message was never just UI decoration -- ContextManager.
+     * buildContext() treats EVERY message in this list as real
+     * conversation history, and JarvisCore.buildConversationalContextHint()
+     * takes the last few of those and literally prepends "we recently
+     * touched on: ..." to every future message sent to a real provider.
+     * Once a real provider (Groq, in the reported case) actually started
+     * working, it was still being told on every single turn that JARVIS
+     * "is currently operating in offline mode because no AI provider has
+     * been connected" -- and a real model, given that framing as recent
+     * context, naturally kept describing itself as offline in its own
+     * varied words. The request was genuinely reaching a real provider
+     * and getting a genuine reply the whole time; the reply was just
+     * contaminated by stale seed content that never should have been
+     * real conversation history in the first place.
+     *
+     * Fixed by not seeding a ChatMessage at all -- the empty list here
+     * is the honest starting state. The same helpful "not connected
+     * yet" text now lives purely in ChatScreen's UI layer (see that
+     * file), shown only when this list is empty, and is never a
+     * ChatMessage that could be fed back into a real provider's context.
+     */
+    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     override val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
     override suspend fun sendMessage(text: String, contextHint: String) {
