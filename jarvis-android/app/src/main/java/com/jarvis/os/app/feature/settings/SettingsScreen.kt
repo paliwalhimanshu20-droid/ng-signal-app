@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,7 +45,9 @@ import com.jarvis.os.app.designsystem.AppearanceMode
 import com.jarvis.os.app.designsystem.JarvisFontFamily
 import com.jarvis.os.app.designsystem.JarvisFontScale
 import com.jarvis.os.app.designsystem.JarvisSpacing
+import com.jarvis.os.app.designsystem.JarvisStatusColors
 import com.jarvis.os.app.designsystem.components.JarvisCard
+import com.jarvis.os.app.designsystem.components.StatusPill
 import kotlinx.coroutines.launch
 
 @Composable
