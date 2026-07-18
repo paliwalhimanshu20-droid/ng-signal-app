@@ -286,6 +286,16 @@ class MockChatRepository @Inject constructor(
         val replyMessageId = UUID.randomUUID().toString()
         var replyAdded = false
 
+        // "End-to-End Conversation Pipeline Audit": logs the one thing
+        // no earlier logging pass covered -- WHICH provider this
+        // specific message was actually routed to, at the exact point
+        // routing happens. Combined with each provider's own request/
+        // response logging (added in the prior stabilization pass),
+        // this makes the full pipeline traceable end to end: this line
+        // confirms routing reached a real provider; that provider's own
+        // logs confirm what happened after.
+        android.util.Log.d("MockChatRepository", "sendMessage: routing to activeProvider=${router.active.id} (${router.active.displayName})")
+
         router.active.sendMessage(sessionId, promptForProvider).collect { chunk ->
             when (chunk) {
                 is ChatChunk.Token -> {
