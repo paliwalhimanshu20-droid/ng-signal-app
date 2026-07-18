@@ -144,4 +144,18 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindPreferredProviderStore(impl: com.jarvis.os.app.data.settings.SharedPrefsPreferredProviderStore): com.jarvis.os.app.data.settings.PreferredProviderStore
+
+    // --- Sprint 13 "Connected Intelligence Platform" ---
+
+    @Binds
+    @Singleton
+    abstract fun bindStreamlitDeploymentStore(impl: com.jarvis.os.app.data.settings.SharedPrefsStreamlitDeploymentStore): com.jarvis.os.app.data.settings.StreamlitDeploymentStore
+
+    @Binds
+    @Singleton
+    abstract fun bindGoogleWorkspaceTokenStore(impl: com.jarvis.os.app.data.settings.EncryptedGoogleWorkspaceTokenStore): com.jarvis.os.app.data.settings.GoogleWorkspaceTokenStore
+
+    @Binds
+    @Singleton
+    abstract fun bindGoogleWorkspaceStatusProvider(impl: com.jarvis.os.app.data.repository.RealGoogleWorkspaceStatusProvider): com.jarvis.os.app.data.repository.GoogleWorkspaceStatusProvider
 }
