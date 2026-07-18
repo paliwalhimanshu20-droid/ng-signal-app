@@ -384,7 +384,7 @@ fun SettingsScreen(navController: androidx.navigation.NavHostController, viewMod
                                 Text(if (googleState.actionInProgress) "Working…" else "Reconnect")
                             }
                             if (googleState.health == com.jarvis.os.app.data.settings.GoogleConnectionHealth.NEEDS_REAUTH) {
-                                TextButton(onClick = { googleAuthLauncher.launch(viewModel.googleAuthorizationIntent()) }) { Text("Re-authorize") }
+                                TextButton(onClick = { viewModel.launchGoogleAuthorization(googleAuthLauncher) }) { Text("Re-authorize") }
                             }
                         }
                         Row {
@@ -395,7 +395,7 @@ fun SettingsScreen(navController: androidx.navigation.NavHostController, viewMod
                             ) { Text("Revoke access") }
                         }
                     } else {
-                        Button(onClick = { googleAuthLauncher.launch(viewModel.googleAuthorizationIntent()) }, enabled = !googleState.actionInProgress) {
+                        Button(onClick = { viewModel.launchGoogleAuthorization(googleAuthLauncher) }, enabled = !googleState.actionInProgress) {
                             Text(if (googleState.actionInProgress) "Connecting…" else "Connect Google Workspace")
                         }
                     }

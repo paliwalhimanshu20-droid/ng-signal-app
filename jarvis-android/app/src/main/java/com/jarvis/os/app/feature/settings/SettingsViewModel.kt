@@ -568,7 +568,28 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** Owner Controls "Connect Google Workspace" and "Re-authorize" both launch this same intent -- see GoogleOAuthConfig's docstring on why re-authorization never requests a different scope set. Call from the Activity Result launcher registered in SettingsScreen. */
-    fun googleAuthorizationIntent(): Intent = googleAuthManager.buildAuthorizationIntent()
+    /**
+     * Runtime hardening: buildAuthorizationIntent() (AppAuth resolving a
+     * Custom Tabs-capable browser) and the launcher's own launch() call
+     * (which throws ActivityNotFoundException if nothing can handle the
+     * intent) can both throw synchronously, on the UI thread, from
+     * inside a Compose onClick -- uncaught, that's a hard crash, not a
+     * graceful failure. This is that catch, in the one place both
+     * "Connect" and "Re-authorize" call through, so a real cause (no
+     * browser installed, a malformed CLIENT_ID/REDIRECT_URI in
+     * GoogleOAuthConfig, etc.) becomes a readable lastError message
+     * instead of the app just closing.
+     */
+    fun launchGoogleAuthorization(launcher: androidx.activity.result.ActivityResultLauncher<Intent>) {
+        try {
+            launcher.launch(googleAuthManager.buildAuthorizationIntent())
+        } catch (e: Exception) {
+            _googleWorkspaceState.value = _googleWorkspaceState.value.copy(
+                lastError = "Couldn't start Google sign-in: ${e.message ?: e::class.simpleName}. " +
+                    "Check that GoogleOAuthConfig.CLIENT_ID is your real Google Cloud client ID (not the placeholder), and that a browser is installed.",
+            )
+        }
+    }
 
     /** Call from the Activity Result callback once Google redirects back into the app. */
     fun onGoogleAuthorizationResult(intent: Intent) {
