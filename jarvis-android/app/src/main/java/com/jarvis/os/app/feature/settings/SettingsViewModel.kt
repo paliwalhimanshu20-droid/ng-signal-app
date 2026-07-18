@@ -6,6 +6,7 @@ import com.jarvis.os.app.core.chat.AiRouter
 import com.jarvis.os.app.core.chat.AnthropicChatProvider
 import com.jarvis.os.app.core.chat.ChatChunk
 import com.jarvis.os.app.core.chat.GeminiChatProvider
+import com.jarvis.os.app.core.chat.GroqChatProvider
 import com.jarvis.os.app.core.chat.OpenAiCompatibleChatProvider
 import com.jarvis.os.app.core.chat.ProviderConnectionState
 import com.jarvis.os.app.data.repository.GitHubStatusProvider
@@ -20,6 +21,8 @@ import com.jarvis.os.app.data.settings.GeminiConfig
 import com.jarvis.os.app.data.settings.GeminiKeyStore
 import com.jarvis.os.app.data.settings.GitHubConfig
 import com.jarvis.os.app.data.settings.GitHubTokenStore
+import com.jarvis.os.app.data.settings.GroqConfig
+import com.jarvis.os.app.data.settings.GroqKeyStore
 import com.jarvis.os.app.data.settings.SettingsRepository
 import com.jarvis.os.app.designsystem.AccentColor
 import com.jarvis.os.app.designsystem.AppearanceMode
@@ -61,6 +64,13 @@ data class AnthropicUiState(
     val lastSuccessAt: Long? = null,
 )
 
+data class GroqUiState(
+    val model: String = "llama-3.3-70b-versatile",
+    val apiKeyInput: String = "",
+    val hasStoredKey: Boolean = false,
+    val lastSuccessAt: Long? = null,
+)
+
 data class GitHubUiState(
     val owner: String = "",
     val repo: String = "",
@@ -95,12 +105,14 @@ class SettingsViewModel @Inject constructor(
     private val aiRouter: AiRouter,
     private val geminiKeyStore: GeminiKeyStore,
     private val anthropicKeyStore: AnthropicKeyStore,
+    private val groqKeyStore: GroqKeyStore,
     private val gitHubTokenStore: GitHubTokenStore,
     private val gitHubStatusProvider: GitHubStatusProvider,
     private val ngSignalProStatusProvider: NgSignalProStatusProvider,
     private val geminiChatProvider: GeminiChatProvider,
     private val openAiChatProvider: OpenAiCompatibleChatProvider,
     private val anthropicChatProvider: AnthropicChatProvider,
+    private val groqChatProvider: GroqChatProvider,
 ) : ViewModel() {
 
     val appearance = repository.appearance.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppearanceSettings())
@@ -205,6 +217,7 @@ class SettingsViewModel @Inject constructor(
                 "openai-compatible" -> _aiProviderState.value = _aiProviderState.value.copy(testInProgress = false, testResult = outcome, lastSuccessAt = apiKeyStore.currentConfig()?.lastSuccessAt)
                 "gemini" -> _geminiTestResult.value = outcome
                 "anthropic" -> _anthropicTestResult.value = outcome
+                "groq" -> _groqTestResult.value = outcome
             }
         }
     }
@@ -279,6 +292,41 @@ class SettingsViewModel @Inject constructor(
         _anthropicState.value = AnthropicUiState()
     }
 
+    // --- "Add Groq as a fourth AI provider": same shape as Gemini/Anthropic's. ---
+
+    private val _groqState = MutableStateFlow(loadGroqState())
+    val groqState: StateFlow<GroqUiState> = _groqState.asStateFlow()
+
+    private fun loadGroqState(): GroqUiState {
+        val config = groqKeyStore.currentConfig() ?: return GroqUiState()
+        return GroqUiState(model = config.model, hasStoredKey = true, lastSuccessAt = config.lastSuccessAt)
+    }
+
+    fun updateGroqModel(model: String) {
+        _groqState.value = _groqState.value.copy(model = model)
+    }
+
+    fun updateGroqApiKeyInput(key: String) {
+        _groqState.value = _groqState.value.copy(apiKeyInput = key)
+    }
+
+    fun saveGroqKey() {
+        val state = _groqState.value
+        if (state.apiKeyInput.isBlank()) return
+        groqKeyStore.save(GroqConfig(apiKey = state.apiKeyInput, model = state.model))
+        _groqState.value = state.copy(apiKeyInput = "", hasStoredKey = true)
+        // See saveApiKey()'s own comment -- same fix, for Groq specifically.
+        aiRouter.switchProvider("groq")
+    }
+
+    fun clearGroqKey() {
+        groqKeyStore.clear()
+        _groqState.value = GroqUiState()
+    }
+
+    private val _groqTestResult = MutableStateFlow<String?>(null)
+    val groqTestResult: StateFlow<String?> = _groqTestResult.asStateFlow()
+
     // --- "AI Provider Stabilization & Truthfulness Audit" Requirement 4:
     // one shared connection state, computed the same way for every
     // provider, combining the persisted facts (hasStoredKey,
@@ -301,6 +349,10 @@ class SettingsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderConnectionState.NOT_CONFIGURED)
 
     val anthropicConnectionState: StateFlow<ProviderConnectionState> = combine(_anthropicState, anthropicChatProvider.lastOutcome) { state, outcome ->
+        ProviderConnectionState.compute(state.hasStoredKey, state.lastSuccessAt, outcome)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderConnectionState.NOT_CONFIGURED)
+
+    val groqConnectionState: StateFlow<ProviderConnectionState> = combine(_groqState, groqChatProvider.lastOutcome) { state, outcome ->
         ProviderConnectionState.compute(state.hasStoredKey, state.lastSuccessAt, outcome)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderConnectionState.NOT_CONFIGURED)
 
