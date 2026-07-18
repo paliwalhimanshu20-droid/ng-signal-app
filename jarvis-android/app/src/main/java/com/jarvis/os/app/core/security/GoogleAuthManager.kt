@@ -76,14 +76,23 @@ class RealGoogleAuthManager @Inject constructor(
         )
             .setScopes(GoogleOAuthConfig.SCOPES)
             // access_type=offline is what makes Google issue a refresh
-            // token at all; prompt=consent forces the consent screen
-            // (and therefore a fresh refresh token) even for an account
-            // that already granted these exact scopes before -- without
-            // it, a Re-authorize after a revoked/expired refresh token
-            // can silently succeed with NO new refresh token, leaving
-            // the Owner stuck in the same broken state they were
-            // re-authorizing to fix.
-            .setAdditionalParameters(mapOf("access_type" to "offline", "prompt" to "consent"))
+            // token at all -- not a reserved AppAuth parameter name, so
+            // it goes through setAdditionalParameters normally.
+            //
+            // prompt=consent forces the consent screen (and therefore a
+            // fresh refresh token) even for an account that already
+            // granted these exact scopes before -- without it, a
+            // Re-authorize after a revoked/expired refresh token can
+            // silently succeed with NO new refresh token, leaving the
+            // Owner stuck in the same broken state they were
+            // re-authorizing to fix. AppAuth treats "prompt" as a
+            // reserved/built-in parameter with its own setPrompt()
+            // method and throws IllegalArgumentException if it's passed
+            // through setAdditionalParameters instead -- that was this
+            // bug: the fix is calling the dedicated method, not
+            // stuffing it in the generic map.
+            .setPrompt("consent")
+            .setAdditionalParameters(mapOf("access_type" to "offline"))
             .build()
 
         Log.i(TAG, "Building authorization request (scopes=${GoogleOAuthConfig.SCOPES.size})")
