@@ -14,7 +14,7 @@ import org.junit.Test
  */
 class AiRouterTest {
 
-    private fun router() = AiRouter(setOf(MockChatProvider(FakeSettingsRepository()), MockClaudeProvider(), MockGptProvider()))
+    private fun router() = AiRouter(setOf(MockChatProvider(FakeSettingsRepository()), MockClaudeProvider(), MockGptProvider()), com.jarvis.os.app.testutil.FakePreferredProviderStore())
 
     @Test
     fun `routeFor with no requirement returns the active provider`() {
