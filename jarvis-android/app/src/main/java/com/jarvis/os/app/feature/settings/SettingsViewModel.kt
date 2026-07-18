@@ -198,26 +198,73 @@ class SettingsViewModel @Inject constructor(
      * Complete (non-empty) or a genuine Error, never both framed as
      * success.
      */
+    /**
+     * "End-to-End Conversation Pipeline Audit": two real, confirmed bugs
+     * fixed here, found by re-reading this exact function rather than
+     * guessing.
+     *
+     * Bug A: this function never called aiRouter.switchProvider() at
+     * all. The auto-switch fix from the previous sprint only lived in
+     * saveGeminiKey()/saveApiKey()/saveAnthropicKey()/saveGroqKey() --
+     * the "save a brand new key" path. Re-testing an ALREADY-saved key
+     * (exactly what happens when the Owner taps Test Connection on a
+     * key saved in an earlier session) never went through that path,
+     * so the active provider never changed even after a real, verified
+     * success. Fixed: a successful test now also switches the active
+     * provider, matching "the active provider used for chat must
+     * always match the Preferred Provider shown in Settings."
+     *
+     * Bug B: only the "openai-compatible" branch below ever refreshed
+     * lastSuccessAt into its UI state after a test. Gemini/Anthropic/
+     * Groq's test result STRING was updated, but their lastSuccessAt
+     * stayed at whatever it was when the ViewModel was first created --
+     * null, for a key that had never succeeded before this exact test.
+     * That's the literal mechanism behind "Verified" (from the live,
+     * correctly-reactive AttemptOutcome signal) and "No successful
+     * connection yet" (from the stale, never-refreshed UI state)
+     * appearing at the same time -- two different fields, only one of
+     * which was ever being kept current. Fixed: every provider's full
+     * UI state is now reloaded from its KeyStore after every test, not
+     * just OpenAI's.
+     */
     fun testConnection(providerId: String = "openai-compatible") {
         viewModelScope.launch {
             if (providerId == "openai-compatible") _aiProviderState.value = _aiProviderState.value.copy(testInProgress = true, testResult = null)
             val provider = aiRouter.available.firstOrNull { it.id == providerId }
             var outcome = "That provider isn't available."
+            var succeeded = false
             if (provider != null) {
                 outcome = "No response received."
                 provider.sendMessage("settings-connection-test", "Reply with just the word OK.").collect { chunk ->
                     when (chunk) {
-                        is ChatChunk.Complete -> outcome = "Connected: ${chunk.fullText.take(80)}"
+                        is ChatChunk.Complete -> {
+                            outcome = "Connected: ${chunk.fullText.take(80)}"
+                            succeeded = true
+                        }
                         is ChatChunk.Error -> outcome = chunk.message
                         else -> Unit
                     }
                 }
             }
+
+            if (succeeded) {
+                aiRouter.switchProvider(providerId)
+            }
+
             when (providerId) {
                 "openai-compatible" -> _aiProviderState.value = _aiProviderState.value.copy(testInProgress = false, testResult = outcome, lastSuccessAt = apiKeyStore.currentConfig()?.lastSuccessAt)
-                "gemini" -> _geminiTestResult.value = outcome
-                "anthropic" -> _anthropicTestResult.value = outcome
-                "groq" -> _groqTestResult.value = outcome
+                "gemini" -> {
+                    _geminiTestResult.value = outcome
+                    _geminiState.value = loadGeminiState()
+                }
+                "anthropic" -> {
+                    _anthropicTestResult.value = outcome
+                    _anthropicState.value = loadAnthropicState()
+                }
+                "groq" -> {
+                    _groqTestResult.value = outcome
+                    _groqState.value = loadGroqState()
+                }
             }
         }
     }
