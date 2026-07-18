@@ -158,4 +158,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindGoogleWorkspaceStatusProvider(impl: com.jarvis.os.app.data.repository.RealGoogleWorkspaceStatusProvider): com.jarvis.os.app.data.repository.GoogleWorkspaceStatusProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindGoogleAuthManager(impl: com.jarvis.os.app.core.security.RealGoogleAuthManager): com.jarvis.os.app.core.security.GoogleAuthManager
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthenticationProvider(impl: com.jarvis.os.app.core.security.RealGoogleAuthManager): com.jarvis.os.app.core.security.AuthenticationProvider
 }
