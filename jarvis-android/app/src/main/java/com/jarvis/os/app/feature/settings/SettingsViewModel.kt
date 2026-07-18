@@ -2,6 +2,7 @@ package com.jarvis.os.app.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Intent
 import com.jarvis.os.app.core.chat.AiRouter
 import com.jarvis.os.app.core.chat.AnthropicChatProvider
 import com.jarvis.os.app.core.chat.ChatChunk
@@ -23,7 +24,8 @@ import com.jarvis.os.app.data.settings.GitHubConfig
 import com.jarvis.os.app.data.settings.GitHubTokenStore
 import com.jarvis.os.app.data.settings.GroqConfig
 import com.jarvis.os.app.data.settings.GroqKeyStore
-import com.jarvis.os.app.data.settings.GoogleWorkspaceConfig
+import com.jarvis.os.app.data.settings.GoogleConnectionHealth
+import com.jarvis.os.app.core.security.GoogleAuthManager
 import com.jarvis.os.app.data.settings.GoogleWorkspaceTokenStore
 import com.jarvis.os.app.data.settings.StreamlitDeploymentStore
 import com.jarvis.os.app.data.repository.GoogleWorkspaceStatusProvider
@@ -91,13 +93,28 @@ data class StreamlitUiState(
     val refreshInProgress: Boolean = false,
 )
 
-/** Sprint 13 Part 4: Google Workspace, paste-a-token flow -- see GoogleWorkspaceTokenStore's docstring for why. */
+/**
+ * Sprint 13 "Production Google Workspace Authentication": every field
+ * here maps 1:1 to an Owner Controls item this sprint's brief lists --
+ * isConnected/health drive Connect vs. Disconnect/Reconnect/Re-authorize
+ * button visibility, grantedScopes is "View granted permissions",
+ * lastSyncAt/lastTokenRefreshAt are exactly those two named fields.
+ * No token field exists on this class at all -- the Owner never sees
+ * one (this sprint's own "Never expose tokens in UI" rule).
+ */
 data class GoogleWorkspaceUiState(
-    val accountEmailInput: String = "",
-    val tokenInput: String = "",
-    val hasStoredToken: Boolean = false,
-    val storedAccountEmail: String = "",
-    val refreshInProgress: Boolean = false,
+    val isConnected: Boolean = false,
+    val accountEmail: String = "",
+    val grantedScopes: Set<String> = emptySet(),
+    val health: GoogleConnectionHealth = GoogleConnectionHealth.UNKNOWN,
+    val lastSyncAt: java.time.Instant? = null,
+    val lastTokenRefreshAt: java.time.Instant? = null,
+    val actionInProgress: Boolean = false,
+    val lastError: String? = null,
+    /** AUTH-002 "Device Management Center" Section 7: this device's own identity -- stable across disconnect/reconnect, owner-editable. */
+    val deviceName: String = "",
+    val deviceNameInput: String = "",
+    val isEditingDeviceName: Boolean = false,
 )
 
 /**
@@ -134,6 +151,7 @@ class SettingsViewModel @Inject constructor(
     private val streamlitStatusProvider: StreamlitStatusProvider,
     private val googleWorkspaceTokenStore: GoogleWorkspaceTokenStore,
     private val googleWorkspaceStatusProvider: GoogleWorkspaceStatusProvider,
+    private val googleAuthManager: GoogleAuthManager,
     private val geminiChatProvider: GeminiChatProvider,
     private val openAiChatProvider: OpenAiCompatibleChatProvider,
     private val anthropicChatProvider: AnthropicChatProvider,
@@ -509,42 +527,86 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // --- Sprint 13 Part 4: Google Workspace (paste-a-token flow -- see GoogleWorkspaceTokenStore's docstring) ---
+    // --- Sprint 13 "Production Google Workspace Authentication": native OAuth, Owner Controls ---
 
     private val _googleWorkspaceState = MutableStateFlow(loadGoogleWorkspaceState())
     val googleWorkspaceState: StateFlow<GoogleWorkspaceUiState> = _googleWorkspaceState.asStateFlow()
 
     private fun loadGoogleWorkspaceState(): GoogleWorkspaceUiState {
-        val config = googleWorkspaceTokenStore.currentConfig() ?: return GoogleWorkspaceUiState()
-        return GoogleWorkspaceUiState(hasStoredToken = true, storedAccountEmail = config.accountEmail)
+        val info = googleWorkspaceTokenStore.currentConnectionInfo()
+        return GoogleWorkspaceUiState(
+            isConnected = googleAuthManager.isConnected(),
+            accountEmail = info?.accountEmail.orEmpty(),
+            grantedScopes = info?.grantedScopes.orEmpty(),
+            health = googleAuthManager.connectionHealth(),
+            lastSyncAt = info?.lastSyncAt,
+            lastTokenRefreshAt = info?.lastTokenRefreshAt,
+            // Device identity is independent of whether Google is
+            // currently connected -- AUTH-002 Section 7: the Owner can
+            // label this device before ever connecting anything.
+            deviceName = googleWorkspaceTokenStore.deviceName(),
+        )
     }
 
-    fun updateGoogleAccountEmailInput(email: String) {
-        _googleWorkspaceState.value = _googleWorkspaceState.value.copy(accountEmailInput = email)
+    fun startEditingDeviceName() {
+        _googleWorkspaceState.value = _googleWorkspaceState.value.copy(isEditingDeviceName = true, deviceNameInput = _googleWorkspaceState.value.deviceName)
     }
 
-    fun updateGoogleTokenInput(token: String) {
-        _googleWorkspaceState.value = _googleWorkspaceState.value.copy(tokenInput = token)
+    fun updateDeviceNameInput(name: String) {
+        _googleWorkspaceState.value = _googleWorkspaceState.value.copy(deviceNameInput = name)
     }
 
-    fun saveGoogleToken() {
-        val state = _googleWorkspaceState.value
-        if (state.tokenInput.isBlank()) return
-        googleWorkspaceTokenStore.save(GoogleWorkspaceConfig(accessToken = state.tokenInput, accountEmail = state.accountEmailInput))
-        _googleWorkspaceState.value = GoogleWorkspaceUiState(hasStoredToken = true, storedAccountEmail = state.accountEmailInput)
-        refreshGoogleWorkspaceStatus()
+    fun saveDeviceName() {
+        val name = _googleWorkspaceState.value.deviceNameInput
+        if (name.isBlank()) return
+        googleWorkspaceTokenStore.renameDevice(name)
+        _googleWorkspaceState.value = _googleWorkspaceState.value.copy(deviceName = name, isEditingDeviceName = false)
     }
 
-    fun clearGoogleToken() {
-        googleWorkspaceTokenStore.clear()
-        _googleWorkspaceState.value = GoogleWorkspaceUiState()
+    fun cancelEditingDeviceName() {
+        _googleWorkspaceState.value = _googleWorkspaceState.value.copy(isEditingDeviceName = false)
+    }
+
+    /** Owner Controls "Connect Google Workspace" and "Re-authorize" both launch this same intent -- see GoogleOAuthConfig's docstring on why re-authorization never requests a different scope set. Call from the Activity Result launcher registered in SettingsScreen. */
+    fun googleAuthorizationIntent(): Intent = googleAuthManager.buildAuthorizationIntent()
+
+    /** Call from the Activity Result callback once Google redirects back into the app. */
+    fun onGoogleAuthorizationResult(intent: Intent) {
+        viewModelScope.launch {
+            _googleWorkspaceState.value = _googleWorkspaceState.value.copy(actionInProgress = true, lastError = null)
+            val result = googleAuthManager.handleAuthorizationResponse(intent)
+            result.onSuccess { refreshGoogleWorkspaceStatus() }
+            result.onFailure { error ->
+                _googleWorkspaceState.value = loadGoogleWorkspaceState().copy(lastError = error.message)
+            }
+        }
+    }
+
+    /** Owner Controls "Reconnect": attempts a silent token refresh against the stored refresh token first, no consent screen. If the refresh token itself is gone/revoked, googleWorkspaceState.health flips to NEEDS_REAUTH and the UI should offer Re-authorize instead. */
+    fun reconnectGoogleWorkspace() = refreshGoogleWorkspaceStatus()
+
+    /** Owner Controls "Disconnect": local-only, no call to Google -- see GoogleAuthManager.disconnectLocally's docstring. Device identity (name/id) survives this -- see GoogleWorkspaceTokenStore.clear()'s own docstring. */
+    fun disconnectGoogleWorkspace() {
+        googleAuthManager.disconnectLocally()
+        _googleWorkspaceState.value = loadGoogleWorkspaceState()
+    }
+
+    /** Owner Controls "Revoke Google access": calls Google's own revoke endpoint, then clears local state regardless of network outcome. Device identity survives this too. */
+    fun revokeGoogleWorkspace() {
+        viewModelScope.launch {
+            _googleWorkspaceState.value = _googleWorkspaceState.value.copy(actionInProgress = true)
+            val result = googleAuthManager.revoke()
+            _googleWorkspaceState.value = loadGoogleWorkspaceState().copy(lastError = result.exceptionOrNull()?.message)
+        }
     }
 
     fun refreshGoogleWorkspaceStatus() {
         viewModelScope.launch {
-            _googleWorkspaceState.value = _googleWorkspaceState.value.copy(refreshInProgress = true)
+            _googleWorkspaceState.value = _googleWorkspaceState.value.copy(actionInProgress = true)
             googleWorkspaceStatusProvider.refresh()
-            _googleWorkspaceState.value = _googleWorkspaceState.value.copy(refreshInProgress = false)
+            val result = googleWorkspaceStatusProvider.status.value
+            val error = (result as? com.jarvis.os.app.data.repository.GoogleWorkspaceFetchResult.Failure)?.message
+            _googleWorkspaceState.value = loadGoogleWorkspaceState().copy(actionInProgress = false, lastError = error)
         }
     }
 }

@@ -305,45 +305,95 @@ fun SettingsScreen(navController: androidx.navigation.NavHostController, viewMod
 
         item {
             val googleState by viewModel.googleWorkspaceState.collectAsState()
+            val googleAuthLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+            ) { result ->
+                result.data?.let { viewModel.onGoogleAuthorizationResult(it) }
+            }
             JarvisCard(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm)) {
                 Column {
-                    Text("Google Workspace", style = MaterialTheme.typography.titleMedium)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Google Workspace", style = MaterialTheme.typography.titleMedium)
+                        if (googleState.isConnected) {
+                            StatusPill(
+                                googleState.health.name.lowercase().replace('_', ' '),
+                                when (googleState.health) {
+                                    com.jarvis.os.app.data.settings.GoogleConnectionHealth.HEALTHY -> JarvisStatusColors.Healthy
+                                    com.jarvis.os.app.data.settings.GoogleConnectionHealth.DEGRADED -> JarvisStatusColors.Degraded
+                                    com.jarvis.os.app.data.settings.GoogleConnectionHealth.NEEDS_REAUTH -> JarvisStatusColors.Unhealthy
+                                    com.jarvis.os.app.data.settings.GoogleConnectionHealth.UNKNOWN -> JarvisStatusColors.Unknown
+                                },
+                            )
+                        }
+                    }
                     Text(
-                        "Connect Gmail, Calendar, and Drive so JARVIS can summarize today's agenda and important email. " +
-                            "Generate an access token with gmail.readonly, calendar.readonly, and drive.readonly scopes (e.g. via Google's OAuth 2.0 Playground) and paste it below.",
+                        "Sign in with Google once -- JARVIS then keeps Gmail, Calendar, and Drive connected on its own, refreshing access automatically. Read-only access only.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm),
                     )
-                    if (googleState.hasStoredToken) {
-                        Text(
-                            googleState.storedAccountEmail.ifBlank { "Connected." },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Row(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
-                            TextButton(onClick = { viewModel.refreshGoogleWorkspaceStatus() }, enabled = !googleState.refreshInProgress) {
-                                Text(if (googleState.refreshInProgress) "Refreshing…" else "Refresh now")
-                            }
-                            TextButton(onClick = { viewModel.clearGoogleToken() }) { Text("Remove") }
+                    if (googleState.isEditingDeviceName) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = googleState.deviceNameInput,
+                                onValueChange = { viewModel.updateDeviceNameInput(it) },
+                                label = { Text("This device's name") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                            )
+                            TextButton(onClick = { viewModel.saveDeviceName() }) { Text("Save") }
+                            TextButton(onClick = { viewModel.cancelEditingDeviceName() }) { Text("Cancel") }
                         }
                     } else {
-                        OutlinedTextField(
-                            value = googleState.accountEmailInput,
-                            onValueChange = { viewModel.updateGoogleAccountEmailInput(it) },
-                            label = { Text("Account email (optional label)") },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm),
-                            singleLine = true,
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = JarvisSpacing.sm).clickable { viewModel.startEditingDeviceName() },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "This device: ${googleState.deviceName}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text("Rename", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    googleState.lastError?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = JarvisStatusColors.Unhealthy, modifier = Modifier.padding(bottom = JarvisSpacing.sm))
+                    }
+                    if (googleState.isConnected) {
+                        Text(googleState.accountEmail.ifBlank { "Connected." }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                        if (googleState.grantedScopes.isNotEmpty()) {
+                            Text(
+                                "Permissions: " + googleState.grantedScopes.filter { it.startsWith("https://") }.joinToString { it.substringAfterLast('/') },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            "Last sync: ${googleState.lastSyncAt?.toString() ?: "never"} · Last token refresh: ${googleState.lastTokenRefreshAt?.toString() ?: "never"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        OutlinedTextField(
-                            value = googleState.tokenInput,
-                            onValueChange = { viewModel.updateGoogleTokenInput(it) },
-                            label = { Text("Access token") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        )
-                        TextButton(onClick = { viewModel.saveGoogleToken() }, modifier = Modifier.padding(top = JarvisSpacing.sm)) { Text("Save") }
+                        Row(modifier = Modifier.padding(top = JarvisSpacing.sm)) {
+                            TextButton(onClick = { viewModel.reconnectGoogleWorkspace() }, enabled = !googleState.actionInProgress) {
+                                Text(if (googleState.actionInProgress) "Working…" else "Reconnect")
+                            }
+                            if (googleState.health == com.jarvis.os.app.data.settings.GoogleConnectionHealth.NEEDS_REAUTH) {
+                                TextButton(onClick = { googleAuthLauncher.launch(viewModel.googleAuthorizationIntent()) }) { Text("Re-authorize") }
+                            }
+                        }
+                        Row {
+                            TextButton(onClick = { viewModel.disconnectGoogleWorkspace() }) { Text("Disconnect") }
+                            TextButton(
+                                onClick = { viewModel.revokeGoogleWorkspace() },
+                                colors = ButtonDefaults.textButtonColors(contentColor = JarvisStatusColors.Unhealthy),
+                            ) { Text("Revoke access") }
+                        }
+                    } else {
+                        Button(onClick = { googleAuthLauncher.launch(viewModel.googleAuthorizationIntent()) }, enabled = !googleState.actionInProgress) {
+                            Text(if (googleState.actionInProgress) "Connecting…" else "Connect Google Workspace")
+                        }
                     }
                 }
             }
