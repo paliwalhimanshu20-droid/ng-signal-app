@@ -15,6 +15,7 @@ import net.openid.appauth.AuthorizationRequest
 import net.openid.appauth.AuthorizationResponse
 import net.openid.appauth.AuthorizationService
 import net.openid.appauth.AuthorizationServiceConfiguration
+import net.openid.appauth.ResponseTypeValues
 import net.openid.appauth.TokenRequest
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
@@ -70,7 +71,7 @@ class RealGoogleAuthManager @Inject constructor(
         val request = AuthorizationRequest.Builder(
             serviceConfig,
             GoogleOAuthConfig.CLIENT_ID,
-            AuthorizationRequest.RESPONSE_TYPE_CODE,
+            ResponseTypeValues.CODE,
             android.net.Uri.parse(GoogleOAuthConfig.REDIRECT_URI),
         )
             .setScopes(GoogleOAuthConfig.SCOPES)
