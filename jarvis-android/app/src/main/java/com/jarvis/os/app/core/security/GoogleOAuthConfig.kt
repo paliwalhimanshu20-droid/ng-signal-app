@@ -43,7 +43,7 @@ package com.jarvis.os.app.core.security
  */
 object GoogleOAuthConfig {
     /** TODO(owner): replace with the real "iOS"-type OAuth Client ID from Google Cloud Console -- see this file's class docstring. */
-    const val CLIENT_ID: String = "810911598783-kbbto3l95oit2a510qvac18s85nljnv7.apps.googleusercontent.com"
+    const val CLIENT_ID: String = "810911598783-c6csn0qrqc79hqgsvfkk6muht1vd42u7.apps.googleusercontent.com"
 
     /** Custom-scheme redirect AppAuth's RedirectUriReceiverActivity listens for -- must match app/build.gradle.kts's appAuthRedirectScheme placeholder exactly. */
     const val REDIRECT_URI: String = "com.jarvis.os.app:/oauth2redirect"
