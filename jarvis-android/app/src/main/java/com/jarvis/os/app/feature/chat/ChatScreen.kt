@@ -264,6 +264,25 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                 contentPadding = PaddingValues(JarvisSpacing.md),
                 verticalArrangement = Arrangement.spacedBy(JarvisSpacing.sm),
             ) {
+                // "What exactly you are doing wrong": this used to be a
+                // real, seeded ChatMessage -- which silently poisoned
+                // every future message's context sent to a real
+                // provider (see MockChatRepository's own docstring for
+                // the full mechanism). Pure UI text now, shown only
+                // while there's genuinely no conversation yet, and
+                // never part of anything a real provider sees.
+                if (messages.isEmpty()) {
+                    item {
+                        Text(
+                            "I'm currently operating in offline mode because no AI provider has been connected yet. " +
+                                "Once you connect Gemini, OpenAI, or Claude from AI Provider Settings, I'll be ready for live conversations. " +
+                                "Until then, I can still help with what's already available here.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(JarvisSpacing.md),
+                        )
+                    }
+                }
                 items(messages, key = { it.messageId }) { message -> MessageBubble(message) }
                 if (isTyping) item { TypingIndicator() }
             }
