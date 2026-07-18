@@ -111,6 +111,8 @@ class MissionControlViewModel @Inject constructor(
     private val geminiChatProvider: GeminiChatProvider,
     private val openAiChatProvider: OpenAiCompatibleChatProvider,
     private val anthropicChatProvider: AnthropicChatProvider,
+    private val groqKeyStore: com.jarvis.os.app.data.settings.GroqKeyStore,
+    private val groqChatProvider: com.jarvis.os.app.core.chat.GroqChatProvider,
 ) : ViewModel() {
 
     init {
@@ -141,8 +143,9 @@ class MissionControlViewModel @Inject constructor(
             geminiChatProvider.lastOutcome,
             openAiChatProvider.lastOutcome,
             anthropicChatProvider.lastOutcome,
-        ) { geminiOutcome, openAiOutcome, anthropicOutcome ->
-            Triple(geminiOutcome, openAiOutcome, anthropicOutcome)
+            groqChatProvider.lastOutcome,
+        ) { geminiOutcome, openAiOutcome, anthropicOutcome, groqOutcome ->
+            FourOutcomes(geminiOutcome, openAiOutcome, anthropicOutcome, groqOutcome)
         },
     ) { firstTen, outcomes ->
         val firstNine = firstTen.firstNine
@@ -168,9 +171,10 @@ class MissionControlViewModel @Inject constructor(
         // because they're not two interpretations, they're the same
         // calculation.
         val providerConnectionState = when (activeProviderId) {
-            "openai-compatible" -> ProviderConnectionState.compute(apiKeyStore.currentConfig() != null, apiKeyStore.currentConfig()?.lastSuccessAt, outcomes.second)
-            "gemini" -> ProviderConnectionState.compute(geminiKeyStore.currentConfig() != null, geminiKeyStore.currentConfig()?.lastSuccessAt, outcomes.first)
-            "anthropic" -> ProviderConnectionState.compute(anthropicKeyStore.currentConfig() != null, anthropicKeyStore.currentConfig()?.lastSuccessAt, outcomes.third)
+            "openai-compatible" -> ProviderConnectionState.compute(apiKeyStore.currentConfig() != null, apiKeyStore.currentConfig()?.lastSuccessAt, outcomes.openAi)
+            "gemini" -> ProviderConnectionState.compute(geminiKeyStore.currentConfig() != null, geminiKeyStore.currentConfig()?.lastSuccessAt, outcomes.gemini)
+            "anthropic" -> ProviderConnectionState.compute(anthropicKeyStore.currentConfig() != null, anthropicKeyStore.currentConfig()?.lastSuccessAt, outcomes.anthropic)
+            "groq" -> ProviderConnectionState.compute(groqKeyStore.currentConfig() != null, groqKeyStore.currentConfig()?.lastSuccessAt, outcomes.groq)
             else -> ProviderConnectionState.OFFLINE
         }
 
@@ -208,6 +212,14 @@ class MissionControlViewModel @Inject constructor(
     private data class FirstEight(val firstSeven: FirstSeven, val activeProviderId: String)
     private data class FirstNine(val firstEight: FirstEight, val ngStatus: NgSignalProStatus)
     private data class FirstTen(val firstNine: FirstNine, val githubStatus: GitHubFetchResult?)
+
+    /** Kotlin has no built-in 4-tuple -- named fields here instead of a Quadruple, so the state-computation block below reads clearly by name rather than .first/.second/.third/.fourth. */
+    private data class FourOutcomes(
+        val gemini: ProviderConnectionState.AttemptOutcome?,
+        val openAi: ProviderConnectionState.AttemptOutcome?,
+        val anthropic: ProviderConnectionState.AttemptOutcome?,
+        val groq: ProviderConnectionState.AttemptOutcome?,
+    )
 }
 
 @Composable
