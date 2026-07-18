@@ -230,16 +230,44 @@ class MockConnectionRepository @Inject constructor() : ConnectionRepository {
         _connections.update { list -> list.map { if (it.connectionId == connectionId) block(it) else it } }
     }
 
+    /**
+     * "AI Provider Stabilization & Truthfulness Audit": a real,
+     * confirmed finding, not a hypothetical one -- 8 of these 9 entries
+     * were seeded as CONNECTED, but only GitHub and NG Signal Pro have
+     * any real backing code anywhere in this app (GitHubStatusProvider,
+     * NgSignalProStatusProvider). Calendar, Gmail, Spotify, and Weather
+     * have no integration of any kind, anywhere -- there is no code
+     * path that could make "CONNECTED" true for them. The "ChatGPT"
+     * entry duplicates the real AI Provider system (AIProviderScreen)
+     * through a completely separate, unconnected pathway. "ProjectOS"
+     * doesn't conceptually belong in a connection list at all -- it's
+     * this app's own internal project tracking, not an external system
+     * to connect to.
+     *
+     * Fixed to PENDING_APPROVAL (an existing, already-real status --
+     * see Claude's own entry below, unchanged) for everything without
+     * real backing, rather than inventing a new status or silently
+     * leaving the false claim in place. This directly fixes Mission
+     * Control's "connected systems" count from an overclaimed 8 of 9 to
+     * an honest 2 of 9.
+     *
+     * NOT fixed in this pass, documented instead of hidden: even
+     * GitHub and NG Signal Pro's CONNECTED status here is a fixed seed
+     * value, not dynamically synced with whether the Owner has actually
+     * entered a real GitHub token in Settings -- see this sprint's
+     * integration report for why that deeper wiring wasn't attempted
+     * alongside everything else in this pass.
+     */
     private fun seedConnections(): List<Connection> = listOf(
         mockConnection("provider-github", "GitHub", ConnectionStatus.CONNECTED, setOf("work")),
-        mockConnection("provider-openai", "ChatGPT", ConnectionStatus.CONNECTED, setOf("work")),
+        mockConnection("provider-openai", "ChatGPT", ConnectionStatus.PENDING_APPROVAL, setOf("work")),
         mockConnection("provider-anthropic", "Claude", ConnectionStatus.PENDING_APPROVAL, setOf("work")),
-        mockConnection("provider-calendar", "Calendar", ConnectionStatus.CONNECTED, setOf("work", "personal")),
-        mockConnection("provider-gmail", "Gmail", ConnectionStatus.CONNECTED, setOf("personal")),
-        mockConnection("provider-spotify", "Spotify", ConnectionStatus.CONNECTED, setOf("personal")),
-        mockConnection("provider-weather", "Weather", ConnectionStatus.CONNECTED, setOf("work", "personal")),
+        mockConnection("provider-calendar", "Calendar", ConnectionStatus.PENDING_APPROVAL, setOf("work", "personal")),
+        mockConnection("provider-gmail", "Gmail", ConnectionStatus.PENDING_APPROVAL, setOf("personal")),
+        mockConnection("provider-spotify", "Spotify", ConnectionStatus.PENDING_APPROVAL, setOf("personal")),
+        mockConnection("provider-weather", "Weather", ConnectionStatus.PENDING_APPROVAL, setOf("work", "personal")),
         mockConnection("provider-ngsignal", "NG Signal Pro", ConnectionStatus.CONNECTED, setOf("work")),
-        mockConnection("provider-projectos", "ProjectOS", ConnectionStatus.CONNECTED, setOf("work")),
+        mockConnection("provider-projectos", "ProjectOS", ConnectionStatus.PENDING_APPROVAL, setOf("work")),
     )
 
     private fun mockConnection(providerId: String, name: String, status: ConnectionStatus, tags: Set<String>) = Connection(
