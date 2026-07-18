@@ -24,6 +24,14 @@ data class GitHubWorkflowRunSummary(
     val updatedAt: Instant?,
 )
 
+/** One real commit on the default branch -- author + message + real commit timestamp, for "what changed today"/"yesterday's commits" style executive questions (Sprint 13). */
+data class GitHubCommitSummary(
+    val shortSha: String,
+    val messageHeadline: String,
+    val authorName: String,
+    val committedAt: Instant?,
+)
+
 data class GitHubStatus(
     val repoFullName: String,
     val defaultBranch: String,
@@ -31,6 +39,8 @@ data class GitHubStatus(
     val recentPullRequestTitles: List<String>,
     val openIssueCount: Int,
     val recentWorkflowRuns: List<GitHubWorkflowRunSummary>,
+    /** Sprint 13: most recent commits on the default branch, newest first -- real /commits data, not derived from workflow runs. */
+    val recentCommits: List<GitHubCommitSummary>,
     val fetchedAt: Instant,
 )
 
@@ -126,6 +136,22 @@ class RealGitHubStatusProvider @Inject constructor(
                     }
                 }
 
+                val commitsJson = getJson("https://api.github.com/repos/${config.owner}/${config.repo}/commits?per_page=10", config.personalAccessToken) as? JSONArray
+                val recentCommits = mutableListOf<GitHubCommitSummary>()
+                if (commitsJson != null) {
+                    for (i in 0 until commitsJson.length()) {
+                        val commitEntry = commitsJson.getJSONObject(i)
+                        val commitDetail = commitEntry.optJSONObject("commit")
+                        val fullMessage = commitDetail?.optString("message", "").orEmpty()
+                        recentCommits += GitHubCommitSummary(
+                            shortSha = commitEntry.optString("sha", "").take(7),
+                            messageHeadline = fullMessage.lineSequence().firstOrNull().orEmpty().ifBlank { "(no message)" },
+                            authorName = commitDetail?.optJSONObject("author")?.optString("name", "unknown") ?: "unknown",
+                            committedAt = parseInstantOrNull(commitDetail?.optJSONObject("author")?.optString("date")),
+                        )
+                    }
+                }
+
                 GitHubFetchResult.Success(
                     GitHubStatus(
                         repoFullName = fullName,
@@ -134,6 +160,7 @@ class RealGitHubStatusProvider @Inject constructor(
                         recentPullRequestTitles = openPrTitles.take(5),
                         openIssueCount = issueCount,
                         recentWorkflowRuns = recentRuns,
+                        recentCommits = recentCommits,
                         fetchedAt = Instant.now(),
                     ),
                 )
