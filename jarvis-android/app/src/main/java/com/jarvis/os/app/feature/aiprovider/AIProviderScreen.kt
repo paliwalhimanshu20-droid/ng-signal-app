@@ -7,11 +7,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,8 +17,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.jarvis.os.app.core.chat.ProviderConnectionState
 import com.jarvis.os.app.designsystem.JarvisBrand
 import com.jarvis.os.app.designsystem.JarvisSpacing
 import com.jarvis.os.app.designsystem.JarvisStatusColors
@@ -33,30 +31,36 @@ import java.util.Date
 /**
  * "JARVIS Goes Live": "Tapping the AI Provider card should open a
  * dedicated AI Provider screen." Reuses SettingsViewModel rather than
- * introducing a second ViewModel with duplicated state -- every piece
- * of state this screen needs (per-provider config, test results,
- * active/preferred provider) already lived there from earlier sprints;
- * this screen is a new, focused presentation of it, not new state.
+ * introducing a second ViewModel with duplicated state.
+ *
+ * "AI Provider Stabilization & Truthfulness Audit": the "Connected"
+ * label used to come from `hasStoredKey` alone -- the exact bug the
+ * Owner found by testing the app (a saved key showing "Connected" next
+ * to "No successful connection yet"). Every card below now reads
+ * [ProviderConnectionState] from SettingsViewModel instead, the one
+ * shared interpretation every screen uses (see that enum's own
+ * docstring).
  *
  * Gemini is listed first -- "Implement Gemini as the first recommended
  * provider" -- followed by OpenAI and Claude. "Preferred provider" at
- * the bottom is real (AiRouter.switchProvider, already the actual
- * mechanism driving which provider a real chat message goes through).
+ * the bottom is real (AiRouter.switchProvider, the actual mechanism
+ * driving which provider a real chat message goes through).
  *
- * "Auto Select" from this sprint's brief is deliberately NOT built as a
- * toggle here -- see this delivery's integration report for why:
- * making it real would mean changing the core chat send path
- * (MockChatRepository.sendMessage always uses AiRouter.active today,
- * never AiRouter.routeFor), a wider change than this pass took on.
- * "Preferred provider" is the one real, working selection mechanism.
+ * "Auto Select" is deliberately NOT a toggle here -- see this
+ * delivery's integration report: real chat always uses the manually
+ * preferred provider, never capability-based auto-routing, and that
+ * core send path wasn't changed in this pass.
  */
 @Composable
 fun AIProviderScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val geminiState by viewModel.geminiState.collectAsState()
     val geminiTestResult by viewModel.geminiTestResult.collectAsState()
+    val geminiConnectionState by viewModel.geminiConnectionState.collectAsState()
     val aiState by viewModel.aiProviderState.collectAsState()
+    val openAiConnectionState by viewModel.openAiConnectionState.collectAsState()
     val anthropicState by viewModel.anthropicState.collectAsState()
     val anthropicTestResult by viewModel.anthropicTestResult.collectAsState()
+    val anthropicConnectionState by viewModel.anthropicConnectionState.collectAsState()
     val activeProviderId by viewModel.activeProviderId.collectAsState()
 
     LazyColumn(contentPadding = PaddingValues(JarvisSpacing.md)) {
@@ -73,6 +77,7 @@ fun AIProviderScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             ProviderCard(
                 title = "Gemini",
                 subtitle = "Google's Gemini models",
+                connectionState = geminiConnectionState,
                 hasStoredKey = geminiState.hasStoredKey,
                 lastSuccessAt = geminiState.lastSuccessAt,
                 testResult = geminiTestResult,
@@ -90,6 +95,7 @@ fun AIProviderScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             ProviderCard(
                 title = "OpenAI",
                 subtitle = "GPT models via OpenAI's API",
+                connectionState = openAiConnectionState,
                 hasStoredKey = aiState.hasStoredKey,
                 lastSuccessAt = aiState.lastSuccessAt,
                 testResult = aiState.testResult,
@@ -109,6 +115,7 @@ fun AIProviderScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             ProviderCard(
                 title = "Claude",
                 subtitle = "Anthropic's Claude models",
+                connectionState = anthropicConnectionState,
                 hasStoredKey = anthropicState.hasStoredKey,
                 lastSuccessAt = anthropicState.lastSuccessAt,
                 testResult = anthropicTestResult,
@@ -151,6 +158,7 @@ fun AIProviderScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 private fun ProviderCard(
     title: String,
     subtitle: String,
+    connectionState: ProviderConnectionState,
     hasStoredKey: Boolean,
     lastSuccessAt: Long?,
     testResult: String?,
@@ -169,9 +177,14 @@ private fun ProviderCard(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    if (hasStoredKey) "Connected" else "Not connected",
+                    connectionState.label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (hasStoredKey) JarvisStatusColors.Healthy else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = when (connectionState) {
+                        ProviderConnectionState.VERIFIED, ProviderConnectionState.CONNECTED -> JarvisStatusColors.Healthy
+                        ProviderConnectionState.RATE_LIMITED -> JarvisStatusColors.Degraded
+                        ProviderConnectionState.ERROR -> JarvisStatusColors.Unhealthy
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = JarvisSpacing.xs, bottom = JarvisSpacing.sm))
