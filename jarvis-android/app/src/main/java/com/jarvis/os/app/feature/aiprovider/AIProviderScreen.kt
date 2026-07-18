@@ -61,6 +61,9 @@ fun AIProviderScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val anthropicState by viewModel.anthropicState.collectAsState()
     val anthropicTestResult by viewModel.anthropicTestResult.collectAsState()
     val anthropicConnectionState by viewModel.anthropicConnectionState.collectAsState()
+    val groqState by viewModel.groqState.collectAsState()
+    val groqTestResult by viewModel.groqTestResult.collectAsState()
+    val groqConnectionState by viewModel.groqConnectionState.collectAsState()
     val activeProviderId by viewModel.activeProviderId.collectAsState()
 
     LazyColumn(contentPadding = PaddingValues(JarvisSpacing.md)) {
@@ -126,6 +129,28 @@ fun AIProviderScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 onSave = { viewModel.saveAnthropicKey() },
                 onRemove = { viewModel.clearAnthropicKey() },
                 onTest = { viewModel.testConnection("anthropic") },
+            )
+        }
+
+        item {
+            // "Add Groq as a fourth AI provider": no billing requirement
+            // on its free tier -- the real reason it was added, after
+            // OpenAI turned out to need a payment method and Gemini's
+            // free tier hit a rate limit from repeated testing.
+            ProviderCard(
+                title = "Groq",
+                subtitle = "Llama and other open models, fast inference, no billing required on the free tier",
+                connectionState = groqConnectionState,
+                hasStoredKey = groqState.hasStoredKey,
+                lastSuccessAt = groqState.lastSuccessAt,
+                testResult = groqTestResult,
+                modelValue = groqState.model,
+                onModelChange = { viewModel.updateGroqModel(it) },
+                apiKeyInput = groqState.apiKeyInput,
+                onApiKeyChange = { viewModel.updateGroqApiKeyInput(it) },
+                onSave = { viewModel.saveGroqKey() },
+                onRemove = { viewModel.clearGroqKey() },
+                onTest = { viewModel.testConnection("groq") },
             )
         }
 
