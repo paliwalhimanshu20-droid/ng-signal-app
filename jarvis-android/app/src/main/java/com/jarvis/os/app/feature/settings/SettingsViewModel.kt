@@ -3,7 +3,11 @@ package com.jarvis.os.app.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.os.app.core.chat.AiRouter
+import com.jarvis.os.app.core.chat.AnthropicChatProvider
 import com.jarvis.os.app.core.chat.ChatChunk
+import com.jarvis.os.app.core.chat.GeminiChatProvider
+import com.jarvis.os.app.core.chat.OpenAiCompatibleChatProvider
+import com.jarvis.os.app.core.chat.ProviderConnectionState
 import com.jarvis.os.app.data.repository.GitHubStatusProvider
 import com.jarvis.os.app.data.repository.NgSignalProStatusProvider
 import com.jarvis.os.app.data.settings.AiProviderConfig
@@ -28,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -93,6 +98,9 @@ class SettingsViewModel @Inject constructor(
     private val gitHubTokenStore: GitHubTokenStore,
     private val gitHubStatusProvider: GitHubStatusProvider,
     private val ngSignalProStatusProvider: NgSignalProStatusProvider,
+    private val geminiChatProvider: GeminiChatProvider,
+    private val openAiChatProvider: OpenAiCompatibleChatProvider,
+    private val anthropicChatProvider: AnthropicChatProvider,
 ) : ViewModel() {
 
     val appearance = repository.appearance.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppearanceSettings())
@@ -147,12 +155,26 @@ class SettingsViewModel @Inject constructor(
         aiRouter.switchProvider(providerId)
     }
 
+    // --- "AI Provider Stabilization & Truthfulness Audit" Requirement 4:
+    // one shared connection state -- see the full definition further
+    // below, after all three underlying UI-state flows it depends on
+    // are declared (geminiConnectionState/openAiConnectionState/
+    // anthropicConnectionState).
+
     /**
      * A REAL call through the real provider -- confirms the key
      * actually works, not a local format check. Generalized to any
      * bound provider id ("JARVIS Goes Live": the dedicated AI Provider
      * screen needs Test Connection for Gemini and Claude too, not just
      * the original OpenAI-compatible card this started on).
+     *
+     * "AI Provider Stabilization & Truthfulness Audit" Requirement 1+3:
+     * the "Connected, but the reply was empty" contradiction is gone --
+     * an empty reply is now a real ChatChunk.Error emitted by the
+     * provider itself (see GeminiChatProvider/OpenAiCompatibleChatProvider/
+     * AnthropicChatProvider), so this function only ever sees a genuine
+     * Complete (non-empty) or a genuine Error, never both framed as
+     * success.
      */
     fun testConnection(providerId: String = "openai-compatible") {
         viewModelScope.launch {
@@ -163,7 +185,7 @@ class SettingsViewModel @Inject constructor(
                 outcome = "No response received."
                 provider.sendMessage("settings-connection-test", "Reply with just the word OK.").collect { chunk ->
                     when (chunk) {
-                        is ChatChunk.Complete -> outcome = if (chunk.fullText.isBlank()) "Connected, but the reply was empty." else "Connected: ${chunk.fullText.take(80)}"
+                        is ChatChunk.Complete -> outcome = "Connected: ${chunk.fullText.take(80)}"
                         is ChatChunk.Error -> outcome = chunk.message
                         else -> Unit
                     }
@@ -242,6 +264,31 @@ class SettingsViewModel @Inject constructor(
         anthropicKeyStore.clear()
         _anthropicState.value = AnthropicUiState()
     }
+
+    // --- "AI Provider Stabilization & Truthfulness Audit" Requirement 4:
+    // one shared connection state, computed the same way for every
+    // provider, combining the persisted facts (hasStoredKey,
+    // lastSuccessAt) with the live signal from the provider itself
+    // (lastOutcome, updated by both real chat and Test Connection since
+    // they call the exact same sendMessage). No screen invents its own
+    // interpretation of what "Connected" means anymore -- they all read
+    // one of these three. Declared here, after _geminiState/
+    // _aiProviderState/_anthropicState all exist, since Kotlin
+    // initializes class properties in declaration order -- referencing
+    // them earlier in the file would have used their default value at
+    // construction time, a real bug caught before it shipped.
+
+    val geminiConnectionState: StateFlow<ProviderConnectionState> = combine(_geminiState, geminiChatProvider.lastOutcome) { state, outcome ->
+        ProviderConnectionState.compute(state.hasStoredKey, state.lastSuccessAt, outcome)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderConnectionState.NOT_CONFIGURED)
+
+    val openAiConnectionState: StateFlow<ProviderConnectionState> = combine(_aiProviderState, openAiChatProvider.lastOutcome) { state, outcome ->
+        ProviderConnectionState.compute(state.hasStoredKey, state.lastSuccessAt, outcome)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderConnectionState.NOT_CONFIGURED)
+
+    val anthropicConnectionState: StateFlow<ProviderConnectionState> = combine(_anthropicState, anthropicChatProvider.lastOutcome) { state, outcome ->
+        ProviderConnectionState.compute(state.hasStoredKey, state.lastSuccessAt, outcome)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderConnectionState.NOT_CONFIGURED)
 
     // --- "Universal Connection Ecosystem -- Phase 1": GitHub configuration ---
 
