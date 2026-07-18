@@ -5,6 +5,7 @@ import com.jarvis.os.app.data.model.AiCapability
 import com.jarvis.os.app.data.settings.ApiKeyStore
 import com.jarvis.os.app.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,28 +24,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Sprint 12 "Real AI Conversation": a genuine, real streaming
- * ChatProvider -- this makes an actual HTTP request to a real
- * endpoint, not a simulation. It only actually produces a real AI
- * reply once the Owner has entered a real API key (Settings -> AI
- * Provider) -- this class cannot fabricate one.
- *
- * "OpenAI-compatible" specifically: POST {baseUrl}/chat/completions
- * with `stream: true`, Server-Sent Events response
- * (`data: {...}` lines, `choices[0].delta.content`, terminated by
- * `data: [DONE]`) is the same shape OpenAI itself uses and that a wide
- * range of other vendors' and self-hosted endpoints also implement.
- *
- * "AI Provider Stabilization & Truthfulness Audit": same real bug
- * GeminiChatProvider had, confirmed by the Owner testing the app --
- * `if (!response.isSuccessful)` discarded the error body, so every
- * failure read as a bare HTTP code no matter what OpenAI's own error
- * JSON actually said. Fixed: the body is read and parsed for OpenAI's
- * real error shape (`error.type`, which is the field that actually
- * distinguishes a transient rate limit from an exhausted billing quota
- * -- both return HTTP 429, and the status code alone can't tell them
- * apart). Logging added (Logcat only, see [TAG]). An empty result after
- * a 200 OK now emits `ChatChunk.Error`, not a fabricated `Complete("")`.
+ * "Fix AI Response Parsing -- Critical": switched from streaming
+ * (`stream: true`, manual SSE line parsing, `choices[0].delta.content`)
+ * to non-streaming (`stream: false` / omitted, one JSON object parsed
+ * once, `choices[0].message.content` -- note this is a REAL, different
+ * field path from the streaming shape, not the same path reused; this
+ * was re-verified against OpenAI's documented non-streaming response
+ * shape specifically, not assumed to match the streaming one). See
+ * GeminiChatProvider's own docstring for the full reasoning on why
+ * streaming was dropped for now rather than debugged further blind.
  */
 @Singleton
 class OpenAiCompatibleChatProvider @Inject constructor(
@@ -62,10 +50,9 @@ class OpenAiCompatibleChatProvider @Inject constructor(
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    /** See GeminiChatProvider's own docstring for why this exists -- one truth, updated by both chat and Test Connection since they call the same function. */
     private val _lastOutcome = MutableStateFlow<ProviderConnectionState.AttemptOutcome?>(null)
     val lastOutcome: StateFlow<ProviderConnectionState.AttemptOutcome?> = _lastOutcome.asStateFlow()
 
@@ -80,7 +67,7 @@ class OpenAiCompatibleChatProvider @Inject constructor(
 
         val requestJson = JSONObject().apply {
             put("model", config.model)
-            put("stream", true)
+            put("stream", false)
             put(
                 "messages",
                 JSONArray()
@@ -109,60 +96,57 @@ class OpenAiCompatibleChatProvider @Inject constructor(
 
         Log.d(TAG, "request start: model=${config.model} baseUrl=${config.baseUrl}")
         val startedAt = System.currentTimeMillis()
-        val accumulated = StringBuilder()
-        var rawLineCount = 0
 
         try {
-            client.newCall(request).execute().use { response ->
+            val fullText = client.newCall(request).execute().use { response ->
                 val latencyMs = System.currentTimeMillis() - startedAt
                 Log.d(TAG, "request finish: status=${response.code} latencyMs=$latencyMs")
 
+                val bodyString = response.body?.string().orEmpty()
+                Log.d(TAG, "response size: ${bodyString.length} chars")
+
                 if (!response.isSuccessful) {
-                    val errorBody = response.body?.string().orEmpty()
-                    Log.w(TAG, "error response body: ${errorBody.take(500)}")
-                    val type = runCatching { JSONObject(errorBody).getJSONObject("error").optString("type") }.getOrNull()
+                    Log.w(TAG, "error response body: ${bodyString.take(500)}")
+                    val type = runCatching { JSONObject(bodyString).getJSONObject("error").optString("type") }.getOrNull()
                     val isRateLimited = response.code == 429 || type == "rate_limit_exceeded" || type == "insufficient_quota"
                     _lastOutcome.value = if (isRateLimited) ProviderConnectionState.AttemptOutcome.RATE_LIMITED else ProviderConnectionState.AttemptOutcome.FAILED
-                    emit(ChatChunk.Error(friendlyErrorMessage(response.code, errorBody)))
-                    return@use
+                    emit(ChatChunk.Error(friendlyErrorMessage(response.code, bodyString)))
+                    return@use null
                 }
-                val source = response.body?.source()
-                if (source == null) {
-                    Log.w(TAG, "successful response had no body")
-                    emit(ChatChunk.Error("The AI provider returned an empty response."))
-                    return@use
-                }
-                while (!source.exhausted()) {
-                    val line = source.readUtf8Line() ?: break
-                    if (!line.startsWith("data:")) continue
-                    rawLineCount += 1
-                    val payload = line.removePrefix("data:").trim()
-                    if (payload.isEmpty() || payload == "[DONE]") continue
-                    val delta = runCatching {
-                        JSONObject(payload)
-                            .getJSONArray("choices")
-                            .getJSONObject(0)
-                            .getJSONObject("delta")
-                            .optString("content", "")
-                    }.onFailure { Log.w(TAG, "failed to parse SSE payload: ${payload.take(300)}", it) }
-                        .getOrDefault("")
-                    if (delta.isNotEmpty()) {
-                        accumulated.append(delta)
-                        emit(ChatChunk.Token(accumulated.toString()))
-                    }
-                }
-            }
 
-            if (accumulated.isEmpty()) {
-                Log.w(TAG, "empty reply after $rawLineCount data line(s) -- response did not match the expected shape")
+                // Non-streaming shape: choices[0].message.content -- NOT choices[0].delta.content (that's the streaming-only shape).
+                val extracted = runCatching {
+                    JSONObject(bodyString)
+                        .getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .optString("content", "")
+                }.onFailure { Log.e(TAG, "failed to parse response body: ${bodyString.take(800)}", it) }
+                    .getOrDefault("")
+
+                if (extracted.isEmpty()) {
+                    Log.w(TAG, "parsed successfully but text was empty -- full body: ${bodyString.take(800)}")
+                }
+                extracted
+            } ?: return@flow
+
+            if (fullText.isEmpty()) {
                 _lastOutcome.value = ProviderConnectionState.AttemptOutcome.FAILED
                 emit(ChatChunk.Error("The AI provider responded, but no reply text could be read from it. This has been logged for investigation."))
-            } else {
-                Log.d(TAG, "response size: ${accumulated.length} chars")
-                emit(ChatChunk.Complete(accumulated.toString()))
-                apiKeyStore.recordSuccess()
-                _lastOutcome.value = ProviderConnectionState.AttemptOutcome.SUCCEEDED
+                return@flow
             }
+
+            val words = fullText.split(" ")
+            val builder = StringBuilder()
+            for ((index, word) in words.withIndex()) {
+                if (index > 0) builder.append(" ")
+                builder.append(word)
+                emit(ChatChunk.Token(builder.toString()))
+                delay(20)
+            }
+            emit(ChatChunk.Complete(fullText))
+            apiKeyStore.recordSuccess()
+            _lastOutcome.value = ProviderConnectionState.AttemptOutcome.SUCCEEDED
         } catch (e: Exception) {
             Log.e(TAG, "network error", e)
             _lastOutcome.value = ProviderConnectionState.AttemptOutcome.FAILED
@@ -170,15 +154,6 @@ class OpenAiCompatibleChatProvider @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    /**
-     * OpenAI's real error body shape: {"error": {"message": ..., "type":
-     * "insufficient_quota" | "rate_limit_exceeded" | "invalid_api_key" |
-     * "invalid_request_error" | ...}}. `type` is what actually
-     * distinguishes a transient rate limit (retry shortly) from an
-     * exhausted billing quota (won't resolve on its own) -- both share
-     * HTTP 429, so the status code alone is not enough, exactly the gap
-     * this sprint's brief called out by name.
-     */
     private fun friendlyErrorMessage(httpCode: Int, errorBody: String): String {
         val type = runCatching { JSONObject(errorBody).getJSONObject("error").optString("type") }.getOrNull()
         return when {

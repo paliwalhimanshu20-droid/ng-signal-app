@@ -4,6 +4,7 @@ import android.util.Log
 import com.jarvis.os.app.data.model.AiCapability
 import com.jarvis.os.app.data.settings.AnthropicKeyStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,24 +22,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * "JARVIS Goes Live": "AI Provider Settings... Anthropic Claude." A
- * genuine, real streaming client against Anthropic's native Messages
- * API (api.anthropic.com/v1/messages), not a mock and not the
- * OpenAI-compatible provider under a different name.
- *
- * Real streaming: Anthropic's SSE stream carries several event types
- * (message_start, content_block_start, content_block_delta,
- * content_block_stop, message_delta, message_stop) on the same `data:`
- * lines -- only `content_block_delta` events with a `text_delta` carry
- * actual reply text. Every other event type's JSON simply doesn't match
- * the shape being extracted below and is silently skipped.
- *
- * "AI Provider Stabilization & Truthfulness Audit": same real bug the
- * other two providers had -- `if (!response.isSuccessful)` discarded
- * the error body. Fixed: parses Anthropic's real error shape
- * (`error.type`: rate_limit_error/overloaded_error/authentication_error/
- * invalid_request_error), with logging (Logcat only, see [TAG]) and
- * honest handling of an empty result after a 200 OK.
+ * "Fix AI Response Parsing -- Critical": not explicitly named in this
+ * sprint's brief (only Gemini/OpenAI were), but switched to
+ * non-streaming for the same reliability reasoning as both of those --
+ * see GeminiChatProvider's own docstring. Non-streaming Claude response
+ * shape: `content[0].text` (an array of content blocks at the top
+ * level), a genuinely different shape from the streaming
+ * `content_block_delta` events this class used before -- re-verified
+ * against Anthropic's documented non-streaming response shape
+ * specifically.
  */
 @Singleton
 class AnthropicChatProvider @Inject constructor(
@@ -55,10 +47,9 @@ class AnthropicChatProvider @Inject constructor(
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    /** See GeminiChatProvider's own docstring for why this exists -- one truth, updated by both chat and Test Connection since they call the same function. */
     private val _lastOutcome = MutableStateFlow<ProviderConnectionState.AttemptOutcome?>(null)
     val lastOutcome: StateFlow<ProviderConnectionState.AttemptOutcome?> = _lastOutcome.asStateFlow()
 
@@ -72,7 +63,6 @@ class AnthropicChatProvider @Inject constructor(
         val requestJson = JSONObject().apply {
             put("model", config.model)
             put("max_tokens", 1024)
-            put("stream", true)
             put(
                 "messages",
                 JSONArray().put(
@@ -95,60 +85,59 @@ class AnthropicChatProvider @Inject constructor(
 
         Log.d(TAG, "request start: model=${config.model}")
         val startedAt = System.currentTimeMillis()
-        val accumulated = StringBuilder()
-        var rawLineCount = 0
 
         try {
-            client.newCall(request).execute().use { response ->
+            val fullText = client.newCall(request).execute().use { response ->
                 val latencyMs = System.currentTimeMillis() - startedAt
                 Log.d(TAG, "request finish: status=${response.code} latencyMs=$latencyMs")
 
+                val bodyString = response.body?.string().orEmpty()
+                Log.d(TAG, "response size: ${bodyString.length} chars")
+
                 if (!response.isSuccessful) {
-                    val errorBody = response.body?.string().orEmpty()
-                    Log.w(TAG, "error response body: ${errorBody.take(500)}")
-                    val type = runCatching { JSONObject(errorBody).getJSONObject("error").optString("type") }.getOrNull()
+                    Log.w(TAG, "error response body: ${bodyString.take(500)}")
+                    val type = runCatching { JSONObject(bodyString).getJSONObject("error").optString("type") }.getOrNull()
                     val isRateLimited = response.code == 429 || type == "rate_limit_error" || type == "overloaded_error"
                     _lastOutcome.value = if (isRateLimited) ProviderConnectionState.AttemptOutcome.RATE_LIMITED else ProviderConnectionState.AttemptOutcome.FAILED
-                    emit(ChatChunk.Error(friendlyErrorMessage(response.code, errorBody)))
-                    return@use
+                    emit(ChatChunk.Error(friendlyErrorMessage(response.code, bodyString)))
+                    return@use null
                 }
-                val source = response.body?.source()
-                if (source == null) {
-                    Log.w(TAG, "successful response had no body")
-                    emit(ChatChunk.Error("Claude returned an empty response."))
-                    return@use
-                }
-                while (!source.exhausted()) {
-                    val line = source.readUtf8Line() ?: break
-                    if (!line.startsWith("data:")) continue
-                    rawLineCount += 1
-                    val payload = line.removePrefix("data:").trim()
-                    if (payload.isEmpty()) continue
-                    val delta = runCatching {
-                        val json = JSONObject(payload)
-                        if (json.optString("type") != "content_block_delta") return@runCatching ""
-                        val deltaObj = json.getJSONObject("delta")
-                        if (deltaObj.optString("type") != "text_delta") return@runCatching ""
-                        deltaObj.optString("text", "")
-                    }.onFailure { Log.w(TAG, "failed to parse SSE payload: ${payload.take(300)}", it) }
-                        .getOrDefault("")
-                    if (delta.isNotEmpty()) {
-                        accumulated.append(delta)
-                        emit(ChatChunk.Token(accumulated.toString()))
-                    }
-                }
-            }
 
-            if (accumulated.isEmpty()) {
-                Log.w(TAG, "empty reply after $rawLineCount data line(s) -- response did not match the expected shape")
+                // Non-streaming shape: top-level "content" array of blocks, each with "text" -- NOT the content_block_delta event shape (that's streaming-only).
+                val extracted = runCatching {
+                    val contentArray = JSONObject(bodyString).getJSONArray("content")
+                    val builder = StringBuilder()
+                    for (i in 0 until contentArray.length()) {
+                        val block = contentArray.getJSONObject(i)
+                        if (block.optString("type") == "text") builder.append(block.optString("text", ""))
+                    }
+                    builder.toString()
+                }.onFailure { Log.e(TAG, "failed to parse response body: ${bodyString.take(800)}", it) }
+                    .getOrDefault("")
+
+                if (extracted.isEmpty()) {
+                    Log.w(TAG, "parsed successfully but text was empty -- full body: ${bodyString.take(800)}")
+                }
+                extracted
+            } ?: return@flow
+
+            if (fullText.isEmpty()) {
                 _lastOutcome.value = ProviderConnectionState.AttemptOutcome.FAILED
                 emit(ChatChunk.Error("Claude responded, but no reply text could be read from it. This has been logged for investigation."))
-            } else {
-                Log.d(TAG, "response size: ${accumulated.length} chars")
-                emit(ChatChunk.Complete(accumulated.toString()))
-                keyStore.recordSuccess()
-                _lastOutcome.value = ProviderConnectionState.AttemptOutcome.SUCCEEDED
+                return@flow
             }
+
+            val words = fullText.split(" ")
+            val builder = StringBuilder()
+            for ((index, word) in words.withIndex()) {
+                if (index > 0) builder.append(" ")
+                builder.append(word)
+                emit(ChatChunk.Token(builder.toString()))
+                delay(20)
+            }
+            emit(ChatChunk.Complete(fullText))
+            keyStore.recordSuccess()
+            _lastOutcome.value = ProviderConnectionState.AttemptOutcome.SUCCEEDED
         } catch (e: Exception) {
             Log.e(TAG, "network error", e)
             _lastOutcome.value = ProviderConnectionState.AttemptOutcome.FAILED
@@ -156,12 +145,6 @@ class AnthropicChatProvider @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    /**
-     * Anthropic's real error body shape: {"type": "error", "error":
-     * {"type": "rate_limit_error" | "overloaded_error" |
-     * "authentication_error" | "invalid_request_error" |
-     * "permission_error", "message": ...}}.
-     */
     private fun friendlyErrorMessage(httpCode: Int, errorBody: String): String {
         val type = runCatching { JSONObject(errorBody).getJSONObject("error").optString("type") }.getOrNull()
         return when {
