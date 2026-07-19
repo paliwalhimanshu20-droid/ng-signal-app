@@ -112,6 +112,25 @@ data class ChatMessage(
     val language: String? = null, // set only when kind == CODE_BLOCK
     val timestamp: Instant,
     val sessionId: String = ChatSession.DEFAULT_SESSION_ID,
+    /**
+     * Sprint 16 "Executive Conversation UI": which connector tool(s), if
+     * any, actually produced the real data behind this reply -- set by
+     * JarvisCore from IntentRouter's own classification, never guessed
+     * from the LLM's text afterward (parsing a reply to infer its
+     * source would be exactly the kind of fragile heuristic this
+     * codebase's "no fake success" discipline avoids elsewhere). Empty
+     * for a plain conversational reply, the owner's own message, or a
+     * briefing/orchestration reply. This is the one small, additive,
+     * backward-compatible (default empty list) model change this UI
+     * sprint made to stable backend architecture -- see JarvisCore's
+     * sendChatMessage docstring for why it was judged "absolutely
+     * required": no rich "via Google Calendar" indicator or connector-
+     * aware error styling is honestly buildable without JARVIS knowing,
+     * for certain, which tool (if any) actually ran this turn.
+     */
+    val sourceToolIds: List<String> = emptyList(),
+    /** True if at least one of sourceToolIds' tool calls this turn returned ToolResult.Failure -- lets the UI style a message as an honest connector error rather than a plain reply, without re-parsing the LLM's own wording to guess. */
+    val toolFailureOccurred: Boolean = false,
 )
 
 /**
