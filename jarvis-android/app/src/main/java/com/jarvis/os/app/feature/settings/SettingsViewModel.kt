@@ -624,7 +624,7 @@ class SettingsViewModel @Inject constructor(
     fun refreshGoogleWorkspaceStatus() {
         viewModelScope.launch {
             _googleWorkspaceState.value = _googleWorkspaceState.value.copy(actionInProgress = true)
-            googleWorkspaceStatusProvider.refresh()
+            googleWorkspaceStatusProvider.refreshAll()
             val result = googleWorkspaceStatusProvider.status.value
             val error = (result as? com.jarvis.os.app.data.repository.GoogleWorkspaceFetchResult.Failure)?.message
             _googleWorkspaceState.value = loadGoogleWorkspaceState().copy(actionInProgress = false, lastError = error)
