@@ -166,4 +166,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAuthenticationProvider(impl: com.jarvis.os.app.core.security.RealGoogleAuthManager): com.jarvis.os.app.core.security.AuthenticationProvider
+
+    // --- Sprint 14 "Intent Router" ---
+
+    @Binds
+    @Singleton
+    abstract fun bindIntentRouter(impl: com.jarvis.os.app.core.intelligence.KeywordIntentRouter): com.jarvis.os.app.core.intelligence.IntentRouter
 }
