@@ -2,7 +2,10 @@ package com.jarvis.os.app.core.tools.di
 
 import com.jarvis.os.app.core.tools.CalculatorTool
 import com.jarvis.os.app.core.tools.GitHubStatusTool
-import com.jarvis.os.app.core.tools.GoogleWorkspaceTool
+import com.jarvis.os.app.core.tools.GoogleCalendarTool
+import com.jarvis.os.app.core.tools.GoogleDriveTool
+import com.jarvis.os.app.core.tools.GoogleGmailTool
+import com.jarvis.os.app.core.tools.GoogleWorkspaceHealthTool
 import com.jarvis.os.app.core.tools.NgSignalProStatusTool
 import com.jarvis.os.app.core.tools.ProjectNoteTool
 import com.jarvis.os.app.core.tools.StreamlitStatusTool
@@ -39,7 +42,21 @@ abstract class ToolModule {
     @IntoSet
     abstract fun bindStreamlitStatusTool(impl: StreamlitStatusTool): Tool
 
+    // --- Sprint 15 Phase 4: Google Workspace split into four independent capability tools ---
+
     @Binds
     @IntoSet
-    abstract fun bindGoogleWorkspaceTool(impl: GoogleWorkspaceTool): Tool
+    abstract fun bindGoogleCalendarTool(impl: GoogleCalendarTool): Tool
+
+    @Binds
+    @IntoSet
+    abstract fun bindGoogleGmailTool(impl: GoogleGmailTool): Tool
+
+    @Binds
+    @IntoSet
+    abstract fun bindGoogleDriveTool(impl: GoogleDriveTool): Tool
+
+    @Binds
+    @IntoSet
+    abstract fun bindGoogleWorkspaceHealthTool(impl: GoogleWorkspaceHealthTool): Tool
 }
