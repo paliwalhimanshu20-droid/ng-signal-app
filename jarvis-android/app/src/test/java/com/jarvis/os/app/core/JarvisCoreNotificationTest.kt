@@ -84,6 +84,7 @@ class JarvisCoreNotificationTest {
             audit = auditRepo,
             contextManager = ContextManager(ConversationMemoryImpl(memoryRepo), PersonalMemoryImpl(memoryRepo), chatRepo, projectsRepo),
             decisionEngine = JarvisDecisionEngine(toolsRepo, agentRegistry),
+            intentRouter = com.jarvis.os.app.core.intelligence.KeywordIntentRouter(toolsRepo),
             watchTower = WatchTowerOrchestrator(multiAiCoordinator, approvalsRepo),
             briefingEngine = ExecutiveBriefingEngine(
                 projectsRepo, approvalsRepo, notificationsRepo, connectionsRepo, memoryRepo, agentRegistry, FakeNgSignalProStatusProvider(), settingsRepository, com.jarvis.os.app.testutil.FakeGitHubStatusProvider(),
