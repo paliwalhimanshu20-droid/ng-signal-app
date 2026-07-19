@@ -231,8 +231,14 @@ interface ChatRepository {
      * existing test) is source-compatible unchanged; JarvisCore is the
      * only caller that passes a real one, built from
      * ContextManager.buildContext -- see JarvisCore.sendChatMessage.
+     *
+     * Sprint 16 "Executive Conversation UI": [sourceToolIds] and
+     * [hadToolFailure] are stamped onto the resulting JARVIS
+     * ChatMessage unchanged -- see that field's own docstring. Both
+     * default to empty/false so this is source-compatible the same way
+     * contextHint was when it was added.
      */
-    suspend fun sendMessage(text: String, contextHint: String = "")
+    suspend fun sendMessage(text: String, contextHint: String = "", sourceToolIds: List<String> = emptyList(), hadToolFailure: Boolean = false)
 }
 
 /**
@@ -280,7 +286,7 @@ class MockChatRepository @Inject constructor(
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     override val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
-    override suspend fun sendMessage(text: String, contextHint: String) {
+    override suspend fun sendMessage(text: String, contextHint: String, sourceToolIds: List<String>, hadToolFailure: Boolean) {
         val sessionId = activeSessionId
         val userMessage = ChatMessage(
             UUID.randomUUID().toString(), MessageAuthor.OWNER, MessageContentKind.TEXT, text,
@@ -313,11 +319,11 @@ class MockChatRepository @Inject constructor(
         router.active.sendMessage(sessionId, promptForProvider).collect { chunk ->
             when (chunk) {
                 is ChatChunk.Token -> {
-                    upsertReply(replyMessageId, chunk.text, sessionId, alreadyAdded = replyAdded)
+                    upsertReply(replyMessageId, chunk.text, sessionId, alreadyAdded = replyAdded, sourceToolIds = sourceToolIds, hadToolFailure = hadToolFailure)
                     replyAdded = true
                 }
                 is ChatChunk.Complete -> {
-                    upsertReply(replyMessageId, chunk.fullText, sessionId, alreadyAdded = replyAdded)
+                    upsertReply(replyMessageId, chunk.fullText, sessionId, alreadyAdded = replyAdded, sourceToolIds = sourceToolIds, hadToolFailure = hadToolFailure)
                     replyAdded = true
                 }
                 is ChatChunk.Error -> {
@@ -331,10 +337,11 @@ class MockChatRepository @Inject constructor(
         }
     }
 
-    private fun upsertReply(messageId: String, text: String, sessionId: String, alreadyAdded: Boolean) {
+    private fun upsertReply(messageId: String, text: String, sessionId: String, alreadyAdded: Boolean, sourceToolIds: List<String> = emptyList(), hadToolFailure: Boolean = false) {
         val message = ChatMessage(
             messageId, MessageAuthor.JARVIS, MessageContentKind.MARKDOWN, text,
             timestamp = Instant.now(), sessionId = sessionId,
+            sourceToolIds = sourceToolIds, toolFailureOccurred = hadToolFailure,
         )
         _messages.update { current ->
             if (alreadyAdded) current.map { if (it.messageId == messageId) message else it }
