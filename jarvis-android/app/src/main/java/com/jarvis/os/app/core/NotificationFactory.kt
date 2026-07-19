@@ -58,6 +58,12 @@ object NotificationFactory {
         is CoreEvent.ChatResponseReceived -> null
         is CoreEvent.TaskStatusChanged -> null
         is CoreEvent.ToolExecuted -> fromToolExecuted(event)
+        // Sprint 15: same reasoning as ChatMessageSent above -- a tool
+        // starting is an in-progress signal the chat UI shows live
+        // (ChatViewModel), not something worth a Notification once it's
+        // over; ToolExecuted (the completion event) already covers the
+        // notification-worthy outcome.
+        is CoreEvent.ToolStarted -> null
     }
 
     private fun fromToolExecuted(event: CoreEvent.ToolExecuted): Notification {

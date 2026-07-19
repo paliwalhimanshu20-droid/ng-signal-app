@@ -4,6 +4,8 @@ import com.jarvis.os.app.core.agents.WatchTowerOrchestrator
 import com.jarvis.os.app.core.intelligence.ContextManager
 import com.jarvis.os.app.core.intelligence.ExecutiveBriefing
 import com.jarvis.os.app.core.intelligence.ExecutiveBriefingEngine
+import com.jarvis.os.app.core.intelligence.IntentClassification
+import com.jarvis.os.app.core.intelligence.IntentRouter
 import com.jarvis.os.app.core.intelligence.JarvisDecision
 import com.jarvis.os.app.core.intelligence.JarvisDecisionEngine
 import com.jarvis.os.app.core.tools.ToolResult
@@ -126,6 +128,7 @@ class JarvisCore @Inject constructor(
     val audit: AuditRepository,
     private val contextManager: ContextManager,
     private val decisionEngine: JarvisDecisionEngine,
+    private val intentRouter: IntentRouter,
     val watchTower: WatchTowerOrchestrator,
     val briefingEngine: ExecutiveBriefingEngine,
     @ApplicationScope private val appScope: CoroutineScope,
@@ -323,6 +326,9 @@ class JarvisCore @Inject constructor(
     // Connections and Approvals above.
 
     suspend fun runTool(toolId: String, input: String, approvalId: String? = null): ToolResult {
+        val toolName = tools.discover().firstOrNull { it.toolId == toolId }?.name ?: toolId
+        publish(CoreEvent.ToolStarted(toolId, toolName))
+
         val result = tools.execute(toolId, input, approvalId)
         val (success, summary) = when (result) {
             is ToolResult.Success -> true to result.output
@@ -359,20 +365,31 @@ class JarvisCore @Inject constructor(
      * gets sent to ChatRepository.sendMessage, not the event-publishing
      * shape around it.
      *
-     * Routes to exactly one of three things, in priority order, based
-     * on JarvisDecisionEngine.decide(text):
+     * Routes to exactly one of four things, in priority order:
      *  1. needsBriefing -> ExecutiveBriefingEngine (Phase 3) -- a status
      *     roundup, not a reply about the owner's specific words.
      *  2. needsOrchestration -> WatchTowerOrchestrator.requestConvene
      *     (Phase 2) -- always creates a pending approval, never runs a
      *     specialist from this call (see that class's docstring).
-     *  3. otherwise -> the Phase 1 conversational context hint: recalled
+     *  3. Sprint 14 "Intent Router" (extended Sprint 15 for multi-tool):
+     *     IntentRouter.classifyAll(text) names every real toolId the
+     *     message matches (zero, one, or several of the connector
+     *     tools) -> every matched tool actually runs (via runTool, so
+     *     each is still audited/CoreEvent'd exactly like a
+     *     Tools-screen-triggered run) and their real, combined output
+     *     is what the ChatProvider sees -- see
+     *     buildToolBackedContextHint's own docstring for why this is
+     *     safe to auto-run where JarvisDecisionEngine.matchedTool
+     *     deliberately is not.
+     *  4. otherwise -> the Phase 1 conversational context hint: recalled
      *     memory/conversation (ContextManager, consulted every turn --
      *     Phase 3's "no repeated explanations" means memory is never
      *     conditional on a keyword), project status if relevant, and an
      *     honest, non-executing note about any tool or agent the
      *     message named (see buildConversationalContextHint's own
-     *     docstring for why matched tools/agents are never auto-run).
+     *     docstring for why matched tools/agents are never auto-run --
+     *     that reasoning is exactly what step 3 above is a narrow,
+     *     justified exception to, not a change to).
      *
      * The owner's own chat bubble is unaffected by any of this --
      * ChatRepository.sendMessage's contextHint parameter augments only
@@ -383,13 +400,15 @@ class JarvisCore @Inject constructor(
         publish(CoreEvent.ChatMessageSent(chat.activeSessionId, text))
 
         val decision = decisionEngine.decide(text)
-        val contextHint = when {
-            decision.needsBriefing -> renderBriefing(briefingEngine.generateMorningBriefing())
-            decision.needsOrchestration -> renderOrchestrationRequest(text)
-            else -> buildConversationalContextHint(text, decision)
+        val classification = intentRouter.classifyAll(text)
+        val outcome = when {
+            decision.needsBriefing -> ChatRoutingOutcome(renderBriefing(briefingEngine.generateMorningBriefing()))
+            decision.needsOrchestration -> ChatRoutingOutcome(renderOrchestrationRequest(text))
+            classification.isNotEmpty() -> buildToolBackedContextHint(text, decision, classification)
+            else -> ChatRoutingOutcome(buildConversationalContextHint(text, decision))
         }
 
-        chat.sendMessage(text, contextHint)
+        chat.sendMessage(text, outcome.contextHint, outcome.sourceToolIds, outcome.hadToolFailure)
         chat.messages.value.lastOrNull()?.let { lastMessage ->
             publish(CoreEvent.ChatResponseReceived(chat.activeSessionId, lastMessage.messageId))
         }
@@ -423,13 +442,14 @@ class JarvisCore @Inject constructor(
 
     /**
      * Phase 1 + Phase 4: what the ChatProvider actually sees this turn
-     * when neither a briefing nor an orchestration request was asked
-     * for. Recalled memory and active conversation from ContextManager
-     * come first and unconditionally (Phase 3's "no repeated
-     * explanations" -- consulted every turn, not gated behind a
-     * keyword), followed by project status only when the message
-     * actually needs it, followed by a natural mention of any tool or
-     * agent JarvisDecisionEngine matched.
+     * when neither a briefing, an orchestration request, nor a Sprint
+     * 14 tool-backed answer (see buildToolBackedContextHint) applies.
+     * Recalled memory and active conversation from ContextManager come
+     * first and unconditionally (Phase 3's "no repeated explanations"
+     * -- consulted every turn, not gated behind a keyword), followed by
+     * project status only when the message actually needs it, followed
+     * by a natural mention of any tool or agent JarvisDecisionEngine
+     * matched.
      *
      * A matched tool or agent is named, never run or dispatched, for
      * either risk level: there is no reliable, deterministic way to
@@ -445,6 +465,108 @@ class JarvisCore @Inject constructor(
      * of an ordinary message that happened to mention an agent's name.
      */
     private suspend fun buildConversationalContextHint(text: String, decision: JarvisDecision): String {
+        val parts = buildBaseContextParts(text, decision)
+        decision.matchedTool?.let { tool ->
+            parts += "${tool.name} looks relevant here -- it's available from the Tools screen whenever you'd like to run it"
+        }
+        decision.matchedAgent?.let { agent ->
+            parts += "${agent.name} specializes in ${agent.specialty.lowercase()} and could weigh in if you'd like to bring the team in"
+        }
+
+        return if (parts.isEmpty()) "" else parts.joinToString(". ") + "."
+    }
+
+    /**
+     * Sprint 16 "Executive Conversation UI": the one carrier this sprint
+     * added so the UI can show a real, verified "via Google Calendar"
+     * indicator (or connector-aware error styling) instead of guessing
+     * from the LLM's own wording after the fact. contextHint is exactly
+     * what used to be the bare String return of this method and
+     * buildConversationalContextHint; sourceToolIds/hadToolFailure are
+     * new, both defaulting to "nothing tool-backed happened this turn"
+     * so briefing/orchestration/plain-conversation replies are
+     * unaffected.
+     */
+    private data class ChatRoutingOutcome(
+        val contextHint: String,
+        val sourceToolIds: List<String> = emptyList(),
+        val hadToolFailure: Boolean = false,
+    )
+
+    /**
+     * Sprint 14 "Intent Router": the actual fix for chat not being able
+     * to answer "can you check my calendar" despite GoogleWorkspaceTool
+     * existing and being connected. Shares the same memory/project base
+     * as buildConversationalContextHint (an owner asking about their
+     * calendar still benefits from recalled context, same as any other
+     * message), but replaces the "name it, don't run it" matchedTool
+     * line with the tool's REAL output -- runTool is called here, not
+     * ToolRepository.execute directly, so this still publishes
+     * CoreEvent.ToolStarted/ToolExecuted and lands in the audit log
+     * exactly like a Tools-screen-triggered run (see runTool's own
+     * docstring).
+     *
+     * Sprint 15 Executive Integration Audit item 1 "Multi-tool
+     * Requests": runs EVERY classification IntentRouter.classifyAll
+     * returned, not just the first -- "do I have meetings today and any
+     * important unread emails" now actually runs both
+     * GoogleCalendarTool and GoogleGmailTool and folds both real
+     * results into the same context hint, sequentially (each is its own
+     * runTool call, its own ToolStarted/ToolExecuted pair, its own
+     * audit entry). A compound question gets a compound, honest answer
+     * instead of the first-matched tool silently winning and the rest
+     * of the question going unaddressed with no signal to anyone that
+     * happened.
+     *
+     * Every branch (Success and Failure, for every matched tool) tells
+     * the ChatProvider the real outcome and instructs it to relay that
+     * naturally -- a Failure (e.g. "Google Workspace isn't connected
+     * yet") must never be smoothed over into a generic "I don't have
+     * access" reply, since that would misrepresent a temporary/fixable
+     * state as a permanent capability gap. The trailing instruction
+     * covers the remaining edge this audit's item 1 also asks for: if
+     * the owner asked about something none of the matched tools
+     * actually cover, the model is told to say so honestly rather than
+     * guessing -- this is what keeps a *partially* multi-tool answer
+     * from silently becoming a *falsely complete* one.
+     *
+     * Sprint 16: now returns ChatRoutingOutcome instead of a bare
+     * String -- toolIds/hadFailure are the real facts of what just
+     * happened, computed here where the actual runTool calls are, never
+     * reconstructed later by guessing.
+     */
+    private suspend fun buildToolBackedContextHint(text: String, decision: JarvisDecision, classifications: List<IntentClassification>): ChatRoutingOutcome {
+        val parts = buildBaseContextParts(text, decision)
+        val toolIds = classifications.mapNotNull { it.toolId }.distinct()
+        if (toolIds.isEmpty()) return ChatRoutingOutcome(buildConversationalContextHint(text, decision))
+
+        var hadFailure = false
+        for (toolId in toolIds) {
+            val result = runTool(toolId, text)
+            parts += when (result) {
+                is ToolResult.Success ->
+                    "Real, current data for this: ${result.output}."
+                is ToolResult.Failure -> {
+                    hadFailure = true
+                    "Attempted to check this just now but it failed: ${result.message}."
+                }
+            }
+        }
+        parts += if (toolIds.size > 1) {
+            "Answer the owner's question naturally using all of the above -- do not say you lack the ability to check any of it, you just checked each part. " +
+                "If the owner asked about something none of the above covers, say so honestly rather than guessing."
+        } else {
+            "Answer the owner's question naturally using this data -- do not say you lack the ability to check this, you just did."
+        }
+        decision.matchedAgent?.let { agent ->
+            parts += "${agent.name} specializes in ${agent.specialty.lowercase()} and could weigh in if you'd like to bring the team in"
+        }
+
+        return ChatRoutingOutcome(parts.joinToString(". ") + ".", toolIds, hadFailure)
+    }
+
+    /** Shared by buildConversationalContextHint and buildToolBackedContextHint -- recalled memory/conversation (unconditional every turn) plus project status when relevant. Neither tool-naming nor tool-running belongs here; each caller appends its own version of that. */
+    private suspend fun buildBaseContextParts(text: String, decision: JarvisDecision): MutableList<String> {
         val context = contextManager.buildContext(sessionId = chat.activeSessionId, query = text)
         val parts = mutableListOf<String>()
 
@@ -460,14 +582,7 @@ class JarvisCore @Inject constructor(
             }
             parts += summary
         }
-        decision.matchedTool?.let { tool ->
-            parts += "${tool.name} looks relevant here -- it's available from the Tools screen whenever you'd like to run it"
-        }
-        decision.matchedAgent?.let { agent ->
-            parts += "${agent.name} specializes in ${agent.specialty.lowercase()} and could weigh in if you'd like to bring the team in"
-        }
-
-        return if (parts.isEmpty()) "" else parts.joinToString(". ") + "."
+        return parts
     }
 
     /**

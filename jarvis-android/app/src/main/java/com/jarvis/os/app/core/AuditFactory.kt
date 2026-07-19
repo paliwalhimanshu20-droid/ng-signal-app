@@ -25,7 +25,7 @@ object AuditFactory {
         is CoreEvent.ConnectionStatusChanged -> "Connection"
         is CoreEvent.ChatMessageSent, is CoreEvent.ChatResponseReceived -> "Chat"
         is CoreEvent.TaskStatusChanged -> "Task"
-        is CoreEvent.ToolExecuted -> "Tool"
+        is CoreEvent.ToolExecuted, is CoreEvent.ToolStarted -> "Tool"
     }
 
     private fun CoreEvent.summaryLabel(): String = when (this) {
@@ -36,5 +36,6 @@ object AuditFactory {
         is CoreEvent.ChatResponseReceived -> "Response received in session $sessionId"
         is CoreEvent.TaskStatusChanged -> "Task $taskId marked ${if (done) "done" else "not done"}"
         is CoreEvent.ToolExecuted -> "Tool '$toolId' ${if (success) "succeeded" else "failed"}: $summary"
+        is CoreEvent.ToolStarted -> "Tool '$toolId' ($toolName) started"
     }
 }

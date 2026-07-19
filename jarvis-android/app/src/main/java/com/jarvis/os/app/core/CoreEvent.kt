@@ -55,4 +55,7 @@ sealed interface CoreEvent {
 
     /** Sprint 10: published by JarvisCore.runTool after every tool execution attempt (success or failure) -- see that method's docstring for why tool execution goes through Core rather than callers hitting ToolRepository directly. */
     data class ToolExecuted(val toolId: String, val success: Boolean, val summary: String) : CoreEvent
+
+    /** Sprint 15 Executive Integration Audit, item 2 "Tool Execution Feedback": published BEFORE a tool runs, not after -- the one signal that lets a UI show "Checking your calendar..." instead of the owner staring at a blank turn while GoogleCalendarTool's real network call is in flight. See ChatViewModel's collector for the actual UI wiring. */
+    data class ToolStarted(val toolId: String, val toolName: String) : CoreEvent
 }
