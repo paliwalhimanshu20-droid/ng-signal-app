@@ -2,8 +2,11 @@ package com.jarvis.os.app.core.tools
 
 import com.jarvis.os.app.data.model.RiskLevel
 import com.jarvis.os.app.data.model.ToolDefinition
+import com.jarvis.os.app.data.repository.CalendarFetchResult
+import com.jarvis.os.app.data.repository.DriveFetchResult
 import com.jarvis.os.app.data.repository.GitHubFetchResult
 import com.jarvis.os.app.data.repository.GitHubStatusProvider
+import com.jarvis.os.app.data.repository.GmailFetchResult
 import com.jarvis.os.app.data.repository.GoogleWorkspaceFetchResult
 import com.jarvis.os.app.data.repository.GoogleWorkspaceStatusProvider
 import com.jarvis.os.app.data.repository.NgSignalProStatusProvider
@@ -15,27 +18,34 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Sprint 13 "Connected Intelligence Platform": four LOW-risk (read-only,
+ * Sprint 13 "Connected Intelligence Platform": LOW-risk (read-only,
  * never approval-gated -- see ToolDefinition.requiresApproval) tools,
- * one per connector, bound into the same Tool Framework CalculatorTool
- * uses (Sprint 10). This is deliberately the integration point for
- * "Executive Questions" rather than a separate NLP layer: JARVIS's
- * chat pipeline already discovers and calls Tool instances through
- * ToolRepository, so a connector becoming chat-answerable is "write a
- * Tool, bind it" -- the same swap point every other capability in this
- * codebase uses, not a bespoke question-router this sprint would have
- * to maintain in parallel.
+ * bound into the same Tool Framework CalculatorTool uses (Sprint 10).
+ * This is deliberately the integration point for "Executive Questions"
+ * rather than a separate NLP layer: JARVIS's chat pipeline already
+ * discovers and calls Tool instances through ToolRepository, so a
+ * connector becoming chat-answerable is "write a Tool, bind it" -- the
+ * same swap point every other capability in this codebase uses.
  *
- * Each tool does simple keyword matching on the raw input text against
- * this sprint's own listed executive questions (e.g. "any failed
- * workflows", "what changed today") -- deterministic, not an LLM call,
- * matching CalculatorTool's own "no third-party dependency, verify
- * what this sandbox can actually run" preference. It reads whatever
- * the underlying *StatusProvider already fetched (calling refresh()
- * first so the answer is current) and reports the real fields on that
- * status -- never a fabricated number for something the provider
- * itself cannot honestly know (see NgSignalProStatusTool below for the
- * clearest example of that limit).
+ * Sprint 15 "Executive Intelligence Completion" Phase 4 splits what was
+ * one monolithic GoogleWorkspaceTool into four independent capability
+ * tools (Calendar, Gmail, Drive, Health) below -- JARVIS now treats
+ * "check my calendar" and "check my email" as different capabilities
+ * with different toolIds, not one tool re-parsing the same message a
+ * second time internally (that re-parsing was Phase 3's duplicate-
+ * classification bug). Each tool also now carries its own
+ * triggerKeywords (Phase 8) -- IntentRouter has no per-connector
+ * table of its own; it just asks every registered tool "do you want
+ * this message" via that field.
+ *
+ * Each tool still does simple keyword matching on the raw input text
+ * for its OWN internal sub-questions (e.g. GitHubStatusTool deciding
+ * "failed workflows" vs "recent commits" once IT has already been
+ * selected) -- deterministic, not an LLM call, matching CalculatorTool's
+ * own "no third-party dependency, verify what this sandbox can actually
+ * run" preference. That's a different, narrower kind of matching than
+ * routing decides which tool to run at all -- see IntentRouter's own
+ * docstring for that distinction.
  */
 @Singleton
 class GitHubStatusTool @Inject constructor(
@@ -46,6 +56,11 @@ class GitHubStatusTool @Inject constructor(
         name = "GitHub Status",
         description = "Answers questions about the connected GitHub repository: failed workflows, what changed today, open PRs, recent commits.",
         riskLevel = RiskLevel.LOW,
+        triggerKeywords = setOf(
+            "github", "pull request", "pull requests", "open pr", "workflow run", "workflow status",
+            "failed workflow", "ci status", "build status", "github actions", "my repo", "repo status",
+            "my commits", "recent commits", "what changed", "my issues", "open issues",
+        ),
     )
 
     override suspend fun execute(input: String): ToolResult {
@@ -95,6 +110,11 @@ class NgSignalProStatusTool @Inject constructor(
         name = "NG Signal Pro Status",
         description = "Answers questions about NG Signal Pro's scanner, warehouse, and alert pipeline health via GitHub Actions run status.",
         riskLevel = RiskLevel.LOW,
+        triggerKeywords = setOf(
+            "ng signal", "signal pro", "scanner healthy", "scanner status", "scanner running",
+            "warehouse sync", "warehouse status", "warehouse updated", "live trades", "any trades",
+            "trading signal", "trading signals",
+        ),
     )
 
     override suspend fun execute(input: String): ToolResult {
@@ -130,6 +150,11 @@ class StreamlitStatusTool @Inject constructor(
         name = "Streamlit Status",
         description = "Checks whether the deployed Streamlit app (NG Signal Pro's dashboard) is reachable and how it's responding.",
         riskLevel = RiskLevel.LOW,
+        triggerKeywords = setOf(
+            "streamlit", "deployment healthy", "deployment status", "deployment problems",
+            "dashboard reachable", "dashboard up", "dashboard status", "app healthy",
+            "open ng signal pro", "open the dashboard",
+        ),
     )
 
     override suspend fun execute(input: String): ToolResult {
@@ -146,37 +171,132 @@ class StreamlitStatusTool @Inject constructor(
     }
 }
 
+// --- Google Workspace: four independent capabilities, Sprint 15 Phase 4 ---
+// All four share RealGoogleWorkspaceStatusProvider (OAuth/token store/HTTP
+// client are genuinely one thing underneath -- see that class's docstring),
+// but each calls only the ONE provider method its own capability needs
+// (Phase 5), and each owns its own triggerKeywords (Phase 8) so
+// IntentRouter routes "check my calendar" straight to GoogleCalendarTool
+// without ever touching Gmail or Drive.
+
 @Singleton
-class GoogleWorkspaceTool @Inject constructor(
+class GoogleCalendarTool @Inject constructor(
     private val provider: GoogleWorkspaceStatusProvider,
 ) : Tool {
     override val definition = ToolDefinition(
-        toolId = "google_workspace_status",
-        name = "Google Workspace",
-        description = "Answers questions about today's calendar and important unread emails via Gmail and Calendar.",
+        toolId = "google_calendar",
+        name = "Google Calendar",
+        description = "Answers questions about today's calendar: what's on, the next meeting, whether you're free.",
         riskLevel = RiskLevel.LOW,
+        triggerKeywords = setOf(
+            "calendar", "agenda", "my meetings", "meetings today", "meetings", "any meetings",
+            "schedule for today", "my schedule", "today's schedule", "what's on my", "upcoming events",
+            "next meeting", "free this afternoon", "am i free", "am i busy",
+        ),
     )
 
     override suspend fun execute(input: String): ToolResult {
-        provider.refresh()
-        val result = provider.status.value
-        return when (result) {
-            null -> ToolResult.Failure("Google Workspace status hasn't been fetched yet.")
-            is GoogleWorkspaceFetchResult.Failure -> ToolResult.Failure(result.message)
-            is GoogleWorkspaceFetchResult.Success -> {
-                val status = result.status
+        return when (val result = provider.getTodaysEvents()) {
+            is CalendarFetchResult.Failure -> ToolResult.Failure(result.message)
+            is CalendarFetchResult.Success -> {
+                val events = result.events
                 val q = input.lowercase()
                 val output = when {
-                    "calendar" in q || "agenda" in q || "meeting" in q ->
-                        if (status.todaysEvents.isEmpty()) "Nothing on the calendar today."
-                        else "Today: " + status.todaysEvents.joinToString { "${it.title} at ${it.startTime}" }
-                    "email" in q || "mail" in q || "inbox" in q ->
-                        if (status.importantEmails.isEmpty()) "No important unread email (${status.unreadEmailCount} unread total)."
-                        else "${status.unreadEmailCount} unread. Important: " + status.importantEmails.joinToString { "\"${it.subject}\" from ${it.from}" }
-                    else -> "${status.todaysEvents.size} event(s) today, ${status.unreadEmailCount} unread email(s)."
+                    "next meeting" in q || "next event" in q ->
+                        events.firstOrNull()?.let { "Your next meeting today: ${it.title} at ${it.startTime}." }
+                            ?: "No meetings left today."
+                    "free" in q ->
+                        if (events.isEmpty()) "You're free all day today."
+                        else "You have ${events.size} event(s) today, so not fully free: " + events.joinToString { "${it.title} at ${it.startTime}" }
+                    else ->
+                        if (events.isEmpty()) "Nothing on the calendar today."
+                        else "Today: " + events.joinToString { "${it.title} at ${it.startTime}" }
                 }
                 ToolResult.Success(output)
             }
+        }
+    }
+}
+
+@Singleton
+class GoogleGmailTool @Inject constructor(
+    private val provider: GoogleWorkspaceStatusProvider,
+) : Tool {
+    override val definition = ToolDefinition(
+        toolId = "google_gmail",
+        name = "Gmail",
+        description = "Answers questions about unread and important email.",
+        riskLevel = RiskLevel.LOW,
+        triggerKeywords = setOf(
+            "gmail", "my email", "my inbox", "unread mail", "unread email", "important email",
+            "email summary", "summarize my email", "summarize my emails", "inbox summary",
+            "new emails", "any emails",
+        ),
+    )
+
+    override suspend fun execute(input: String): ToolResult {
+        return when (val result = provider.getUnreadEmails()) {
+            is GmailFetchResult.Failure -> ToolResult.Failure(result.message)
+            is GmailFetchResult.Success -> ToolResult.Success(
+                if (result.importantEmails.isEmpty()) "No important unread email (${result.unreadCount} unread total)."
+                else "${result.unreadCount} unread. Important: " + result.importantEmails.joinToString { "\"${it.subject}\" from ${it.from}" },
+            )
+        }
+    }
+}
+
+@Singleton
+class GoogleDriveTool @Inject constructor(
+    private val provider: GoogleWorkspaceStatusProvider,
+) : Tool {
+    override val definition = ToolDefinition(
+        toolId = "google_drive",
+        name = "Google Drive",
+        description = "Answers questions about recent Drive files.",
+        riskLevel = RiskLevel.LOW,
+        triggerKeywords = setOf(
+            "google drive", "my drive", "drive files", "recent documents", "recent files",
+            "latest files", "latest documents", "my files", "search drive",
+        ),
+    )
+
+    override suspend fun execute(input: String): ToolResult {
+        return when (val result = provider.getRecentDriveFiles()) {
+            is DriveFetchResult.Failure -> ToolResult.Failure(result.message)
+            is DriveFetchResult.Success -> ToolResult.Success(
+                if (result.recentFiles.isEmpty()) "No recent Drive files found."
+                else "Recent Drive files: " + result.recentFiles.joinToString { it.name },
+            )
+        }
+    }
+}
+
+@Singleton
+class GoogleWorkspaceHealthTool @Inject constructor(
+    private val provider: GoogleWorkspaceStatusProvider,
+) : Tool {
+    override val definition = ToolDefinition(
+        toolId = "google_workspace_health",
+        name = "Google Workspace Health",
+        description = "Reports whether Google Workspace is connected and a combined snapshot across Calendar, Gmail, and Drive.",
+        riskLevel = RiskLevel.LOW,
+        triggerKeywords = setOf(
+            "is google connected", "google connected", "google workspace connected",
+            "workspace connected", "reconnect google", "google workspace health", "workspace status",
+            "workspace healthy", "is google workspace",
+        ),
+    )
+
+    override suspend fun execute(input: String): ToolResult {
+        provider.refreshAll()
+        return when (val result = provider.status.value) {
+            null -> ToolResult.Failure("Google Workspace status hasn't been checked yet.")
+            is GoogleWorkspaceFetchResult.Failure -> ToolResult.Failure(result.message)
+            is GoogleWorkspaceFetchResult.Success -> ToolResult.Success(
+                "Google Workspace is connected as ${result.status.accountEmail}. " +
+                    "${result.status.todaysEvents.size} event(s) today, ${result.status.unreadEmailCount} unread email(s), " +
+                    "${result.status.recentDriveFiles.size} recent Drive file(s).",
+            )
         }
     }
 }
