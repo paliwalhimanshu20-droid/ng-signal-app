@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,6 +56,7 @@ import com.jarvis.os.app.data.model.MessageContentKind
 import com.jarvis.os.app.core.chat.markdown.MarkdownText
 import com.jarvis.os.app.data.settings.SettingsRepository
 import com.jarvis.os.app.designsystem.JarvisSpacing
+import com.jarvis.os.app.designsystem.JarvisStatusColors
 import com.jarvis.os.app.designsystem.components.JarvisCard
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -103,6 +106,10 @@ class ChatViewModel @Inject constructor(
     private val _isTyping = MutableStateFlow(false)
     val isTyping: StateFlow<Boolean> = _isTyping.asStateFlow()
 
+    /** Sprint 15 Executive Integration Audit item 2 "Tool Execution Feedback": non-null while a tool is actually running (set on CoreEvent.ToolStarted, cleared with isTyping on ChatResponseReceived) -- what lets the UI show "Checking your calendar..." instead of a generic "thinking" spinner while GoogleCalendarTool's real network call is in flight. */
+    private val _workingOnLabel = MutableStateFlow<String?>(null)
+    val workingOnLabel: StateFlow<String?> = _workingOnLabel.asStateFlow()
+
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
@@ -118,13 +125,25 @@ class ChatViewModel @Inject constructor(
      * session naturally overlaps with typing briefly): Listening and
      * Speaking are momentary and explicit, so they take priority over
      * the ambient isTyping-derived Thinking state.
+     *
+     * Sprint 16 "Executive Conversation UI" Phase 8: workingOnLabel
+     * non-null (a real CoreEvent.ToolStarted fired, a connector is
+     * actually mid-network-call) now maps to the existing Working
+     * state instead of the generic Thinking one -- reusing
+     * JarvisAvatarState's current enum rather than adding a new
+     * Searching/Analyzing case per this sprint's own "use existing
+     * avatar capabilities where possible" instruction. Checked before
+     * Thinking in priority order: every tool-backed turn is also
+     * isTyping=true, so without this ordering Thinking would always
+     * win and Working would never actually show.
      */
     val avatarState: StateFlow<com.jarvis.os.app.designsystem.components.JarvisAvatarState> = kotlinx.coroutines.flow.combine(
-        isTyping, _isListening, speechSynthesizer.isSpeaking,
-    ) { typing, listening, speaking ->
+        isTyping, _isListening, speechSynthesizer.isSpeaking, workingOnLabel,
+    ) { typing, listening, speaking, working ->
         when {
             listening -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Listening
             speaking -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Speaking
+            working != null -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Working
             typing -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Thinking
             else -> com.jarvis.os.app.designsystem.components.JarvisAvatarState.Idle
         }
@@ -141,11 +160,27 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             core.events.collect { event ->
-                if (event is CoreEvent.ChatResponseReceived && event.sessionId == core.chat.activeSessionId) {
-                    _isTyping.value = false
+                when {
+                    event is CoreEvent.ChatResponseReceived && event.sessionId == core.chat.activeSessionId -> {
+                        _isTyping.value = false
+                        _workingOnLabel.value = null
+                    }
+                    event is CoreEvent.ToolStarted -> _workingOnLabel.value = friendlyWorkingLabel(event.toolId, event.toolName)
                 }
             }
         }
+    }
+
+    /** Sprint 15 Executive Integration Audit item 2: the exact phrasing this audit's own examples asked for ("Checking your calendar...", "Reading your Gmail...", "Searching Drive..."), falling back to a generic-but-still-specific phrase using the tool's own display name for any connector that doesn't have a hand-tuned line yet -- a new connector is never left with no feedback at all, just a less polished one until someone adds a line here. */
+    private fun friendlyWorkingLabel(toolId: String, toolName: String): String = when (toolId) {
+        "google_calendar" -> "Checking your calendar…"
+        "google_gmail" -> "Reading your Gmail…"
+        "google_drive" -> "Searching Google Drive…"
+        "google_workspace_health" -> "Checking Google Workspace…"
+        "github_status" -> "Checking GitHub…"
+        "ng_signal_pro_status" -> "Checking NG Signal Pro…"
+        "streamlit_status" -> "Checking Streamlit…"
+        else -> "Checking $toolName…"
     }
 
     fun startListening() {
@@ -195,6 +230,7 @@ class ChatViewModel @Inject constructor(
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val messages by viewModel.messages.collectAsState()
     val isTyping by viewModel.isTyping.collectAsState()
+    val workingOnLabel by viewModel.workingOnLabel.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
     val avatarState by viewModel.avatarState.collectAsState()
     var input by remember { mutableStateOf("") }
@@ -284,7 +320,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     }
                 }
                 items(messages, key = { it.messageId }) { message -> MessageBubble(message) }
-                if (isTyping) item { TypingIndicator() }
+                if (isTyping) item { TypingIndicator(label = workingOnLabel ?: "JARVIS is thinking…") }
             }
 
             Row(
@@ -321,30 +357,71 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     }
 }
 
+/**
+ * Sprint 16 "Executive Conversation UI" Phase 4 "Connected System
+ * Indicators" + Phase 5 "Premium Message Presentation" (error
+ * differentiation). Reads message.sourceToolIds/toolFailureOccurred --
+ * real facts JarvisCore stamped on this exact message when it was
+ * built (see ChatMessage's own docstring), never inferred by scanning
+ * the LLM's rendered text afterward.
+ */
+private fun connectedSourceLabel(toolId: String): String = when (toolId) {
+    "google_calendar" -> "Google Calendar"
+    "google_gmail" -> "Gmail"
+    "google_drive" -> "Google Drive"
+    "google_workspace_health" -> "Google Workspace"
+    "github_status" -> "GitHub"
+    "ng_signal_pro_status" -> "NG Signal Pro"
+    "streamlit_status" -> "Streamlit"
+    else -> toolId
+}
+
 @Composable
 private fun MessageBubble(message: ChatMessage) {
     val isOwner = message.author == MessageAuthor.OWNER
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (isOwner) Arrangement.End else Arrangement.Start) {
-        JarvisCard(modifier = Modifier.padding(vertical = JarvisSpacing.xs)) {
-            when (message.kind) {
-                MessageContentKind.CODE_BLOCK -> Text(
-                    message.content,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(JarvisSpacing.sm),
-                )
-                MessageContentKind.MARKDOWN -> MarkdownText(message.content)
-                MessageContentKind.TEXT -> Text(message.content, style = MaterialTheme.typography.bodyMedium)
+        Column(horizontalAlignment = if (isOwner) Alignment.End else Alignment.Start) {
+            if (!isOwner && message.sourceToolIds.isNotEmpty()) {
+                val labels = message.sourceToolIds.joinToString(" · ") { connectedSourceLabel(it) }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 2.dp, start = JarvisSpacing.xs),
+                ) {
+                    Icon(
+                        imageVector = if (message.toolFailureOccurred) Icons.Filled.Warning else Icons.Filled.Link,
+                        contentDescription = null,
+                        tint = if (message.toolFailureOccurred) JarvisStatusColors.Unhealthy else JarvisStatusColors.Healthy,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Text(
+                        "via $labels",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (message.toolFailureOccurred) JarvisStatusColors.Unhealthy else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                }
+            }
+            JarvisCard(modifier = Modifier.padding(vertical = JarvisSpacing.xs)) {
+                when (message.kind) {
+                    MessageContentKind.CODE_BLOCK -> Text(
+                        message.content,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(JarvisSpacing.sm),
+                    )
+                    MessageContentKind.MARKDOWN -> MarkdownText(message.content)
+                    MessageContentKind.TEXT -> Text(message.content, style = MaterialTheme.typography.bodyMedium)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TypingIndicator() {
+private fun TypingIndicator(label: String = "JARVIS is thinking…") {
     Row(verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(modifier = Modifier.padding(end = JarvisSpacing.sm).size(14.dp), strokeWidth = 2.dp)
-        Text("JARVIS is thinking…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
