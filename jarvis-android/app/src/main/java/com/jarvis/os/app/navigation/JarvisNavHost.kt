@@ -8,6 +8,7 @@ import com.jarvis.os.app.feature.aiprovider.AIProviderScreen
 import com.jarvis.os.app.feature.approvals.ApprovalCenterScreen
 import com.jarvis.os.app.feature.chat.ChatScreen
 import com.jarvis.os.app.feature.connections.ConnectionsScreen
+import com.jarvis.os.app.feature.deployment.DeploymentCenterScreen
 import com.jarvis.os.app.feature.home.HomeScreen
 import com.jarvis.os.app.feature.homeautomation.HomeAutomationScreen
 import com.jarvis.os.app.feature.memory.MemoryScreen
@@ -32,5 +33,6 @@ fun JarvisNavHost(navController: NavHostController) {
         composable(JarvisDestination.AIProvider.route) { AIProviderScreen() }
         composable(JarvisDestination.MissionControl.route) { MissionControlScreen(navController) }
         composable(JarvisDestination.WatchTower.route) { WatchTowerScreen() }
+        composable(JarvisDestination.DeploymentCenter.route) { DeploymentCenterScreen() }
     }
 }

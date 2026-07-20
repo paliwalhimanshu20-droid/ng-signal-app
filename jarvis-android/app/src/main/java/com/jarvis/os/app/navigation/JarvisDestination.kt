@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
@@ -37,6 +38,8 @@ sealed class JarvisDestination(val route: String, val label: String, val icon: I
     data object HomeAutomation : JarvisDestination("home_automation", "Home Automation", Icons.Filled.Home)
     data object MissionControl : JarvisDestination("dashboard", "Mission Control", Icons.Filled.Dashboard)
     data object WatchTower : JarvisDestination("watch_tower", "Watch Tower", Icons.Filled.Groups)
+    /** ASDP-001 Phase 1 "Package Intake" -- reached from a Mission Control tile. Only Package Intake is wired behind this route so far; see that feature's own docstring. */
+    data object DeploymentCenter : JarvisDestination("deployment_center", "Deployment Center", Icons.Filled.CloudUpload)
     // "JARVIS Goes Live": reached only by tapping the AI Provider card
     // inside Settings -- deliberately not added to drawerOnlyItems/all
     // below, since it isn't meant to be a separately-discoverable
