@@ -172,4 +172,18 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindIntentRouter(impl: com.jarvis.os.app.core.intelligence.KeywordIntentRouter): com.jarvis.os.app.core.intelligence.IntentRouter
+
+    // --- Code review RC-001/RC-002/RC-003: Build/Deployment/Repository engine abstractions (ASDP-001) ---
+
+    @Binds
+    @Singleton
+    abstract fun bindBuildEngine(impl: com.jarvis.os.app.core.deployment.engines.GitHubActionsBuildEngine): com.jarvis.os.app.core.deployment.engines.BuildEngine
+
+    @Binds
+    @Singleton
+    abstract fun bindDeploymentEngine(impl: com.jarvis.os.app.core.deployment.engines.GitHubApiDeploymentEngine): com.jarvis.os.app.core.deployment.engines.DeploymentEngine
+
+    @Binds
+    @Singleton
+    abstract fun bindRepositoryProvider(impl: com.jarvis.os.app.core.deployment.engines.GitHubRepositoryProvider): com.jarvis.os.app.core.deployment.engines.RepositoryProvider
 }
