@@ -269,6 +269,21 @@ fun MissionControlScreen(navController: androidx.navigation.NavHostController, v
             )
         }
         item {
+            // ASDP-001 Phase 1 "Package Intake": a static tile, not
+            // backed by new MissionControlViewModel state -- there's no
+            // deployment history to summarize yet (that's Phase 12/13
+            // territory), so this just gets the Owner to the import
+            // flow rather than claiming a status this app doesn't have
+            // real data for.
+            MissionControlTile(
+                label = "DEPLOYMENT CENTER",
+                value = "Import a project package",
+                detail = "ASDP-001 Phase 1 -- package analysis only so far",
+                accentColor = JarvisBrand.CoreCyan,
+                onClick = { navController.navigate(com.jarvis.os.app.navigation.JarvisDestination.DeploymentCenter.route) },
+            )
+        }
+        item {
             val dashboard = state.projectDashboard
             MissionControlTile(
                 label = "PROJECTOS",
