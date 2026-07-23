@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Real theming lives in designsystem/Theme.kt (Compose) — this
-         XML theme exists only to satisfy the platform's pre-Compose
-         window/splash requirement, per standard Compose app setup. -->
-    <style name="Theme.Jarvis" parent="android:Theme.Material.Light.NoActionBar" />
-</resources>
