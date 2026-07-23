@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "com.jarvis.os.app-debug-69:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.jarvis.os.app-main-71:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.jarvis.os.app-debug-69:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.jarvis.os.app-main-71:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.jarvis.os.app-debug-69:/drawable_avatar_v1.jpg.flat",
+        "source": "com.jarvis.os.app-main-71:/drawable/avatar_v1.jpg"
+    },
+    {
+        "merged": "com.jarvis.os.app-debug-69:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.jarvis.os.app-main-71:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.jarvis.os.app-debug-69:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.jarvis.os.app-main-71:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    }
+]
