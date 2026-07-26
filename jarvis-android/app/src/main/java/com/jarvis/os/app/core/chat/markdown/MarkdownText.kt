@@ -174,7 +174,7 @@ private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     return blocks
 }
 
-/** Inline styling: **bold**, *italic*/_italic_, `code`, [text](url). Single pass, left to right, no nesting. */
+/** Inline styling: bold (**text**), italic (*text* or _text_), code (`text`), links [text](url). Single pass, left to right, no nesting. */
 private fun renderInline(text: String, baseColor: Color): AnnotatedString = buildAnnotatedString {
     val pattern = Regex(
         """(\*\*(.+?)\*\*)|(\*(.+?)\*)|(_(.+?)_)|(`(.+?)`)|(\[(.+?)]\((.+?)\))"""
