@@ -186,4 +186,28 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindRepositoryProvider(impl: com.jarvis.os.app.core.deployment.engines.GitHubRepositoryProvider): com.jarvis.os.app.core.deployment.engines.RepositoryProvider
+
+    // --- DI audit: these five interfaces each have exactly one real @Inject-constructor
+    // implementation already in the codebase (see each class's own file) but were never bound,
+    // so nothing that depends on them — directly or transitively — could build. ---
+
+    @Binds
+    @Singleton
+    abstract fun bindSpeechToTextController(impl: com.jarvis.os.app.core.voice.AndroidSpeechToTextController): com.jarvis.os.app.core.voice.SpeechToTextController
+
+    @Binds
+    @Singleton
+    abstract fun bindSpeechSynthesizer(impl: com.jarvis.os.app.core.voice.AndroidSpeechSynthesizer): com.jarvis.os.app.core.voice.SpeechSynthesizer
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkflowEngine(impl: com.jarvis.os.app.core.workflow.DefaultWorkflowEngine): com.jarvis.os.app.core.workflow.WorkflowEngine
+
+    @Binds
+    @Singleton
+    abstract fun bindAvatarAssetProvider(impl: com.jarvis.os.app.designsystem.avatar.DrawableAvatarAssetProvider): com.jarvis.os.app.designsystem.avatar.AvatarAssetProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindSecretVault(impl: com.jarvis.os.app.core.security.InMemorySecretVault): com.jarvis.os.app.core.security.SecretVault
 }
