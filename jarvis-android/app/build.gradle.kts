@@ -94,6 +94,15 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
 
+    // JARVIS Trading Intelligence Database (TIDB) — was documented in
+    // build.gradle.dependencies.kts but never actually merged in; that
+    // left every androidx.room.* reference across com.jarvis.tidb
+    // unresolved. Wiring it here for real.
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+    androidTestImplementation(libs.room.testing)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.test.ext.junit)
