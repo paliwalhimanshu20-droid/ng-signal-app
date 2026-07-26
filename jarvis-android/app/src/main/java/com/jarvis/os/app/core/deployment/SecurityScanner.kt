@@ -101,7 +101,19 @@ class SecurityScanner @Inject constructor() {
     }
 
     private fun looksLikeText(path: String): Boolean {
-        val binaryExtensions = setOf("png", "jpg", "jpeg", "gif", "webp", "ico", "bmp", "zip", "jar", "apk", "so", "dll", "exe", "ttf", "otf", "woff", "woff2", "mp3", "mp4", "mov", "pdf", "class")
+        // Root cause of the "large non-text file" test failure: this allowlist named specific
+        // media/library extensions but omitted the generic binary/archive/disk-image extensions
+        // a real deployment archive can contain -- ".bin" (used by the test, and the most
+        // generic "this is a binary file" extension there is) fell through to "looks like
+        // text", which silently skipped scanSize()'s large-binary WARNING for every such file.
+        val binaryExtensions = setOf(
+            "png", "jpg", "jpeg", "gif", "webp", "ico", "bmp",
+            "zip", "jar", "apk", "tar", "gz", "tgz", "bz2", "7z", "rar",
+            "so", "dll", "exe", "o", "a", "lib", "wasm",
+            "ttf", "otf", "woff", "woff2",
+            "mp3", "mp4", "mov", "pdf", "class",
+            "bin", "dat", "iso", "img", "dmg", "db", "sqlite", "sqlite3",
+        )
         val ext = path.substringAfterLast('.', "").lowercase()
         return ext !in binaryExtensions
     }
