@@ -1,5 +1,6 @@
 package com.jarvis.tidb.analytics.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -79,7 +80,7 @@ data class BacktestEntity(
     indices = [
         Index(value = ["uuid"], unique = true),
         Index(value = ["backtestRowId"]),
-        Index(value = ["version"])
+        Index(value = ["configVersion"])
     ]
 )
 data class BacktestConfigurationEntity(
@@ -90,7 +91,9 @@ data class BacktestConfigurationEntity(
 
     val backtestRowId: Long,
 
-    val version: Int = 1,
+    /** Revision counter for this backtest's parameter set — distinct from the embedded [AuditMetadata.version] optimistic-lock counter below. */
+    @ColumnInfo(name = "configVersion")
+    val configVersion: Int = 1,
 
     /** JSON blob of strategy parameters — arbitrary shape owned by the (future) strategy engine. */
     val parametersJson: String,

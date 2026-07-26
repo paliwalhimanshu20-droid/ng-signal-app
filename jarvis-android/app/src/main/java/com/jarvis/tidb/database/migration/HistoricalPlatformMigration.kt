@@ -524,6 +524,7 @@ val MIGRATION_4_5: Migration = object : Migration(4, 5) {
             """.trimIndent()
         )
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_dna_indicator_behavior_profiles_uuid` ON `dna_indicator_behavior_profiles` (`uuid`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_dna_indicator_behavior_profiles_indicatorDefId` ON `dna_indicator_behavior_profiles` (`indicatorDefId`)")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `idx_dna_indicator_behavior_unique` ON `dna_indicator_behavior_profiles` (`instrumentId`, `indicatorDefId`, `timeframe`)")
 
         db.execSQL(

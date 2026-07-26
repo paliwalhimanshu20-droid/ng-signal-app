@@ -186,7 +186,7 @@ data class OptimizationSuggestionEntity(
         Index(value = ["uuid"], unique = true),
         Index(value = ["patternKey"]),
         Index(value = ["confidence"]),
-        Index(value = ["generatedAt"])
+        Index(value = ["firstObservedAt"])
     ]
 )
 data class PatternDiscoveryEntity(

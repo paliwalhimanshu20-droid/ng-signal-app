@@ -43,10 +43,10 @@ interface BacktestConfigurationDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(configuration: BacktestConfigurationEntity): Long
 
-    @Query("SELECT * FROM backtest_configurations WHERE backtestRowId = :backtestRowId ORDER BY version DESC")
+    @Query("SELECT * FROM backtest_configurations WHERE backtestRowId = :backtestRowId ORDER BY configVersion DESC")
     fun observeByBacktest(backtestRowId: Long): Flow<List<BacktestConfigurationEntity>>
 
-    @Query("SELECT * FROM backtest_configurations WHERE backtestRowId = :backtestRowId ORDER BY version DESC LIMIT 1")
+    @Query("SELECT * FROM backtest_configurations WHERE backtestRowId = :backtestRowId ORDER BY configVersion DESC LIMIT 1")
     suspend fun latestForBacktest(backtestRowId: Long): BacktestConfigurationEntity?
 }
 

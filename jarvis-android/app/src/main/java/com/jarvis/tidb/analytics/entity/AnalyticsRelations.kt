@@ -37,7 +37,7 @@ data class BacktestRunWithDetails(
     @Embedded
     val run: BacktestRunEntity,
 
-    @Relation(parentColumn = "runRowId", entityColumn = "rowId", entity = BacktestTradeEntity::class)
+    @Relation(parentColumn = "rowId", entityColumn = "runRowId", entity = BacktestTradeEntity::class)
     val trades: List<BacktestTradeEntity>,
 
     @Relation(parentColumn = "rowId", entityColumn = "runRowId")

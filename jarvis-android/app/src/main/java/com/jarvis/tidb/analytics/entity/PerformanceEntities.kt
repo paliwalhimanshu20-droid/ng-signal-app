@@ -98,7 +98,7 @@ data class PerformanceMetricEntity(
     indices = [
         Index(value = ["uuid"], unique = true),
         Index(value = ["strategyId"], unique = true),
-        Index(value = ["updatedAt"])
+        Index(value = ["recomputedAt"])
     ]
 )
 data class StrategyPerformanceEntity(
@@ -147,7 +147,7 @@ data class StrategyPerformanceEntity(
 
     val maxConsecutiveLosses: Int = 0,
 
-    val updatedAt: Long = System.currentTimeMillis(),
+    val recomputedAt: Long = System.currentTimeMillis(),
 
     @Embedded
     val audit: AuditMetadata = AuditMetadata()
@@ -158,7 +158,7 @@ data class StrategyPerformanceEntity(
     indices = [
         Index(value = ["uuid"], unique = true),
         Index(value = ["instrumentId"], unique = true),
-        Index(value = ["updatedAt"])
+        Index(value = ["recomputedAt"])
     ]
 )
 data class InstrumentPerformanceEntity(
@@ -207,7 +207,7 @@ data class InstrumentPerformanceEntity(
 
     val maxConsecutiveLosses: Int = 0,
 
-    val updatedAt: Long = System.currentTimeMillis(),
+    val recomputedAt: Long = System.currentTimeMillis(),
 
     @Embedded
     val audit: AuditMetadata = AuditMetadata()
@@ -218,7 +218,6 @@ data class InstrumentPerformanceEntity(
     indices = [
         Index(value = ["uuid"], unique = true),
         Index(value = ["yearMonth"], unique = true),
-        Index(value = ["yearMonth"])
     ]
 )
 data class MonthlyPerformanceEntity(

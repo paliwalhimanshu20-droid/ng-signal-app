@@ -65,7 +65,7 @@ data class PortfolioEntity(
 
     val realizedPnl: Double = 0.0,
 
-    val updatedAt: Long = System.currentTimeMillis(),
+    val balanceUpdatedAt: Long = System.currentTimeMillis(),
 
     @Embedded
     val audit: AuditMetadata = AuditMetadata(),
@@ -127,7 +127,7 @@ data class PortfolioPositionEntity(
 
     val closedAt: Long? = null,
 
-    val updatedAt: Long = System.currentTimeMillis(),
+    val positionUpdatedAt: Long = System.currentTimeMillis(),
 
     @Embedded
     val audit: AuditMetadata = AuditMetadata()

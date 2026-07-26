@@ -161,6 +161,7 @@ data class SeasonalTendencyEntity(
     ],
     indices = [
         Index(value = ["uuid"], unique = true),
+        Index(value = ["indicatorDefId"]),
         Index(value = ["instrumentId", "indicatorDefId", "timeframe"], unique = true, name = "idx_dna_indicator_behavior_unique")
     ]
 )
