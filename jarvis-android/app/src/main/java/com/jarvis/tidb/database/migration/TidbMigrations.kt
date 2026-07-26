@@ -29,6 +29,12 @@ import androidx.room.migration.Migration
  */
 object TidbMigrations {
 
-    /** All in-place migrations for [com.jarvis.tidb.database.TradingIntelligenceDatabase], in order. Empty until schema version 5 ships. */
-    val ALL: Array<Migration> = emptyArray()
+    /**
+     * All in-place migrations for [com.jarvis.tidb.database.TradingIntelligenceDatabase], in order.
+     *
+     * v4 -> v5: [MIGRATION_4_5] — Historical Market Data Platform. Purely additive (26 new
+     * tables across ingestion/candle-extensions/quality/indicator/dna/evidence); no existing
+     * table is altered. See docs/database/TRADING-005-Historical-Market-Data-Platform.md.
+     */
+    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5)
 }

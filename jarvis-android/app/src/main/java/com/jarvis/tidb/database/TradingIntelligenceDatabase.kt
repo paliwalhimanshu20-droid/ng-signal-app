@@ -95,6 +95,64 @@ import com.jarvis.tidb.analytics.entity.TradeFeesEntity
 import com.jarvis.tidb.analytics.entity.TradeJournalEntity
 import com.jarvis.tidb.analytics.entity.TradingTimelineEventEntity
 import com.jarvis.tidb.database.migration.TidbMigrations
+// ---- Historical Market Data Platform (schema v5): ingestion ----
+import com.jarvis.tidb.historical.ingestion.dao.DataProviderDao
+import com.jarvis.tidb.historical.ingestion.dao.IngestionCheckpointDao
+import com.jarvis.tidb.historical.ingestion.dao.IngestionJobDao
+import com.jarvis.tidb.historical.ingestion.dao.IngestionJobLogDao
+import com.jarvis.tidb.historical.ingestion.entity.DataProviderEntity
+import com.jarvis.tidb.historical.ingestion.entity.IngestionCheckpointEntity
+import com.jarvis.tidb.historical.ingestion.entity.IngestionJobEntity
+import com.jarvis.tidb.historical.ingestion.entity.IngestionJobLogEntity
+// ---- Historical Market Data Platform: candle extensions ----
+import com.jarvis.tidb.historical.candle.dao.CandleGapDao
+import com.jarvis.tidb.historical.candle.dao.CandleVersionDao
+import com.jarvis.tidb.historical.candle.entity.CandleGapEntity
+import com.jarvis.tidb.historical.candle.entity.CandleVersionEntity
+// ---- Historical Market Data Platform: quality engine ----
+import com.jarvis.tidb.historical.quality.dao.CandleQualityReportDao
+import com.jarvis.tidb.historical.quality.dao.CorporateActionDao
+import com.jarvis.tidb.historical.quality.dao.QualityIssueDao
+import com.jarvis.tidb.historical.quality.entity.CandleQualityReportEntity
+import com.jarvis.tidb.historical.quality.entity.CorporateActionEntity
+import com.jarvis.tidb.historical.quality.entity.QualityIssueEntity
+// ---- Historical Market Data Platform: indicator warehouse ----
+import com.jarvis.tidb.historical.indicator.dao.IndicatorComputationRunDao
+import com.jarvis.tidb.historical.indicator.dao.IndicatorDefinitionDao
+import com.jarvis.tidb.historical.indicator.dao.IndicatorValueDao
+import com.jarvis.tidb.historical.indicator.entity.IndicatorComputationRunEntity
+import com.jarvis.tidb.historical.indicator.entity.IndicatorDefinitionEntity
+import com.jarvis.tidb.historical.indicator.entity.IndicatorValueEntity
+// ---- Historical Market Data Platform: instrument DNA foundation ----
+import com.jarvis.tidb.historical.dna.dao.GapBehaviorProfileDao
+import com.jarvis.tidb.historical.dna.dao.IndicatorBehaviorProfileDao
+import com.jarvis.tidb.historical.dna.dao.LiquidityProfileDao
+import com.jarvis.tidb.historical.dna.dao.SeasonalTendencyDao
+import com.jarvis.tidb.historical.dna.dao.SessionBehaviorProfileDao
+import com.jarvis.tidb.historical.dna.dao.StatisticalCharacteristicsDao
+import com.jarvis.tidb.historical.dna.dao.TrendPersistenceProfileDao
+import com.jarvis.tidb.historical.dna.dao.VolatilityProfileDao
+import com.jarvis.tidb.historical.dna.entity.GapBehaviorProfileEntity
+import com.jarvis.tidb.historical.dna.entity.IndicatorBehaviorProfileEntity
+import com.jarvis.tidb.historical.dna.entity.LiquidityProfileEntity
+import com.jarvis.tidb.historical.dna.entity.SeasonalTendencyEntity
+import com.jarvis.tidb.historical.dna.entity.SessionBehaviorProfileEntity
+import com.jarvis.tidb.historical.dna.entity.StatisticalCharacteristicsEntity
+import com.jarvis.tidb.historical.dna.entity.TrendPersistenceProfileEntity
+import com.jarvis.tidb.historical.dna.entity.VolatilityProfileEntity
+// ---- Historical Market Data Platform: evidence foundation ----
+import com.jarvis.tidb.historical.evidence.dao.ConfidenceComponentDao
+import com.jarvis.tidb.historical.evidence.dao.EvidenceRecordDao
+import com.jarvis.tidb.historical.evidence.dao.MarketObservationDao
+import com.jarvis.tidb.historical.evidence.dao.PatternOccurrenceDao
+import com.jarvis.tidb.historical.evidence.dao.SourceReferenceDao
+import com.jarvis.tidb.historical.evidence.dao.SupportingIndicatorDao
+import com.jarvis.tidb.historical.evidence.entity.ConfidenceComponentEntity
+import com.jarvis.tidb.historical.evidence.entity.EvidenceRecordEntity
+import com.jarvis.tidb.historical.evidence.entity.MarketObservationEntity
+import com.jarvis.tidb.historical.evidence.entity.PatternOccurrenceEntity
+import com.jarvis.tidb.historical.evidence.entity.SourceReferenceEntity
+import com.jarvis.tidb.historical.evidence.entity.SupportingIndicatorEntity
 
 /**
  * TRADING INTELLIGENCE DATABASE v1.0 — the single, unified Room database for JARVIS.
@@ -106,13 +164,18 @@ import com.jarvis.tidb.database.migration.TidbMigrations
  * `docs/database/TRADING-INTELLIGENCE-DATABASE-v1.md` §1–2 for the full rationale and the
  * cross-module `@ForeignKey` upgrades this merge enabled.
  *
- * Schema version **4**: version 1–3 map to the pre-merge per-module schema generations
+ * Schema version **5**: version 1–3 map to the pre-merge per-module schema generations
  * (Module 1 reached v2 internally; this database's version counter restarts the *unified*
  * schema at 4 to leave 1–3 unambiguously reserved for "one of the three legacy per-module
  * databases", so a version number alone is never ambiguous about which physical schema it
  * describes). See [TidbMigrations] and the migration-strategy section of the architecture doc
  * for the one-time legacy-data consolidation path (`LegacyDatabaseConsolidator`) that runs
  * before this database is first opened on an upgrading install.
+ *
+ * v4 -> v5 ([MIGRATION_4_5][com.jarvis.tidb.database.migration.MIGRATION_4_5]) adds the
+ * Historical Market Data Platform: 26 purely-additive tables across six new packages under
+ * `com.jarvis.tidb.historical` (ingestion, candle extensions, quality, indicator, dna,
+ * evidence). See docs/database/TRADING-005-Historical-Market-Data-Platform.md.
  *
  * No destructive fallback — this is the same non-negotiable convention every module has
  * followed since Module 1 Revision 1: every structural change ships an explicit
@@ -171,9 +234,41 @@ import com.jarvis.tidb.database.migration.TidbMigrations
         PortfolioAllocationEntity::class,
         PortfolioRiskEntity::class,
         CapitalMovementEntity::class,
-        PortfolioSnapshotEntity::class
+        PortfolioSnapshotEntity::class,
+        // ---- Historical Market Data Platform (schema v5) — Ingestion Engine ----
+        DataProviderEntity::class,
+        IngestionJobEntity::class,
+        IngestionJobLogEntity::class,
+        IngestionCheckpointEntity::class,
+        // ---- Historical Market Data Platform — Candle Storage extensions ----
+        CandleVersionEntity::class,
+        CandleGapEntity::class,
+        // ---- Historical Market Data Platform — Data Quality Engine ----
+        CandleQualityReportEntity::class,
+        QualityIssueEntity::class,
+        CorporateActionEntity::class,
+        // ---- Historical Market Data Platform — Indicator Warehouse ----
+        IndicatorDefinitionEntity::class,
+        IndicatorValueEntity::class,
+        IndicatorComputationRunEntity::class,
+        // ---- Historical Market Data Platform — Instrument DNA Foundation ----
+        VolatilityProfileEntity::class,
+        SessionBehaviorProfileEntity::class,
+        TrendPersistenceProfileEntity::class,
+        LiquidityProfileEntity::class,
+        GapBehaviorProfileEntity::class,
+        SeasonalTendencyEntity::class,
+        IndicatorBehaviorProfileEntity::class,
+        StatisticalCharacteristicsEntity::class,
+        // ---- Historical Market Data Platform — Evidence Foundation ----
+        MarketObservationEntity::class,
+        EvidenceRecordEntity::class,
+        PatternOccurrenceEntity::class,
+        SupportingIndicatorEntity::class,
+        ConfidenceComponentEntity::class,
+        SourceReferenceEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -238,6 +333,44 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
     abstract fun portfolioRiskDao(): PortfolioRiskDao
     abstract fun capitalMovementDao(): CapitalMovementDao
     abstract fun portfolioSnapshotDao(): PortfolioSnapshotDao
+
+    // ---- Historical Market Data Platform (schema v5): ingestion ----
+    abstract fun dataProviderDao(): DataProviderDao
+    abstract fun ingestionJobDao(): IngestionJobDao
+    abstract fun ingestionJobLogDao(): IngestionJobLogDao
+    abstract fun ingestionCheckpointDao(): IngestionCheckpointDao
+
+    // ---- Historical Market Data Platform: candle extensions ----
+    abstract fun candleVersionDao(): CandleVersionDao
+    abstract fun candleGapDao(): CandleGapDao
+
+    // ---- Historical Market Data Platform: quality engine ----
+    abstract fun candleQualityReportDao(): CandleQualityReportDao
+    abstract fun qualityIssueDao(): QualityIssueDao
+    abstract fun corporateActionDao(): CorporateActionDao
+
+    // ---- Historical Market Data Platform: indicator warehouse ----
+    abstract fun indicatorDefinitionDao(): IndicatorDefinitionDao
+    abstract fun indicatorValueDao(): IndicatorValueDao
+    abstract fun indicatorComputationRunDao(): IndicatorComputationRunDao
+
+    // ---- Historical Market Data Platform: instrument DNA foundation ----
+    abstract fun volatilityProfileDao(): VolatilityProfileDao
+    abstract fun sessionBehaviorProfileDao(): SessionBehaviorProfileDao
+    abstract fun trendPersistenceProfileDao(): TrendPersistenceProfileDao
+    abstract fun liquidityProfileDao(): LiquidityProfileDao
+    abstract fun gapBehaviorProfileDao(): GapBehaviorProfileDao
+    abstract fun seasonalTendencyDao(): SeasonalTendencyDao
+    abstract fun indicatorBehaviorProfileDao(): IndicatorBehaviorProfileDao
+    abstract fun statisticalCharacteristicsDao(): StatisticalCharacteristicsDao
+
+    // ---- Historical Market Data Platform: evidence foundation ----
+    abstract fun marketObservationDao(): MarketObservationDao
+    abstract fun evidenceRecordDao(): EvidenceRecordDao
+    abstract fun patternOccurrenceDao(): PatternOccurrenceDao
+    abstract fun supportingIndicatorDao(): SupportingIndicatorDao
+    abstract fun confidenceComponentDao(): ConfidenceComponentDao
+    abstract fun sourceReferenceDao(): SourceReferenceDao
 
     companion object {
         const val DATABASE_NAME = "jarvis_trading_intelligence.db"

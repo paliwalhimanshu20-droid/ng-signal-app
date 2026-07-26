@@ -31,6 +31,45 @@ import com.jarvis.tidb.database.TradingIntelligenceDatabase
 import com.jarvis.tidb.database.migration.LegacyDatabaseConsolidator
 import com.jarvis.tidb.signals.repository.SignalRepository
 import com.jarvis.tidb.signals.repository.impl.SignalRepositoryImpl
+// ---- Historical Market Data Platform (schema v5) ----
+import com.jarvis.tidb.historical.ingestion.repository.DataProviderRepository
+import com.jarvis.tidb.historical.ingestion.repository.IngestionCheckpointRepository
+import com.jarvis.tidb.historical.ingestion.repository.IngestionJobRepository
+import com.jarvis.tidb.historical.ingestion.repository.impl.DataProviderRepositoryImpl
+import com.jarvis.tidb.historical.ingestion.repository.impl.IngestionCheckpointRepositoryImpl
+import com.jarvis.tidb.historical.ingestion.repository.impl.IngestionJobRepositoryImpl
+import com.jarvis.tidb.historical.candle.repository.CandleGapRepository
+import com.jarvis.tidb.historical.candle.repository.CandleVersionRepository
+import com.jarvis.tidb.historical.candle.repository.impl.CandleGapRepositoryImpl
+import com.jarvis.tidb.historical.candle.repository.impl.CandleVersionRepositoryImpl
+import com.jarvis.tidb.historical.quality.repository.CorporateActionRepository
+import com.jarvis.tidb.historical.quality.repository.QualityReportRepository
+import com.jarvis.tidb.historical.quality.repository.impl.CorporateActionRepositoryImpl
+import com.jarvis.tidb.historical.quality.repository.impl.QualityReportRepositoryImpl
+import com.jarvis.tidb.historical.indicator.repository.IndicatorComputationRunRepository
+import com.jarvis.tidb.historical.indicator.repository.IndicatorDefinitionRepository
+import com.jarvis.tidb.historical.indicator.repository.IndicatorValueRepository
+import com.jarvis.tidb.historical.indicator.repository.impl.IndicatorComputationRunRepositoryImpl
+import com.jarvis.tidb.historical.indicator.repository.impl.IndicatorDefinitionRepositoryImpl
+import com.jarvis.tidb.historical.indicator.repository.impl.IndicatorValueRepositoryImpl
+import com.jarvis.tidb.historical.dna.repository.GapBehaviorProfileRepository
+import com.jarvis.tidb.historical.dna.repository.IndicatorBehaviorProfileRepository
+import com.jarvis.tidb.historical.dna.repository.LiquidityProfileRepository
+import com.jarvis.tidb.historical.dna.repository.SeasonalTendencyRepository
+import com.jarvis.tidb.historical.dna.repository.SessionBehaviorProfileRepository
+import com.jarvis.tidb.historical.dna.repository.StatisticalCharacteristicsRepository
+import com.jarvis.tidb.historical.dna.repository.TrendPersistenceProfileRepository
+import com.jarvis.tidb.historical.dna.repository.VolatilityProfileRepository
+import com.jarvis.tidb.historical.dna.repository.impl.GapBehaviorProfileRepositoryImpl
+import com.jarvis.tidb.historical.dna.repository.impl.IndicatorBehaviorProfileRepositoryImpl
+import com.jarvis.tidb.historical.dna.repository.impl.LiquidityProfileRepositoryImpl
+import com.jarvis.tidb.historical.dna.repository.impl.SeasonalTendencyRepositoryImpl
+import com.jarvis.tidb.historical.dna.repository.impl.SessionBehaviorProfileRepositoryImpl
+import com.jarvis.tidb.historical.dna.repository.impl.StatisticalCharacteristicsRepositoryImpl
+import com.jarvis.tidb.historical.dna.repository.impl.TrendPersistenceProfileRepositoryImpl
+import com.jarvis.tidb.historical.dna.repository.impl.VolatilityProfileRepositoryImpl
+import com.jarvis.tidb.historical.evidence.repository.EvidenceRepository
+import com.jarvis.tidb.historical.evidence.repository.impl.EvidenceRepositoryImpl
 
 /**
  * The single, unified, framework-agnostic manual DI provider for the entire Trading
@@ -68,6 +107,37 @@ object TidbModule {
     @Volatile private var learningRepository: LearningRepository? = null
     @Volatile private var timelineRepository: TimelineRepository? = null
     @Volatile private var portfolioRepository: PortfolioRepository? = null
+
+    // ---- historical: ingestion ----
+    @Volatile private var dataProviderRepository: DataProviderRepository? = null
+    @Volatile private var ingestionJobRepository: IngestionJobRepository? = null
+    @Volatile private var ingestionCheckpointRepository: IngestionCheckpointRepository? = null
+
+    // ---- historical: candle extensions ----
+    @Volatile private var candleVersionRepository: CandleVersionRepository? = null
+    @Volatile private var candleGapRepository: CandleGapRepository? = null
+
+    // ---- historical: quality engine ----
+    @Volatile private var qualityReportRepository: QualityReportRepository? = null
+    @Volatile private var corporateActionRepository: CorporateActionRepository? = null
+
+    // ---- historical: indicator warehouse ----
+    @Volatile private var indicatorDefinitionRepository: IndicatorDefinitionRepository? = null
+    @Volatile private var indicatorValueRepository: IndicatorValueRepository? = null
+    @Volatile private var indicatorComputationRunRepository: IndicatorComputationRunRepository? = null
+
+    // ---- historical: instrument DNA foundation ----
+    @Volatile private var volatilityProfileRepository: VolatilityProfileRepository? = null
+    @Volatile private var sessionBehaviorProfileRepository: SessionBehaviorProfileRepository? = null
+    @Volatile private var trendPersistenceProfileRepository: TrendPersistenceProfileRepository? = null
+    @Volatile private var liquidityProfileRepository: LiquidityProfileRepository? = null
+    @Volatile private var gapBehaviorProfileRepository: GapBehaviorProfileRepository? = null
+    @Volatile private var seasonalTendencyRepository: SeasonalTendencyRepository? = null
+    @Volatile private var indicatorBehaviorProfileRepository: IndicatorBehaviorProfileRepository? = null
+    @Volatile private var statisticalCharacteristicsRepository: StatisticalCharacteristicsRepository? = null
+
+    // ---- historical: evidence foundation ----
+    @Volatile private var evidenceRepository: EvidenceRepository? = null
 
     fun initialize(context: Context) {
         if (database != null) return
@@ -149,6 +219,44 @@ object TidbModule {
                 capitalMovementDao = db.capitalMovementDao(),
                 snapshotDao = db.portfolioSnapshotDao()
             )
+
+            // ---- historical: ingestion ----
+            dataProviderRepository = DataProviderRepositoryImpl(db.dataProviderDao())
+            ingestionJobRepository = IngestionJobRepositoryImpl(db.ingestionJobDao(), db.ingestionJobLogDao())
+            ingestionCheckpointRepository = IngestionCheckpointRepositoryImpl(db.ingestionCheckpointDao())
+
+            // ---- historical: candle extensions ----
+            candleVersionRepository = CandleVersionRepositoryImpl(db.candleVersionDao())
+            candleGapRepository = CandleGapRepositoryImpl(db.candleGapDao())
+
+            // ---- historical: quality engine ----
+            qualityReportRepository = QualityReportRepositoryImpl(db.candleQualityReportDao(), db.qualityIssueDao())
+            corporateActionRepository = CorporateActionRepositoryImpl(db.corporateActionDao())
+
+            // ---- historical: indicator warehouse ----
+            indicatorDefinitionRepository = IndicatorDefinitionRepositoryImpl(db.indicatorDefinitionDao())
+            indicatorValueRepository = IndicatorValueRepositoryImpl(db.indicatorValueDao())
+            indicatorComputationRunRepository = IndicatorComputationRunRepositoryImpl(db.indicatorComputationRunDao())
+
+            // ---- historical: instrument DNA foundation ----
+            volatilityProfileRepository = VolatilityProfileRepositoryImpl(db.volatilityProfileDao())
+            sessionBehaviorProfileRepository = SessionBehaviorProfileRepositoryImpl(db.sessionBehaviorProfileDao())
+            trendPersistenceProfileRepository = TrendPersistenceProfileRepositoryImpl(db.trendPersistenceProfileDao())
+            liquidityProfileRepository = LiquidityProfileRepositoryImpl(db.liquidityProfileDao())
+            gapBehaviorProfileRepository = GapBehaviorProfileRepositoryImpl(db.gapBehaviorProfileDao())
+            seasonalTendencyRepository = SeasonalTendencyRepositoryImpl(db.seasonalTendencyDao())
+            indicatorBehaviorProfileRepository = IndicatorBehaviorProfileRepositoryImpl(db.indicatorBehaviorProfileDao())
+            statisticalCharacteristicsRepository = StatisticalCharacteristicsRepositoryImpl(db.statisticalCharacteristicsDao())
+
+            // ---- historical: evidence foundation ----
+            evidenceRepository = EvidenceRepositoryImpl(
+                observationDao = db.marketObservationDao(),
+                evidenceDao = db.evidenceRecordDao(),
+                patternDao = db.patternOccurrenceDao(),
+                supportingIndicatorDao = db.supportingIndicatorDao(),
+                confidenceComponentDao = db.confidenceComponentDao(),
+                sourceReferenceDao = db.sourceReferenceDao()
+            )
         }
     }
 
@@ -173,4 +281,35 @@ object TidbModule {
     fun learningRepository(): LearningRepository = require(learningRepository)
     fun timelineRepository(): TimelineRepository = require(timelineRepository)
     fun portfolioRepository(): PortfolioRepository = require(portfolioRepository)
+
+    // ---- historical: ingestion ----
+    fun dataProviderRepository(): DataProviderRepository = require(dataProviderRepository)
+    fun ingestionJobRepository(): IngestionJobRepository = require(ingestionJobRepository)
+    fun ingestionCheckpointRepository(): IngestionCheckpointRepository = require(ingestionCheckpointRepository)
+
+    // ---- historical: candle extensions ----
+    fun candleVersionRepository(): CandleVersionRepository = require(candleVersionRepository)
+    fun candleGapRepository(): CandleGapRepository = require(candleGapRepository)
+
+    // ---- historical: quality engine ----
+    fun qualityReportRepository(): QualityReportRepository = require(qualityReportRepository)
+    fun corporateActionRepository(): CorporateActionRepository = require(corporateActionRepository)
+
+    // ---- historical: indicator warehouse ----
+    fun indicatorDefinitionRepository(): IndicatorDefinitionRepository = require(indicatorDefinitionRepository)
+    fun indicatorValueRepository(): IndicatorValueRepository = require(indicatorValueRepository)
+    fun indicatorComputationRunRepository(): IndicatorComputationRunRepository = require(indicatorComputationRunRepository)
+
+    // ---- historical: instrument DNA foundation ----
+    fun volatilityProfileRepository(): VolatilityProfileRepository = require(volatilityProfileRepository)
+    fun sessionBehaviorProfileRepository(): SessionBehaviorProfileRepository = require(sessionBehaviorProfileRepository)
+    fun trendPersistenceProfileRepository(): TrendPersistenceProfileRepository = require(trendPersistenceProfileRepository)
+    fun liquidityProfileRepository(): LiquidityProfileRepository = require(liquidityProfileRepository)
+    fun gapBehaviorProfileRepository(): GapBehaviorProfileRepository = require(gapBehaviorProfileRepository)
+    fun seasonalTendencyRepository(): SeasonalTendencyRepository = require(seasonalTendencyRepository)
+    fun indicatorBehaviorProfileRepository(): IndicatorBehaviorProfileRepository = require(indicatorBehaviorProfileRepository)
+    fun statisticalCharacteristicsRepository(): StatisticalCharacteristicsRepository = require(statisticalCharacteristicsRepository)
+
+    // ---- historical: evidence foundation ----
+    fun evidenceRepository(): EvidenceRepository = require(evidenceRepository)
 }
