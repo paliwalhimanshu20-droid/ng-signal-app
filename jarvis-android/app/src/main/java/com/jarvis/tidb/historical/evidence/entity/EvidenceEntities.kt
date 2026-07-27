@@ -128,6 +128,14 @@ data class PatternOccurrenceEntity(
     @ColumnInfo(name = "matchConfidence") val matchConfidence: Double,
     @ColumnInfo(name = "outcome") val outcome: PatternOutcome = PatternOutcome.PENDING,
     @ColumnInfo(name = "outcomeNotes") val outcomeNotes: String? = null,
+    /**
+     * TRADING-006 (schema v6) — additive nullable logical-only backlink to
+     * `intelligence.pattern.entity.PatternEntity.patternId` (the `patterns` table), added via
+     * `MIGRATION_5_6`'s `ALTER TABLE pattern_occurrences ADD COLUMN patternId INTEGER`. Not a
+     * Room `@ForeignKey` — see `intelligence/pattern/entity/PatternEntities.kt` for why.
+     * `patternName` (above) remains the original Module 4 field and is untouched.
+     */
+    @ColumnInfo(name = "patternId") val patternId: Long? = null,
     @Embedded val audit: AuditMetadata = AuditMetadata()
 )
 
