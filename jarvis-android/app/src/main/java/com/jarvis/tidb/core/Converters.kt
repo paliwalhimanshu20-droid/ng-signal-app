@@ -178,4 +178,109 @@ class Converters {
     @TypeConverter
     fun toPatternOutcome(value: String): com.jarvis.tidb.historical.evidence.entity.PatternOutcome =
         com.jarvis.tidb.historical.evidence.entity.PatternOutcome.from(value)
+
+    // ---- TRADING-006 (schema v6) — Module 5: Trading Intelligence & Evidence Engine ----
+    // All persisted as String `value`, matching the Historical Market Data Platform convention above.
+
+    @TypeConverter
+    fun fromEvidenceCategoryLevel(value: com.jarvis.tidb.intelligence.evidence.entity.EvidenceCategoryLevel): String = value.value
+    @TypeConverter
+    fun toEvidenceCategoryLevel(value: String): com.jarvis.tidb.intelligence.evidence.entity.EvidenceCategoryLevel =
+        com.jarvis.tidb.intelligence.evidence.entity.EvidenceCategoryLevel.from(value)
+
+    @TypeConverter
+    fun fromEvidenceSourceKind(value: com.jarvis.tidb.intelligence.evidence.entity.EvidenceSourceKind): String = value.value
+    @TypeConverter
+    fun toEvidenceSourceKind(value: String): com.jarvis.tidb.intelligence.evidence.entity.EvidenceSourceKind =
+        com.jarvis.tidb.intelligence.evidence.entity.EvidenceSourceKind.from(value)
+
+    @TypeConverter
+    fun fromLinkedEntityType(value: com.jarvis.tidb.intelligence.evidence.entity.LinkedEntityType): String = value.value
+    @TypeConverter
+    fun toLinkedEntityType(value: String): com.jarvis.tidb.intelligence.evidence.entity.LinkedEntityType =
+        com.jarvis.tidb.intelligence.evidence.entity.LinkedEntityType.from(value)
+
+    @TypeConverter
+    fun fromEvidenceLinkRole(value: com.jarvis.tidb.intelligence.evidence.entity.EvidenceLinkRole): String = value.value
+    @TypeConverter
+    fun toEvidenceLinkRole(value: String): com.jarvis.tidb.intelligence.evidence.entity.EvidenceLinkRole =
+        com.jarvis.tidb.intelligence.evidence.entity.EvidenceLinkRole.from(value)
+
+    @TypeConverter
+    fun fromOutcomeVerdict(value: com.jarvis.tidb.intelligence.evidence.entity.OutcomeVerdict): String = value.value
+    @TypeConverter
+    fun toOutcomeVerdict(value: String): com.jarvis.tidb.intelligence.evidence.entity.OutcomeVerdict =
+        com.jarvis.tidb.intelligence.evidence.entity.OutcomeVerdict.from(value)
+
+    @TypeConverter
+    fun fromPatternFamily(value: com.jarvis.tidb.intelligence.pattern.entity.PatternFamily): String = value.value
+    @TypeConverter
+    fun toPatternFamily(value: String): com.jarvis.tidb.intelligence.pattern.entity.PatternFamily =
+        com.jarvis.tidb.intelligence.pattern.entity.PatternFamily.from(value)
+
+    @TypeConverter
+    fun fromRegimeType(value: com.jarvis.tidb.intelligence.regime.entity.RegimeType): String = value.value
+    @TypeConverter
+    fun toRegimeType(value: String): com.jarvis.tidb.intelligence.regime.entity.RegimeType =
+        com.jarvis.tidb.intelligence.regime.entity.RegimeType.from(value)
+
+    @TypeConverter
+    fun fromConfidenceModelType(value: com.jarvis.tidb.intelligence.confidence.entity.ConfidenceModelType): String = value.value
+    @TypeConverter
+    fun toConfidenceModelType(value: String): com.jarvis.tidb.intelligence.confidence.entity.ConfidenceModelType =
+        com.jarvis.tidb.intelligence.confidence.entity.ConfidenceModelType.from(value)
+
+    @TypeConverter
+    fun fromScoredEntityType(value: com.jarvis.tidb.intelligence.confidence.entity.ScoredEntityType): String = value.value
+    @TypeConverter
+    fun toScoredEntityType(value: String): com.jarvis.tidb.intelligence.confidence.entity.ScoredEntityType =
+        com.jarvis.tidb.intelligence.confidence.entity.ScoredEntityType.from(value)
+
+    @TypeConverter
+    fun fromHypothesisStatus(value: com.jarvis.tidb.intelligence.research.entity.HypothesisStatus): String = value.value
+    @TypeConverter
+    fun toHypothesisStatus(value: String): com.jarvis.tidb.intelligence.research.entity.HypothesisStatus =
+        com.jarvis.tidb.intelligence.research.entity.HypothesisStatus.from(value)
+
+    @TypeConverter
+    fun fromExperimentType(value: com.jarvis.tidb.intelligence.research.entity.ExperimentType): String = value.value
+    @TypeConverter
+    fun toExperimentType(value: String): com.jarvis.tidb.intelligence.research.entity.ExperimentType =
+        com.jarvis.tidb.intelligence.research.entity.ExperimentType.from(value)
+
+    @TypeConverter
+    fun fromExperimentStatus(value: com.jarvis.tidb.intelligence.research.entity.ExperimentStatus): String = value.value
+    @TypeConverter
+    fun toExperimentStatus(value: String): com.jarvis.tidb.intelligence.research.entity.ExperimentStatus =
+        com.jarvis.tidb.intelligence.research.entity.ExperimentStatus.from(value)
+
+    @TypeConverter
+    fun fromExperimentRunStatus(value: com.jarvis.tidb.intelligence.research.entity.ExperimentRunStatus): String = value.value
+    @TypeConverter
+    fun toExperimentRunStatus(value: String): com.jarvis.tidb.intelligence.research.entity.ExperimentRunStatus =
+        com.jarvis.tidb.intelligence.research.entity.ExperimentRunStatus.from(value)
+
+    @TypeConverter
+    fun fromExperimentConclusion(value: com.jarvis.tidb.intelligence.research.entity.ExperimentConclusion?): String? = value?.value
+    @TypeConverter
+    fun toExperimentConclusion(value: String?): com.jarvis.tidb.intelligence.research.entity.ExperimentConclusion? =
+        value?.let { com.jarvis.tidb.intelligence.research.entity.ExperimentConclusion.from(it) }
+
+    @TypeConverter
+    fun fromGraphEntityType(value: com.jarvis.tidb.intelligence.graph.entity.GraphEntityType): String = value.value
+    @TypeConverter
+    fun toGraphEntityType(value: String): com.jarvis.tidb.intelligence.graph.entity.GraphEntityType =
+        com.jarvis.tidb.intelligence.graph.entity.GraphEntityType.from(value)
+
+    @TypeConverter
+    fun fromRelationshipType(value: com.jarvis.tidb.intelligence.graph.entity.RelationshipType): String = value.value
+    @TypeConverter
+    fun toRelationshipType(value: String): com.jarvis.tidb.intelligence.graph.entity.RelationshipType =
+        com.jarvis.tidb.intelligence.graph.entity.RelationshipType.from(value)
+
+    @TypeConverter
+    fun fromCausalDirection(value: com.jarvis.tidb.intelligence.graph.entity.CausalDirection): String = value.value
+    @TypeConverter
+    fun toCausalDirection(value: String): com.jarvis.tidb.intelligence.graph.entity.CausalDirection =
+        com.jarvis.tidb.intelligence.graph.entity.CausalDirection.from(value)
 }

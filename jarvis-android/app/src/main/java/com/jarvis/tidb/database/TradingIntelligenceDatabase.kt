@@ -153,6 +153,41 @@ import com.jarvis.tidb.historical.evidence.entity.MarketObservationEntity
 import com.jarvis.tidb.historical.evidence.entity.PatternOccurrenceEntity
 import com.jarvis.tidb.historical.evidence.entity.SourceReferenceEntity
 import com.jarvis.tidb.historical.evidence.entity.SupportingIndicatorEntity
+// ---- TRADING-006 (schema v6): Module 5 — Trading Intelligence & Evidence Engine ----
+import com.jarvis.tidb.intelligence.evidence.dao.EvidenceCategoryDao
+import com.jarvis.tidb.intelligence.evidence.dao.EvidenceLinkDao
+import com.jarvis.tidb.intelligence.evidence.dao.EvidenceOutcomeDao
+import com.jarvis.tidb.intelligence.evidence.dao.EvidenceSourceDao
+import com.jarvis.tidb.intelligence.evidence.entity.EvidenceCategoryEntity
+import com.jarvis.tidb.intelligence.evidence.entity.EvidenceLinkEntity
+import com.jarvis.tidb.intelligence.evidence.entity.EvidenceOutcomeEntity
+import com.jarvis.tidb.intelligence.evidence.entity.EvidenceSourceEntity
+import com.jarvis.tidb.intelligence.pattern.dao.PatternDao
+import com.jarvis.tidb.intelligence.pattern.entity.PatternEntity
+import com.jarvis.tidb.intelligence.regime.dao.MarketRegimeDao
+import com.jarvis.tidb.intelligence.regime.dao.RegimeObservationDao
+import com.jarvis.tidb.intelligence.regime.entity.MarketRegimeEntity
+import com.jarvis.tidb.intelligence.regime.entity.RegimeObservationEntity
+import com.jarvis.tidb.intelligence.confidence.dao.ConfidenceModelDao
+import com.jarvis.tidb.intelligence.confidence.dao.ConfidenceScoreDao
+import com.jarvis.tidb.intelligence.confidence.entity.ConfidenceModelEntity
+import com.jarvis.tidb.intelligence.confidence.entity.ConfidenceScoreEntity
+import com.jarvis.tidb.intelligence.research.dao.ExperimentDao
+import com.jarvis.tidb.intelligence.research.dao.ExperimentResultDao
+import com.jarvis.tidb.intelligence.research.dao.ExperimentRunDao
+import com.jarvis.tidb.intelligence.research.dao.HypothesisDao
+import com.jarvis.tidb.intelligence.research.entity.ExperimentEntity
+import com.jarvis.tidb.intelligence.research.entity.ExperimentResultEntity
+import com.jarvis.tidb.intelligence.research.entity.ExperimentRunEntity
+import com.jarvis.tidb.intelligence.research.entity.HypothesisEntity
+import com.jarvis.tidb.intelligence.graph.dao.CausalObservationDao
+import com.jarvis.tidb.intelligence.graph.dao.CorrelationDao
+import com.jarvis.tidb.intelligence.graph.dao.EntityRelationshipDao
+import com.jarvis.tidb.intelligence.graph.dao.MarketContextDao
+import com.jarvis.tidb.intelligence.graph.entity.CausalObservationEntity
+import com.jarvis.tidb.intelligence.graph.entity.CorrelationEntity
+import com.jarvis.tidb.intelligence.graph.entity.EntityRelationshipEntity
+import com.jarvis.tidb.intelligence.graph.entity.MarketContextEntity
 
 /**
  * TRADING INTELLIGENCE DATABASE v1.0 — the single, unified Room database for JARVIS.
@@ -164,7 +199,7 @@ import com.jarvis.tidb.historical.evidence.entity.SupportingIndicatorEntity
  * `docs/database/TRADING-INTELLIGENCE-DATABASE-v1.md` §1–2 for the full rationale and the
  * cross-module `@ForeignKey` upgrades this merge enabled.
  *
- * Schema version **5**: version 1–3 map to the pre-merge per-module schema generations
+ * Schema version **6**: version 1–3 map to the pre-merge per-module schema generations
  * (Module 1 reached v2 internally; this database's version counter restarts the *unified*
  * schema at 4 to leave 1–3 unambiguously reserved for "one of the three legacy per-module
  * databases", so a version number alone is never ambiguous about which physical schema it
@@ -176,6 +211,14 @@ import com.jarvis.tidb.historical.evidence.entity.SupportingIndicatorEntity
  * Historical Market Data Platform: 26 purely-additive tables across six new packages under
  * `com.jarvis.tidb.historical` (ingestion, candle extensions, quality, indicator, dna,
  * evidence). See docs/database/TRADING-005-Historical-Market-Data-Platform.md.
+ *
+ * v5 -> v6 ([MIGRATION_5_6][com.jarvis.tidb.database.migration.MIGRATION_5_6]) adds
+ * TRADING-006 Module 5 — Trading Intelligence & Evidence Engine: 17 purely-additive tables
+ * under `com.jarvis.tidb.intelligence` (evidence extensions, pattern catalog, market regimes,
+ * confidence modeling, research engine, knowledge graph), plus one additive nullable column on
+ * the existing `pattern_occurrences` table. Deliberately does NOT redefine
+ * `EvidenceRecordEntity`, `PatternOccurrenceEntity`, or `LearningInsightEntity` — see
+ * docs/database/TRADING-006-Trading-Intelligence-Evidence-Engine.md §1 for the reconciliation.
  *
  * No destructive fallback — this is the same non-negotiable convention every module has
  * followed since Module 1 Revision 1: every structural change ships an explicit
@@ -266,9 +309,32 @@ import com.jarvis.tidb.historical.evidence.entity.SupportingIndicatorEntity
         PatternOccurrenceEntity::class,
         SupportingIndicatorEntity::class,
         ConfidenceComponentEntity::class,
-        SourceReferenceEntity::class
+        SourceReferenceEntity::class,
+        // ---- TRADING-006 (schema v6) — Module 5: Evidence Foundation extensions ----
+        EvidenceCategoryEntity::class,
+        EvidenceSourceEntity::class,
+        EvidenceLinkEntity::class,
+        EvidenceOutcomeEntity::class,
+        // ---- TRADING-006 — Module 5: Pattern Catalog ----
+        PatternEntity::class,
+        // ---- TRADING-006 — Module 5: Market Regime Tracking ----
+        MarketRegimeEntity::class,
+        RegimeObservationEntity::class,
+        // ---- TRADING-006 — Module 5: Confidence Modeling ----
+        ConfidenceModelEntity::class,
+        ConfidenceScoreEntity::class,
+        // ---- TRADING-006 — Module 5: Research Engine ----
+        HypothesisEntity::class,
+        ExperimentEntity::class,
+        ExperimentRunEntity::class,
+        ExperimentResultEntity::class,
+        // ---- TRADING-006 — Module 5: Knowledge Graph ----
+        EntityRelationshipEntity::class,
+        MarketContextEntity::class,
+        CausalObservationEntity::class,
+        CorrelationEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -371,6 +437,35 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
     abstract fun supportingIndicatorDao(): SupportingIndicatorDao
     abstract fun confidenceComponentDao(): ConfidenceComponentDao
     abstract fun sourceReferenceDao(): SourceReferenceDao
+
+    // ---- TRADING-006 (schema v6) — Module 5: Evidence Foundation extensions ----
+    abstract fun evidenceCategoryDao(): EvidenceCategoryDao
+    abstract fun evidenceSourceDao(): EvidenceSourceDao
+    abstract fun evidenceLinkDao(): EvidenceLinkDao
+    abstract fun evidenceOutcomeDao(): EvidenceOutcomeDao
+
+    // ---- TRADING-006 — Module 5: Pattern Catalog ----
+    abstract fun patternDao(): PatternDao
+
+    // ---- TRADING-006 — Module 5: Market Regime Tracking ----
+    abstract fun marketRegimeDao(): MarketRegimeDao
+    abstract fun regimeObservationDao(): RegimeObservationDao
+
+    // ---- TRADING-006 — Module 5: Confidence Modeling ----
+    abstract fun confidenceModelDao(): ConfidenceModelDao
+    abstract fun confidenceScoreDao(): ConfidenceScoreDao
+
+    // ---- TRADING-006 — Module 5: Research Engine ----
+    abstract fun hypothesisDao(): HypothesisDao
+    abstract fun experimentDao(): ExperimentDao
+    abstract fun experimentRunDao(): ExperimentRunDao
+    abstract fun experimentResultDao(): ExperimentResultDao
+
+    // ---- TRADING-006 — Module 5: Knowledge Graph ----
+    abstract fun entityRelationshipDao(): EntityRelationshipDao
+    abstract fun marketContextDao(): MarketContextDao
+    abstract fun causalObservationDao(): CausalObservationDao
+    abstract fun correlationDao(): CorrelationDao
 
     companion object {
         const val DATABASE_NAME = "jarvis_trading_intelligence.db"

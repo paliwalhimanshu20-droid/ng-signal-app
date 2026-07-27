@@ -70,6 +70,19 @@ import com.jarvis.tidb.historical.dna.repository.impl.TrendPersistenceProfileRep
 import com.jarvis.tidb.historical.dna.repository.impl.VolatilityProfileRepositoryImpl
 import com.jarvis.tidb.historical.evidence.repository.EvidenceRepository
 import com.jarvis.tidb.historical.evidence.repository.impl.EvidenceRepositoryImpl
+// ---- TRADING-006 (schema v6): Module 5 — Trading Intelligence & Evidence Engine ----
+import com.jarvis.tidb.intelligence.evidence.repository.IntelligenceEvidenceRepository
+import com.jarvis.tidb.intelligence.evidence.repository.impl.IntelligenceEvidenceRepositoryImpl
+import com.jarvis.tidb.intelligence.pattern.repository.PatternRepository
+import com.jarvis.tidb.intelligence.pattern.repository.impl.PatternRepositoryImpl
+import com.jarvis.tidb.intelligence.regime.repository.RegimeRepository
+import com.jarvis.tidb.intelligence.regime.repository.impl.RegimeRepositoryImpl
+import com.jarvis.tidb.intelligence.confidence.repository.ConfidenceRepository
+import com.jarvis.tidb.intelligence.confidence.repository.impl.ConfidenceRepositoryImpl
+import com.jarvis.tidb.intelligence.research.repository.ResearchRepository
+import com.jarvis.tidb.intelligence.research.repository.impl.ResearchRepositoryImpl
+import com.jarvis.tidb.intelligence.graph.repository.GraphRepository
+import com.jarvis.tidb.intelligence.graph.repository.impl.GraphRepositoryImpl
 
 /**
  * The single, unified, framework-agnostic manual DI provider for the entire Trading
@@ -138,6 +151,14 @@ object TidbModule {
 
     // ---- historical: evidence foundation ----
     @Volatile private var evidenceRepository: EvidenceRepository? = null
+
+    // ---- TRADING-006 (schema v6): Module 5 — Trading Intelligence & Evidence Engine ----
+    @Volatile private var intelligenceEvidenceRepository: IntelligenceEvidenceRepository? = null
+    @Volatile private var patternRepository: PatternRepository? = null
+    @Volatile private var regimeRepository: RegimeRepository? = null
+    @Volatile private var confidenceRepository: ConfidenceRepository? = null
+    @Volatile private var researchRepository: ResearchRepository? = null
+    @Volatile private var graphRepository: GraphRepository? = null
 
     fun initialize(context: Context) {
         if (database != null) return
@@ -257,6 +278,35 @@ object TidbModule {
                 confidenceComponentDao = db.confidenceComponentDao(),
                 sourceReferenceDao = db.sourceReferenceDao()
             )
+
+            // ---- TRADING-006 (schema v6): Module 5 — Trading Intelligence & Evidence Engine ----
+            intelligenceEvidenceRepository = IntelligenceEvidenceRepositoryImpl(
+                categoryDao = db.evidenceCategoryDao(),
+                sourceDao = db.evidenceSourceDao(),
+                linkDao = db.evidenceLinkDao(),
+                outcomeDao = db.evidenceOutcomeDao()
+            )
+            patternRepository = PatternRepositoryImpl(db.patternDao())
+            regimeRepository = RegimeRepositoryImpl(
+                regimeDao = db.marketRegimeDao(),
+                observationDao = db.regimeObservationDao()
+            )
+            confidenceRepository = ConfidenceRepositoryImpl(
+                modelDao = db.confidenceModelDao(),
+                scoreDao = db.confidenceScoreDao()
+            )
+            researchRepository = ResearchRepositoryImpl(
+                hypothesisDao = db.hypothesisDao(),
+                experimentDao = db.experimentDao(),
+                runDao = db.experimentRunDao(),
+                resultDao = db.experimentResultDao()
+            )
+            graphRepository = GraphRepositoryImpl(
+                relationshipDao = db.entityRelationshipDao(),
+                contextDao = db.marketContextDao(),
+                causalDao = db.causalObservationDao(),
+                correlationDao = db.correlationDao()
+            )
         }
     }
 
@@ -312,4 +362,12 @@ object TidbModule {
 
     // ---- historical: evidence foundation ----
     fun evidenceRepository(): EvidenceRepository = require(evidenceRepository)
+
+    // ---- TRADING-006 (schema v6): Module 5 — Trading Intelligence & Evidence Engine ----
+    fun intelligenceEvidenceRepository(): IntelligenceEvidenceRepository = require(intelligenceEvidenceRepository)
+    fun patternRepository(): PatternRepository = require(patternRepository)
+    fun regimeRepository(): RegimeRepository = require(regimeRepository)
+    fun confidenceRepository(): ConfidenceRepository = require(confidenceRepository)
+    fun researchRepository(): ResearchRepository = require(researchRepository)
+    fun graphRepository(): GraphRepository = require(graphRepository)
 }

@@ -35,6 +35,11 @@ object TidbMigrations {
      * v4 -> v5: [MIGRATION_4_5] — Historical Market Data Platform. Purely additive (26 new
      * tables across ingestion/candle-extensions/quality/indicator/dna/evidence); no existing
      * table is altered. See docs/database/TRADING-005-Historical-Market-Data-Platform.md.
+     *
+     * v5 -> v6: [MIGRATION_5_6] — TRADING-006 Trading Intelligence & Evidence Engine (Module 5).
+     * Purely additive (17 new tables under `com.jarvis.tidb.intelligence`, plus one additive
+     * nullable column — `pattern_occurrences.patternId`). See
+     * docs/database/TRADING-006-Trading-Intelligence-Evidence-Engine.md.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6)
 }
