@@ -129,7 +129,9 @@ enum class LinkedEntityType(val value: String) {
     REGIME_OBSERVATION("REGIME_OBSERVATION"),
     LEARNING_INSIGHT("LEARNING_INSIGHT"),
     CAUSAL_OBSERVATION("CAUSAL_OBSERVATION"),
-    CORRELATION("CORRELATION");
+    CORRELATION("CORRELATION"),
+    /** TRADING-007B (schema v9) — Decision Intelligence Engine. Lets `EvidenceLinkEntity` link directly to a `decision.entity.RecommendationEntity` row, reusing this table's existing `role`/`weight` for evidence weighting rather than introducing a decision-specific evidence-link table. */
+    DECISION("DECISION");
 
     companion object {
         fun from(value: String): LinkedEntityType = entries.firstOrNull { it.value == value } ?: TRADE

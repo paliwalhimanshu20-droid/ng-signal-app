@@ -41,6 +41,10 @@ enum class TimelineEventType {
     RISK_LIMIT_BREACHED,
     DECISION_MADE,
     LESSON_RECORDED,
+    /** TRADING-007B (schema v9) — Decision Intelligence Engine. */
+    RECOMMENDATION_ISSUED,
+    /** TRADING-007B (schema v9) — Decision Intelligence Engine. */
+    RECOMMENDATION_REVIEWED,
     OTHER
 }
 

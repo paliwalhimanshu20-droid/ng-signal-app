@@ -64,7 +64,9 @@ enum class ScoredEntityType(val value: String) {
     REGIME_OBSERVATION("REGIME_OBSERVATION"),
     HYPOTHESIS("HYPOTHESIS"),
     TRADE("TRADE"),
-    SIGNAL("SIGNAL");
+    SIGNAL("SIGNAL"),
+    /** TRADING-007B (schema v9) — Decision Intelligence Engine. A `decision.entity.RecommendationEntity`'s composed confidence is a `ConfidenceScoreEntity` row scored against this type — no separate confidence column/table on the recommendation itself. */
+    DECISION("DECISION");
 
     companion object {
         fun from(value: String): ScoredEntityType = entries.firstOrNull { it.value == value } ?: EVIDENCE_RECORD

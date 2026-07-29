@@ -110,6 +110,17 @@ import com.jarvis.tidb.context.entity.EconomicEventCategoryLinkEntity
 import com.jarvis.tidb.context.entity.EconomicEventEntity
 import com.jarvis.tidb.context.entity.EconomicEventInstrumentLinkEntity
 import com.jarvis.tidb.context.entity.EconomicEventOutcomeEntity
+// ---- TRADING-007B (schema v9): Decision Intelligence Engine ----
+import com.jarvis.tidb.decision.dao.DecisionReviewDao
+import com.jarvis.tidb.decision.dao.RecommendationAlternativeDao
+import com.jarvis.tidb.decision.dao.RecommendationDao
+import com.jarvis.tidb.decision.dao.RecommendationOutcomeDao
+import com.jarvis.tidb.decision.dao.RecommendationRiskAssessmentDao
+import com.jarvis.tidb.decision.entity.DecisionReviewEntity
+import com.jarvis.tidb.decision.entity.RecommendationAlternativeEntity
+import com.jarvis.tidb.decision.entity.RecommendationEntity
+import com.jarvis.tidb.decision.entity.RecommendationOutcomeEntity
+import com.jarvis.tidb.decision.entity.RecommendationRiskAssessmentEntity
 // ---- Historical Market Data Platform (schema v5): ingestion ----
 import com.jarvis.tidb.historical.ingestion.dao.DataProviderDao
 import com.jarvis.tidb.historical.ingestion.dao.IngestionCheckpointDao
@@ -387,9 +398,15 @@ import com.jarvis.tidb.news.entity.SentimentScoreEntity
         EconomicEventInstrumentLinkEntity::class,
         EconomicEventOutcomeEntity::class,
         DriftMetricEntity::class,
-        CalibrationMetricEntity::class
+        CalibrationMetricEntity::class,
+        // ---- TRADING-007B (schema v9) — Decision Intelligence Engine ----
+        RecommendationEntity::class,
+        RecommendationRiskAssessmentEntity::class,
+        RecommendationAlternativeEntity::class,
+        RecommendationOutcomeEntity::class,
+        DecisionReviewEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -539,6 +556,13 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
     abstract fun economicEventOutcomeDao(): EconomicEventOutcomeDao
     abstract fun driftMetricDao(): DriftMetricDao
     abstract fun calibrationMetricDao(): CalibrationMetricDao
+
+    // ---- TRADING-007B (schema v9) — Decision Intelligence Engine ----
+    abstract fun recommendationDao(): RecommendationDao
+    abstract fun recommendationRiskAssessmentDao(): RecommendationRiskAssessmentDao
+    abstract fun recommendationAlternativeDao(): RecommendationAlternativeDao
+    abstract fun recommendationOutcomeDao(): RecommendationOutcomeDao
+    abstract fun decisionReviewDao(): DecisionReviewDao
 
     companion object {
         const val DATABASE_NAME = "jarvis_trading_intelligence.db"

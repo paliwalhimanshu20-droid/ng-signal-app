@@ -281,7 +281,9 @@ enum class ContextMonitoringSubjectType(val value: String) {
     MODEL("MODEL"),
     INDICATOR("INDICATOR"),
     STRATEGY("STRATEGY"),
-    SOURCE("SOURCE");
+    SOURCE("SOURCE"),
+    /** TRADING-007B (schema v9) — Decision Intelligence Engine. Lets `drift_metrics`/`calibration_metrics` track the Decision Intelligence Engine's own behavior (confidence calibration, decision drift, bias) with zero new tables — see `decision/entity/DecisionIntelligenceEntities.kt` file doc. */
+    RECOMMENDATION_ENGINE("RECOMMENDATION_ENGINE");
 
     companion object {
         fun from(value: String): ContextMonitoringSubjectType = entries.firstOrNull { it.value == value } ?: MODEL

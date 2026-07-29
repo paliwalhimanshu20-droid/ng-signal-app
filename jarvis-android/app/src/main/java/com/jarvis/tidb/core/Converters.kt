@@ -351,4 +351,57 @@ class Converters {
     @TypeConverter
     fun toCalibrationMetricType(value: String): com.jarvis.tidb.context.entity.CalibrationMetricType =
         com.jarvis.tidb.context.entity.CalibrationMetricType.from(value)
+
+    // ---- TRADING-007B (schema v9) — Decision Intelligence Engine ----
+    // All persisted as String `value`, matching every prior module's convention.
+    // Note: `RecommendationOutcomeEntity.verdict` reuses `OutcomeVerdict` directly (converter
+    // already registered above) rather than duplicating a converter for an identical enum.
+
+    @TypeConverter
+    fun fromRecommendationType(value: com.jarvis.tidb.decision.entity.RecommendationType): String = value.value
+    @TypeConverter
+    fun toRecommendationType(value: String): com.jarvis.tidb.decision.entity.RecommendationType =
+        com.jarvis.tidb.decision.entity.RecommendationType.from(value)
+
+    @TypeConverter
+    fun fromRecommendationStatus(value: com.jarvis.tidb.decision.entity.RecommendationStatus): String = value.value
+    @TypeConverter
+    fun toRecommendationStatus(value: String): com.jarvis.tidb.decision.entity.RecommendationStatus =
+        com.jarvis.tidb.decision.entity.RecommendationStatus.from(value)
+
+    @TypeConverter
+    fun fromDecisionTimeHorizon(value: com.jarvis.tidb.decision.entity.DecisionTimeHorizon): String = value.value
+    @TypeConverter
+    fun toDecisionTimeHorizon(value: String): com.jarvis.tidb.decision.entity.DecisionTimeHorizon =
+        com.jarvis.tidb.decision.entity.DecisionTimeHorizon.from(value)
+
+    @TypeConverter
+    fun fromRecommendationRiskCategory(value: com.jarvis.tidb.decision.entity.RecommendationRiskCategory): String = value.value
+    @TypeConverter
+    fun toRecommendationRiskCategory(value: String): com.jarvis.tidb.decision.entity.RecommendationRiskCategory =
+        com.jarvis.tidb.decision.entity.RecommendationRiskCategory.from(value)
+
+    @TypeConverter
+    fun fromRiskLevel(value: com.jarvis.tidb.decision.entity.RiskLevel): String = value.value
+    @TypeConverter
+    fun toRiskLevel(value: String): com.jarvis.tidb.decision.entity.RiskLevel =
+        com.jarvis.tidb.decision.entity.RiskLevel.from(value)
+
+    @TypeConverter
+    fun fromDecisionReviewTrigger(value: com.jarvis.tidb.decision.entity.DecisionReviewTrigger): String = value.value
+    @TypeConverter
+    fun toDecisionReviewTrigger(value: String): com.jarvis.tidb.decision.entity.DecisionReviewTrigger =
+        com.jarvis.tidb.decision.entity.DecisionReviewTrigger.from(value)
+
+    @TypeConverter
+    fun fromDecisionReviewConclusion(value: com.jarvis.tidb.decision.entity.DecisionReviewConclusion): String = value.value
+    @TypeConverter
+    fun toDecisionReviewConclusion(value: String): com.jarvis.tidb.decision.entity.DecisionReviewConclusion =
+        com.jarvis.tidb.decision.entity.DecisionReviewConclusion.from(value)
+
+    @TypeConverter
+    fun fromDecisionReviewTriggerReferenceType(value: com.jarvis.tidb.decision.entity.DecisionReviewTriggerReferenceType?): String? = value?.value
+    @TypeConverter
+    fun toDecisionReviewTriggerReferenceType(value: String?): com.jarvis.tidb.decision.entity.DecisionReviewTriggerReferenceType? =
+        value?.let { com.jarvis.tidb.decision.entity.DecisionReviewTriggerReferenceType.from(it) }
 }

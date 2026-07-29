@@ -89,6 +89,9 @@ import com.jarvis.tidb.news.repository.impl.NewsRepositoryImpl
 // ---- TRADING-007A.2 (schema v8): Market Context Intelligence Platform ----
 import com.jarvis.tidb.context.repository.MarketContextIntelligenceRepository
 import com.jarvis.tidb.context.repository.impl.MarketContextIntelligenceRepositoryImpl
+// ---- TRADING-007B (schema v9): Decision Intelligence Engine ----
+import com.jarvis.tidb.decision.repository.DecisionIntelligenceRepository
+import com.jarvis.tidb.decision.repository.impl.DecisionIntelligenceRepositoryImpl
 
 /**
  * The single, unified, framework-agnostic manual DI provider for the entire Trading
@@ -171,6 +174,9 @@ object TidbModule {
 
     // ---- TRADING-007A.2 (schema v8): Market Context Intelligence Platform ----
     @Volatile private var marketContextIntelligenceRepository: MarketContextIntelligenceRepository? = null
+
+    // ---- TRADING-007B (schema v9): Decision Intelligence Engine ----
+    @Volatile private var decisionIntelligenceRepository: DecisionIntelligenceRepository? = null
 
     fun initialize(context: Context) {
         if (database != null) return
@@ -341,6 +347,15 @@ object TidbModule {
                 driftMetricDao = db.driftMetricDao(),
                 calibrationMetricDao = db.calibrationMetricDao()
             )
+
+            // ---- TRADING-007B (schema v9): Decision Intelligence Engine ----
+            decisionIntelligenceRepository = DecisionIntelligenceRepositoryImpl(
+                recommendationDao = db.recommendationDao(),
+                riskAssessmentDao = db.recommendationRiskAssessmentDao(),
+                alternativeDao = db.recommendationAlternativeDao(),
+                outcomeDao = db.recommendationOutcomeDao(),
+                reviewDao = db.decisionReviewDao()
+            )
         }
     }
 
@@ -410,4 +425,7 @@ object TidbModule {
 
     // ---- TRADING-007A.2 (schema v8): Market Context Intelligence Platform ----
     fun marketContextIntelligenceRepository(): MarketContextIntelligenceRepository = require(marketContextIntelligenceRepository)
+
+    // ---- TRADING-007B (schema v9): Decision Intelligence Engine ----
+    fun decisionIntelligenceRepository(): DecisionIntelligenceRepository = require(decisionIntelligenceRepository)
 }

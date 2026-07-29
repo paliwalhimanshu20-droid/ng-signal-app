@@ -53,6 +53,13 @@ object TidbMigrations {
      * established by Module 5's `confidence_scores` and `entity_relationships` rather than
      * introducing separate per-subject-type drift tables — see
      * docs/database/TRADING-007A.2-Market-Context-Intelligence-Platform.md.
+     *
+     * v8 -> v9: [MIGRATION_8_9] — TRADING-007B Decision Intelligence Engine.
+     * Purely additive (5 new tables under `com.jarvis.tidb.decision`). Persistence only — no
+     * inference/scoring logic. Reuses `EvidenceLinkEntity` (evidence weighting), `ConfidenceScoreEntity`
+     * (confidence), and `drift_metrics`/`calibration_metrics` (decision drift/calibration) via
+     * additive enum values rather than duplicating any of them — see
+     * docs/database/TRADING-007B-Decision-Intelligence-Engine-Architecture.md.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
 }
