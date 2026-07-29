@@ -45,6 +45,14 @@ object TidbMigrations {
      * Purely additive (7 new tables under `com.jarvis.tidb.news`). Reuses Module 4/5's
      * evidence/confidence/outcome tables rather than duplicating them — see
      * docs/database/TRADING-007A.1-News-Sentiment-Intelligence-Platform.md.
+     *
+     * v7 -> v8: [MIGRATION_7_8] — TRADING-007A.2 Market Context Intelligence Platform.
+     * Purely additive (7 new tables under `com.jarvis.tidb.context`: 5 `economic_event_*`
+     * calendar tables plus the standalone `drift_metrics` / `calibration_metrics` polymorphic
+     * monitoring tables). Reuses the `subjectType`/`subjectRowId` polymorphic pattern already
+     * established by Module 5's `confidence_scores` and `entity_relationships` rather than
+     * introducing separate per-subject-type drift tables — see
+     * docs/database/TRADING-007A.2-Market-Context-Intelligence-Platform.md.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
 }

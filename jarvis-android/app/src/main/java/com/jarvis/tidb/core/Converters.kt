@@ -312,4 +312,43 @@ class Converters {
     @TypeConverter
     fun toSentimentLabel(value: String): com.jarvis.tidb.news.entity.SentimentLabel =
         com.jarvis.tidb.news.entity.SentimentLabel.from(value)
+
+    // ---- TRADING-007A.2 (schema v8) — Market Context Intelligence Platform ----
+    // All persisted as String `value`, matching every prior module's convention.
+
+    @TypeConverter
+    fun fromEconomicEventStatus(value: com.jarvis.tidb.context.entity.EconomicEventStatus): String = value.value
+    @TypeConverter
+    fun toEconomicEventStatus(value: String): com.jarvis.tidb.context.entity.EconomicEventStatus =
+        com.jarvis.tidb.context.entity.EconomicEventStatus.from(value)
+
+    @TypeConverter
+    fun fromEconomicEventImportance(value: com.jarvis.tidb.context.entity.EconomicEventImportance): String = value.value
+    @TypeConverter
+    fun toEconomicEventImportance(value: String): com.jarvis.tidb.context.entity.EconomicEventImportance =
+        com.jarvis.tidb.context.entity.EconomicEventImportance.from(value)
+
+    @TypeConverter
+    fun fromEconomicEventLinkScope(value: com.jarvis.tidb.context.entity.EconomicEventLinkScope): String = value.value
+    @TypeConverter
+    fun toEconomicEventLinkScope(value: String): com.jarvis.tidb.context.entity.EconomicEventLinkScope =
+        com.jarvis.tidb.context.entity.EconomicEventLinkScope.from(value)
+
+    @TypeConverter
+    fun fromContextMonitoringSubjectType(value: com.jarvis.tidb.context.entity.ContextMonitoringSubjectType): String = value.value
+    @TypeConverter
+    fun toContextMonitoringSubjectType(value: String): com.jarvis.tidb.context.entity.ContextMonitoringSubjectType =
+        com.jarvis.tidb.context.entity.ContextMonitoringSubjectType.from(value)
+
+    @TypeConverter
+    fun fromDriftSeverity(value: com.jarvis.tidb.context.entity.DriftSeverity): String = value.value
+    @TypeConverter
+    fun toDriftSeverity(value: String): com.jarvis.tidb.context.entity.DriftSeverity =
+        com.jarvis.tidb.context.entity.DriftSeverity.from(value)
+
+    @TypeConverter
+    fun fromCalibrationMetricType(value: com.jarvis.tidb.context.entity.CalibrationMetricType): String = value.value
+    @TypeConverter
+    fun toCalibrationMetricType(value: String): com.jarvis.tidb.context.entity.CalibrationMetricType =
+        com.jarvis.tidb.context.entity.CalibrationMetricType.from(value)
 }

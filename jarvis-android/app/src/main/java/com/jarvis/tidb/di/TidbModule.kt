@@ -86,6 +86,9 @@ import com.jarvis.tidb.intelligence.graph.repository.impl.GraphRepositoryImpl
 // ---- TRADING-007A.1 (schema v7): News & Sentiment Intelligence Platform ----
 import com.jarvis.tidb.news.repository.NewsRepository
 import com.jarvis.tidb.news.repository.impl.NewsRepositoryImpl
+// ---- TRADING-007A.2 (schema v8): Market Context Intelligence Platform ----
+import com.jarvis.tidb.context.repository.MarketContextIntelligenceRepository
+import com.jarvis.tidb.context.repository.impl.MarketContextIntelligenceRepositoryImpl
 
 /**
  * The single, unified, framework-agnostic manual DI provider for the entire Trading
@@ -165,6 +168,9 @@ object TidbModule {
 
     // ---- TRADING-007A.1 (schema v7): News & Sentiment Intelligence Platform ----
     @Volatile private var newsRepository: NewsRepository? = null
+
+    // ---- TRADING-007A.2 (schema v8): Market Context Intelligence Platform ----
+    @Volatile private var marketContextIntelligenceRepository: MarketContextIntelligenceRepository? = null
 
     fun initialize(context: Context) {
         if (database != null) return
@@ -324,6 +330,17 @@ object TidbModule {
                 sentimentScoreDao = db.sentimentScoreDao(),
                 duplicateDao = db.newsDuplicateDao()
             )
+
+            // ---- TRADING-007A.2 (schema v8): Market Context Intelligence Platform ----
+            marketContextIntelligenceRepository = MarketContextIntelligenceRepositoryImpl(
+                eventDao = db.economicEventDao(),
+                categoryDao = db.economicEventCategoryDao(),
+                categoryLinkDao = db.economicEventCategoryLinkDao(),
+                instrumentLinkDao = db.economicEventInstrumentLinkDao(),
+                outcomeDao = db.economicEventOutcomeDao(),
+                driftMetricDao = db.driftMetricDao(),
+                calibrationMetricDao = db.calibrationMetricDao()
+            )
         }
     }
 
@@ -390,4 +407,7 @@ object TidbModule {
 
     // ---- TRADING-007A.1 (schema v7): News & Sentiment Intelligence Platform ----
     fun newsRepository(): NewsRepository = require(newsRepository)
+
+    // ---- TRADING-007A.2 (schema v8): Market Context Intelligence Platform ----
+    fun marketContextIntelligenceRepository(): MarketContextIntelligenceRepository = require(marketContextIntelligenceRepository)
 }

@@ -95,6 +95,21 @@ import com.jarvis.tidb.analytics.entity.TradeFeesEntity
 import com.jarvis.tidb.analytics.entity.TradeJournalEntity
 import com.jarvis.tidb.analytics.entity.TradingTimelineEventEntity
 import com.jarvis.tidb.database.migration.TidbMigrations
+// ---- TRADING-007A.2 (schema v8): Market Context Intelligence Platform ----
+import com.jarvis.tidb.context.dao.CalibrationMetricDao
+import com.jarvis.tidb.context.dao.DriftMetricDao
+import com.jarvis.tidb.context.dao.EconomicEventCategoryDao
+import com.jarvis.tidb.context.dao.EconomicEventCategoryLinkDao
+import com.jarvis.tidb.context.dao.EconomicEventDao
+import com.jarvis.tidb.context.dao.EconomicEventInstrumentLinkDao
+import com.jarvis.tidb.context.dao.EconomicEventOutcomeDao
+import com.jarvis.tidb.context.entity.CalibrationMetricEntity
+import com.jarvis.tidb.context.entity.DriftMetricEntity
+import com.jarvis.tidb.context.entity.EconomicEventCategoryEntity
+import com.jarvis.tidb.context.entity.EconomicEventCategoryLinkEntity
+import com.jarvis.tidb.context.entity.EconomicEventEntity
+import com.jarvis.tidb.context.entity.EconomicEventInstrumentLinkEntity
+import com.jarvis.tidb.context.entity.EconomicEventOutcomeEntity
 // ---- Historical Market Data Platform (schema v5): ingestion ----
 import com.jarvis.tidb.historical.ingestion.dao.DataProviderDao
 import com.jarvis.tidb.historical.ingestion.dao.IngestionCheckpointDao
@@ -364,9 +379,17 @@ import com.jarvis.tidb.news.entity.SentimentScoreEntity
         NewsCategoryLinkEntity::class,
         NewsInstrumentLinkEntity::class,
         SentimentScoreEntity::class,
-        NewsDuplicateEntity::class
+        NewsDuplicateEntity::class,
+        // ---- TRADING-007A.2 (schema v8) — Market Context Intelligence Platform ----
+        EconomicEventEntity::class,
+        EconomicEventCategoryEntity::class,
+        EconomicEventCategoryLinkEntity::class,
+        EconomicEventInstrumentLinkEntity::class,
+        EconomicEventOutcomeEntity::class,
+        DriftMetricEntity::class,
+        CalibrationMetricEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -507,6 +530,15 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
     abstract fun newsInstrumentLinkDao(): NewsInstrumentLinkDao
     abstract fun sentimentScoreDao(): SentimentScoreDao
     abstract fun newsDuplicateDao(): NewsDuplicateDao
+
+    // ---- TRADING-007A.2 (schema v8) — Market Context Intelligence Platform ----
+    abstract fun economicEventDao(): EconomicEventDao
+    abstract fun economicEventCategoryDao(): EconomicEventCategoryDao
+    abstract fun economicEventCategoryLinkDao(): EconomicEventCategoryLinkDao
+    abstract fun economicEventInstrumentLinkDao(): EconomicEventInstrumentLinkDao
+    abstract fun economicEventOutcomeDao(): EconomicEventOutcomeDao
+    abstract fun driftMetricDao(): DriftMetricDao
+    abstract fun calibrationMetricDao(): CalibrationMetricDao
 
     companion object {
         const val DATABASE_NAME = "jarvis_trading_intelligence.db"
