@@ -27,7 +27,9 @@ enum class ProviderType(val value: String) {
     BROKER_FEED("BROKER_FEED"),
     THIRD_PARTY_VENDOR("THIRD_PARTY_VENDOR"),
     AGGREGATOR("AGGREGATOR"),
-    MANUAL_UPLOAD("MANUAL_UPLOAD");
+    MANUAL_UPLOAD("MANUAL_UPLOAD"),
+    /** TRADING-007A.1 (schema v7), additive: a news/RSS feed provider. See `com.jarvis.tidb.news`. */
+    NEWS_FEED("NEWS_FEED");
 
     companion object {
         fun from(value: String): ProviderType = entries.firstOrNull { it.value == value } ?: THIRD_PARTY_VENDOR
@@ -38,7 +40,9 @@ enum class IngestionJobType(val value: String) {
     FULL_BACKFILL("FULL_BACKFILL"),
     INCREMENTAL_UPDATE("INCREMENTAL_UPDATE"),
     GAP_FILL("GAP_FILL"),
-    MANUAL_REIMPORT("MANUAL_REIMPORT");
+    MANUAL_REIMPORT("MANUAL_REIMPORT"),
+    /** TRADING-007A.1 (schema v7), additive: a news-article ingestion pull. See `com.jarvis.tidb.news`. */
+    NEWS_PULL("NEWS_PULL");
 
     companion object {
         fun from(value: String): IngestionJobType = entries.firstOrNull { it.value == value } ?: INCREMENTAL_UPDATE

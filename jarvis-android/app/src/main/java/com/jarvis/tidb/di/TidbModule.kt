@@ -83,6 +83,9 @@ import com.jarvis.tidb.intelligence.research.repository.ResearchRepository
 import com.jarvis.tidb.intelligence.research.repository.impl.ResearchRepositoryImpl
 import com.jarvis.tidb.intelligence.graph.repository.GraphRepository
 import com.jarvis.tidb.intelligence.graph.repository.impl.GraphRepositoryImpl
+// ---- TRADING-007A.1 (schema v7): News & Sentiment Intelligence Platform ----
+import com.jarvis.tidb.news.repository.NewsRepository
+import com.jarvis.tidb.news.repository.impl.NewsRepositoryImpl
 
 /**
  * The single, unified, framework-agnostic manual DI provider for the entire Trading
@@ -159,6 +162,9 @@ object TidbModule {
     @Volatile private var confidenceRepository: ConfidenceRepository? = null
     @Volatile private var researchRepository: ResearchRepository? = null
     @Volatile private var graphRepository: GraphRepository? = null
+
+    // ---- TRADING-007A.1 (schema v7): News & Sentiment Intelligence Platform ----
+    @Volatile private var newsRepository: NewsRepository? = null
 
     fun initialize(context: Context) {
         if (database != null) return
@@ -307,6 +313,17 @@ object TidbModule {
                 causalDao = db.causalObservationDao(),
                 correlationDao = db.correlationDao()
             )
+
+            // ---- TRADING-007A.1 (schema v7): News & Sentiment Intelligence Platform ----
+            newsRepository = NewsRepositoryImpl(
+                sourceDao = db.newsSourceDao(),
+                articleDao = db.newsArticleDao(),
+                categoryDao = db.newsCategoryDao(),
+                categoryLinkDao = db.newsCategoryLinkDao(),
+                instrumentLinkDao = db.newsInstrumentLinkDao(),
+                sentimentScoreDao = db.sentimentScoreDao(),
+                duplicateDao = db.newsDuplicateDao()
+            )
         }
     }
 
@@ -370,4 +387,7 @@ object TidbModule {
     fun confidenceRepository(): ConfidenceRepository = require(confidenceRepository)
     fun researchRepository(): ResearchRepository = require(researchRepository)
     fun graphRepository(): GraphRepository = require(graphRepository)
+
+    // ---- TRADING-007A.1 (schema v7): News & Sentiment Intelligence Platform ----
+    fun newsRepository(): NewsRepository = require(newsRepository)
 }

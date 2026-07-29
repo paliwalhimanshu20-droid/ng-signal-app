@@ -283,4 +283,33 @@ class Converters {
     @TypeConverter
     fun toCausalDirection(value: String): com.jarvis.tidb.intelligence.graph.entity.CausalDirection =
         com.jarvis.tidb.intelligence.graph.entity.CausalDirection.from(value)
+
+    // ---- TRADING-007A.1 (schema v7) — News & Sentiment Intelligence Platform ----
+    // All persisted as String `value`, matching every prior module's convention.
+    // Note: `NewsCategoryEntity.level` reuses `EvidenceCategoryLevel` directly (converter
+    // already registered above) rather than duplicating a converter for an identical enum.
+
+    @TypeConverter
+    fun fromNewsSourceTier(value: com.jarvis.tidb.news.entity.NewsSourceTier): String = value.value
+    @TypeConverter
+    fun toNewsSourceTier(value: String): com.jarvis.tidb.news.entity.NewsSourceTier =
+        com.jarvis.tidb.news.entity.NewsSourceTier.from(value)
+
+    @TypeConverter
+    fun fromNewsArticleStatus(value: com.jarvis.tidb.news.entity.NewsArticleStatus): String = value.value
+    @TypeConverter
+    fun toNewsArticleStatus(value: String): com.jarvis.tidb.news.entity.NewsArticleStatus =
+        com.jarvis.tidb.news.entity.NewsArticleStatus.from(value)
+
+    @TypeConverter
+    fun fromNewsContentCompleteness(value: com.jarvis.tidb.news.entity.NewsContentCompleteness): String = value.value
+    @TypeConverter
+    fun toNewsContentCompleteness(value: String): com.jarvis.tidb.news.entity.NewsContentCompleteness =
+        com.jarvis.tidb.news.entity.NewsContentCompleteness.from(value)
+
+    @TypeConverter
+    fun fromSentimentLabel(value: com.jarvis.tidb.news.entity.SentimentLabel): String = value.value
+    @TypeConverter
+    fun toSentimentLabel(value: String): com.jarvis.tidb.news.entity.SentimentLabel =
+        com.jarvis.tidb.news.entity.SentimentLabel.from(value)
 }

@@ -188,6 +188,21 @@ import com.jarvis.tidb.intelligence.graph.entity.CausalObservationEntity
 import com.jarvis.tidb.intelligence.graph.entity.CorrelationEntity
 import com.jarvis.tidb.intelligence.graph.entity.EntityRelationshipEntity
 import com.jarvis.tidb.intelligence.graph.entity.MarketContextEntity
+// ---- TRADING-007A.1 (schema v7): News & Sentiment Intelligence Platform ----
+import com.jarvis.tidb.news.dao.NewsArticleDao
+import com.jarvis.tidb.news.dao.NewsCategoryDao
+import com.jarvis.tidb.news.dao.NewsCategoryLinkDao
+import com.jarvis.tidb.news.dao.NewsDuplicateDao
+import com.jarvis.tidb.news.dao.NewsInstrumentLinkDao
+import com.jarvis.tidb.news.dao.NewsSourceDao
+import com.jarvis.tidb.news.dao.SentimentScoreDao
+import com.jarvis.tidb.news.entity.NewsArticleEntity
+import com.jarvis.tidb.news.entity.NewsCategoryEntity
+import com.jarvis.tidb.news.entity.NewsCategoryLinkEntity
+import com.jarvis.tidb.news.entity.NewsDuplicateEntity
+import com.jarvis.tidb.news.entity.NewsInstrumentLinkEntity
+import com.jarvis.tidb.news.entity.NewsSourceEntity
+import com.jarvis.tidb.news.entity.SentimentScoreEntity
 
 /**
  * TRADING INTELLIGENCE DATABASE v1.0 — the single, unified Room database for JARVIS.
@@ -219,6 +234,15 @@ import com.jarvis.tidb.intelligence.graph.entity.MarketContextEntity
  * the existing `pattern_occurrences` table. Deliberately does NOT redefine
  * `EvidenceRecordEntity`, `PatternOccurrenceEntity`, or `LearningInsightEntity` — see
  * docs/database/TRADING-006-Trading-Intelligence-Evidence-Engine.md §1 for the reconciliation.
+ *
+ * v6 -> v7 ([MIGRATION_6_7][com.jarvis.tidb.database.migration.MIGRATION_6_7]) adds
+ * TRADING-007A.1 News & Sentiment Intelligence Platform: 7 purely-additive tables under
+ * `com.jarvis.tidb.news` (source registry, articles, categories, category/instrument links,
+ * sentiment scores, duplicate detection). Deliberately does NOT add new evidence, confidence,
+ * link, or outcome tables — a news article is promoted into the existing `EvidenceRecordEntity`
+ * / `EvidenceLinkEntity` / `EvidenceOutcomeEntity` machinery (Modules 4/5) once it's judged
+ * citable. See docs/database/TRADING-007A.1-News-Sentiment-Intelligence-Platform.md §1 for the
+ * reconciliation, matching the format `TRADING-006`'s §1 established.
  *
  * No destructive fallback — this is the same non-negotiable convention every module has
  * followed since Module 1 Revision 1: every structural change ships an explicit
@@ -332,9 +356,17 @@ import com.jarvis.tidb.intelligence.graph.entity.MarketContextEntity
         EntityRelationshipEntity::class,
         MarketContextEntity::class,
         CausalObservationEntity::class,
-        CorrelationEntity::class
+        CorrelationEntity::class,
+        // ---- TRADING-007A.1 (schema v7) — News & Sentiment Intelligence Platform ----
+        NewsSourceEntity::class,
+        NewsArticleEntity::class,
+        NewsCategoryEntity::class,
+        NewsCategoryLinkEntity::class,
+        NewsInstrumentLinkEntity::class,
+        SentimentScoreEntity::class,
+        NewsDuplicateEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -466,6 +498,15 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
     abstract fun marketContextDao(): MarketContextDao
     abstract fun causalObservationDao(): CausalObservationDao
     abstract fun correlationDao(): CorrelationDao
+
+    // ---- TRADING-007A.1 (schema v7) — News & Sentiment Intelligence Platform ----
+    abstract fun newsSourceDao(): NewsSourceDao
+    abstract fun newsArticleDao(): NewsArticleDao
+    abstract fun newsCategoryDao(): NewsCategoryDao
+    abstract fun newsCategoryLinkDao(): NewsCategoryLinkDao
+    abstract fun newsInstrumentLinkDao(): NewsInstrumentLinkDao
+    abstract fun sentimentScoreDao(): SentimentScoreDao
+    abstract fun newsDuplicateDao(): NewsDuplicateDao
 
     companion object {
         const val DATABASE_NAME = "jarvis_trading_intelligence.db"

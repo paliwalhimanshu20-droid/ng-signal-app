@@ -40,6 +40,11 @@ object TidbMigrations {
      * Purely additive (17 new tables under `com.jarvis.tidb.intelligence`, plus one additive
      * nullable column — `pattern_occurrences.patternId`). See
      * docs/database/TRADING-006-Trading-Intelligence-Evidence-Engine.md.
+     *
+     * v6 -> v7: [MIGRATION_6_7] — TRADING-007A.1 News & Sentiment Intelligence Platform.
+     * Purely additive (7 new tables under `com.jarvis.tidb.news`). Reuses Module 4/5's
+     * evidence/confidence/outcome tables rather than duplicating them — see
+     * docs/database/TRADING-007A.1-News-Sentiment-Intelligence-Platform.md.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
 }
