@@ -63,7 +63,8 @@ class OpenAiCompatibleChatProvider @Inject constructor(
             return@flow
         }
 
-        val language = settingsRepository.appearance.first().language
+        val appearance = settingsRepository.appearance.first()
+        val language = appearance.language
 
         val requestJson = JSONObject().apply {
             put("model", config.model)
@@ -74,7 +75,7 @@ class OpenAiCompatibleChatProvider @Inject constructor(
                     .put(
                         JSONObject().apply {
                             put("role", "system")
-                            put("content", JarvisPersona.systemPrompt(language))
+                            put("content", JarvisPersona.systemPrompt(language, appearance.personaDisplayName))
                         },
                     )
                     .put(

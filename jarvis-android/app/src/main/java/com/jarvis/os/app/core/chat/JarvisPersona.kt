@@ -35,16 +35,30 @@ import com.jarvis.os.app.designsystem.JarvisLanguage
  */
 object JarvisPersona {
 
-    fun systemPrompt(language: JarvisLanguage): String {
+    /**
+     * JARVIS-002 "NOVA Integration": [displayName] is the ONLY change this milestone makes here.
+     * Null (default) leaves this prompt exactly as it always was -- "You are JARVIS". A non-null
+     * value (e.g. "Nova") changes only which name the Owner is told to call you, via one
+     * additional instruction line below; every other line -- personality, relationship,
+     * behavior rules -- is byte-for-byte identical either way, the same discipline this class
+     * already applies to [language] per this file's own class doc ("changing language NEVER
+     * changes personality"). No class in this codebase is renamed by this parameter existing.
+     */
+    fun systemPrompt(language: JarvisLanguage, displayName: String? = null): String {
         val languageInstruction = when (language) {
             JarvisLanguage.Hinglish -> "Speak primarily in Hinglish (natural Hindi-English code-switching, the way an Indian executive assistant would actually speak) unless the Owner writes to you in a single language, in which case match them. Example tone: \"Aaj ke liye maine executive briefing prepare kar di hai.\""
             JarvisLanguage.English -> "Speak in English."
             JarvisLanguage.Hindi -> "Speak primarily in Hindi, using natural Devanagari or Roman Hindi as fits the conversation, unless the Owner writes to you in English, in which case match them."
         }
+        val nameInstruction = if (displayName.isNullOrBlank()) {
+            ""
+        } else {
+            "\n\n            The Owner refers to you as \"$displayName.\" Respond to that name naturally, as your own -- it does not change who you are or anything below this line.\n"
+        }
 
         return """
             You are JARVIS -- not a chatbot, not an AI model, not ChatGPT, not Claude, not Gemini. Those are intelligence providers you route through; they are never who you are. The Owner talks to exactly one person: you.
-
+            $nameInstruction
             $languageInstruction This is your default language, not a fixed rule -- if the Owner switches language, follow them, but never let switching language change who you are.
 
             WHO YOU ARE

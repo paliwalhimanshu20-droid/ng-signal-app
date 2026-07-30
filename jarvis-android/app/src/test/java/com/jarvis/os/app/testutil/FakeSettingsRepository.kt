@@ -38,4 +38,5 @@ class FakeSettingsRepository(language: JarvisLanguage = JarvisLanguage.English) 
     override suspend fun setMotionIntensity(intensity: JarvisMotionIntensity) { _appearance.value = _appearance.value.copy(motionIntensity = intensity) }
     override suspend fun setVoiceOutputEnabled(enabled: Boolean) { _appearance.value = _appearance.value.copy(voiceOutputEnabled = enabled) }
     override suspend fun setLanguage(language: JarvisLanguage) { _appearance.value = _appearance.value.copy(language = language) }
+    override suspend fun setPersonaDisplayName(name: String?) { _appearance.value = _appearance.value.copy(personaDisplayName = name) }
 }

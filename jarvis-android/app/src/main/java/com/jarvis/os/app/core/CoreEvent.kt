@@ -58,4 +58,20 @@ sealed interface CoreEvent {
 
     /** Sprint 15 Executive Integration Audit, item 2 "Tool Execution Feedback": published BEFORE a tool runs, not after -- the one signal that lets a UI show "Checking your calendar..." instead of the owner staring at a blank turn while GoogleCalendarTool's real network call is in flight. See ChatViewModel's collector for the actual UI wiring. */
     data class ToolStarted(val toolId: String, val toolName: String) : CoreEvent
+
+    /**
+     * JARVIS-002 Layer 2/3: published after `DecisionLifecycleRunner`'s stage 11 (MONITOR) has
+     * recorded the corresponding `TradingTimelineEventEntity`, so any listener (a future UI
+     * surface, a future proactive-notification path) can react without depending on
+     * `DecisionLifecycleRunner` directly -- the same "listeners never depend on the producer"
+     * shape every other CoreEvent above already follows. Not yet published by anything in this
+     * first implementation -- the event bus (`_events` + `publish`) is owned by `JarvisCore`
+     * itself, and `JarvisCore` is the one injecting `TradingIntelligenceOrchestrator`, so having
+     * `TradingIntelligenceOrchestrator` or `DecisionLifecycleRunner` publish directly would
+     * require a dependency back onto `JarvisCore`, which is circular. Recommended follow-up:
+     * extract the event bus into its own small `@Singleton` (e.g. `CoreEventBus`) that both
+     * `JarvisCore` and `core.trading.*` depend on independently -- flagged here as a genuine
+     * finding from building this, not deferred by oversight.
+     */
+    data class TradingRecommendationIssued(val recommendationId: Long, val instrumentId: Long) : CoreEvent
 }

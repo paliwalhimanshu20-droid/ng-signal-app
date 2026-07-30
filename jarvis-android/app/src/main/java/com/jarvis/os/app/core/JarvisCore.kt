@@ -9,6 +9,7 @@ import com.jarvis.os.app.core.intelligence.IntentRouter
 import com.jarvis.os.app.core.intelligence.JarvisDecision
 import com.jarvis.os.app.core.intelligence.JarvisDecisionEngine
 import com.jarvis.os.app.core.tools.ToolResult
+import com.jarvis.os.app.core.trading.TradingIntelligenceOrchestrator
 import com.jarvis.os.app.data.model.ApprovalKind
 import com.jarvis.os.app.data.model.ApprovalOutcome
 import com.jarvis.os.app.data.model.ConnectionStatus
@@ -129,6 +130,7 @@ class JarvisCore @Inject constructor(
     private val contextManager: ContextManager,
     private val decisionEngine: JarvisDecisionEngine,
     private val intentRouter: IntentRouter,
+    private val tradingIntelligenceOrchestrator: TradingIntelligenceOrchestrator,
     val watchTower: WatchTowerOrchestrator,
     val briefingEngine: ExecutiveBriefingEngine,
     @ApplicationScope private val appScope: CoroutineScope,
@@ -401,7 +403,9 @@ class JarvisCore @Inject constructor(
 
         val decision = decisionEngine.decide(text)
         val classification = intentRouter.classifyAll(text)
+        val tradingReply = matchTradingInstrumentSymbol(text)?.let { symbol -> tradingIntelligenceOrchestrator.askAbout(symbol) }
         val outcome = when {
+            tradingReply != null -> ChatRoutingOutcome(tradingReply)
             decision.needsBriefing -> ChatRoutingOutcome(renderBriefing(briefingEngine.generateMorningBriefing()))
             decision.needsOrchestration -> ChatRoutingOutcome(renderOrchestrationRequest(text))
             classification.isNotEmpty() -> buildToolBackedContextHint(text, decision, classification)
@@ -598,6 +602,25 @@ class JarvisCore @Inject constructor(
      */
     private fun matchNavigationCommand(text: String): String? =
         navigationCommandsByPhrase[text.trim().lowercase()]
+
+    /**
+     * JARVIS-002 Layer 3, minimal first pass: a real `TradingIntentRouter`/
+     * `TradingQuestionParser` (deterministic, auditable, matching this file's own
+     * IntentRouter/JarvisDecisionEngine convention) is separate, not-yet-built scope --
+     * see `TradingIntelligenceOrchestrator`'s class doc. This placeholder only proves the
+     * runtime wire end to end for September's single validated instrument. The symbol string
+     * below ("NATURALGAS") is a best-guess default pending confirmation against this
+     * environment's actual seeded `InstrumentEntity.symbol` convention -- if it does not match,
+     * `TradingIntelligenceOrchestrator.askAbout` returns null (unresolved instrument) and this
+     * message falls through to JarvisCore's existing, unaffected conversational handling below,
+     * so an incorrect symbol fails safe rather than breaking the chat path.
+     */
+    private fun matchTradingInstrumentSymbol(text: String): String? {
+        val lower = text.trim().lowercase()
+        val tradingKeywords = listOf("natural gas", "naturalgas", "should i buy", "should i sell", "trade verdict", "recommendation for")
+        if (tradingKeywords.none { lower.contains(it) }) return null
+        return "NATURALGAS"
+    }
 
     companion object {
         private val navigationCommandsByPhrase: Map<String, String> = mapOf(

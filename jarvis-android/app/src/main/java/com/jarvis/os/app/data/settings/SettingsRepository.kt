@@ -46,6 +46,8 @@ interface SettingsRepository {
     suspend fun setMotionIntensity(intensity: JarvisMotionIntensity)
     suspend fun setVoiceOutputEnabled(enabled: Boolean)
     suspend fun setLanguage(language: JarvisLanguage)
+    /** JARVIS-002 "NOVA Integration": persists [AppearanceSettings.personaDisplayName]. Pass null to reset to the JARVIS default. */
+    suspend fun setPersonaDisplayName(name: String?)
 }
 
 @Singleton
@@ -63,6 +65,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val MOTION_INTENSITY = stringPreferencesKey("motion_intensity")
         val VOICE_OUTPUT_ENABLED = booleanPreferencesKey("voice_output_enabled")
         val LANGUAGE = stringPreferencesKey("jarvis_language")
+        val PERSONA_DISPLAY_NAME = stringPreferencesKey("persona_display_name")
     }
 
     override val appearance: Flow<AppearanceSettings> = dataStore.data.map { prefs ->
@@ -81,6 +84,7 @@ class DataStoreSettingsRepository @Inject constructor(
             voiceOutputEnabled = prefs[Keys.VOICE_OUTPUT_ENABLED] ?: true,
             language = prefs[Keys.LANGUAGE]?.let { runCatching { JarvisLanguage.valueOf(it) }.getOrNull() }
                 ?: JarvisLanguage.Hinglish,
+            personaDisplayName = prefs[Keys.PERSONA_DISPLAY_NAME],
         )
     }
 
@@ -124,5 +128,11 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override suspend fun setLanguage(language: JarvisLanguage) {
         dataStore.edit { it[Keys.LANGUAGE] = language.name }
+    }
+
+    override suspend fun setPersonaDisplayName(name: String?) {
+        dataStore.edit { prefs ->
+            if (name.isNullOrBlank()) prefs.remove(Keys.PERSONA_DISPLAY_NAME) else prefs[Keys.PERSONA_DISPLAY_NAME] = name
+        }
     }
 }

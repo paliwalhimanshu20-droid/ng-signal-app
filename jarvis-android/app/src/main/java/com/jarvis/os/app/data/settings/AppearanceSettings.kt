@@ -20,4 +20,13 @@ data class AppearanceSettings(
     val voiceOutputEnabled: Boolean = true,
     /** "JARVIS Personality & Experience Bible": "Base Language: Hinglish (Default)." Drives JarvisPersona's system prompt (real AI provider) and every deterministic template's own phrasing (Executive Briefing, Watch Tower idle lines) -- see JarvisLanguage's own docstring. */
     val language: JarvisLanguage = JarvisLanguage.Hinglish,
+    /**
+     * JARVIS-002 "NOVA Integration" scope: the ONLY change this milestone makes toward a
+     * user-facing conversational name. Null (the default) means "JARVIS" -- the platform,
+     * class names, and Constitution are unchanged either way, per that section's explicit "no
+     * rename" instruction. When set (e.g. "Nova"), [com.jarvis.os.app.core.chat.JarvisPersona]
+     * uses it as the name presented to the Owner in conversation; nothing else in this codebase
+     * reads or branches on this value.
+     */
+    val personaDisplayName: String? = null,
 )
