@@ -64,6 +64,15 @@ object NotificationFactory {
         // over; ToolExecuted (the completion event) already covers the
         // notification-worthy outcome.
         is CoreEvent.ToolStarted -> null
+        // JARVIS-002: not yet published by anything (see CoreEvent.kt's docstring on this
+        // subtype for why -- the event bus is owned by JarvisCore, and wiring a publisher would
+        // currently be circular). Once a publisher exists, this is genuinely notification-worthy
+        // (unlike ChatMessageSent above) and should return a real Notification -- most likely
+        // under a new NotificationCategory.TRADING rather than overloading an existing category,
+        // since neither TOOL nor SYSTEM accurately describes "a recommendation was issued."
+        // Left null for now rather than guessed, matching this file's own "decide deliberately,
+        // don't silently drop" rule stated in the class doc above.
+        is CoreEvent.TradingRecommendationIssued -> null
     }
 
     private fun fromToolExecuted(event: CoreEvent.ToolExecuted): Notification {
