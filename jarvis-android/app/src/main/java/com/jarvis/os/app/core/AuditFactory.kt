@@ -27,6 +27,7 @@ object AuditFactory {
         is CoreEvent.TaskStatusChanged -> "Task"
         is CoreEvent.ToolExecuted, is CoreEvent.ToolStarted -> "Tool"
         is CoreEvent.TradingRecommendationIssued -> "Trading"
+        is CoreEvent.LocalIntentResolved -> "Local Intent Router"
     }
 
     private fun CoreEvent.summaryLabel(): String = when (this) {
@@ -39,5 +40,6 @@ object AuditFactory {
         is CoreEvent.ToolExecuted -> "Tool '$toolId' ${if (success) "succeeded" else "failed"}: $summary"
         is CoreEvent.ToolStarted -> "Tool '$toolId' ($toolName) started"
         is CoreEvent.TradingRecommendationIssued -> "Recommendation #$recommendationId issued for instrument $instrumentId"
+        is CoreEvent.LocalIntentResolved -> "Answered locally via $domain (no AI provider called): $summary"
     }
 }

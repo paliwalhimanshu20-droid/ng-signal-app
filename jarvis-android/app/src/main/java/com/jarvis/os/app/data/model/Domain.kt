@@ -131,6 +131,17 @@ data class ChatMessage(
     val sourceToolIds: List<String> = emptyList(),
     /** True if at least one of sourceToolIds' tool calls this turn returned ToolResult.Failure -- lets the UI style a message as an honest connector error rather than a plain reply, without re-parsing the LLM's own wording to guess. */
     val toolFailureOccurred: Boolean = false,
+    /**
+     * "OS First" Local Intent Router: set (to e.g. "TIDB", "SIGNALS", "MISSION_CONTROL") when
+     * this reply was answered entirely by a local repository/service -- see
+     * com.jarvis.os.app.core.intelligence.localintent.LocalIntentRouter -- with NO AI provider
+     * call made this turn at all. Null for every other reply (plain conversational, tool-backed,
+     * briefing, orchestration), including every pre-existing message and test, matching this
+     * field's own "additive, default-null" convention already used by sourceToolIds above. Lets
+     * the UI show an honest "answered locally, no AI used" indicator instead of a "via <tool>"
+     * one, without guessing from the reply text.
+     */
+    val sourceLocalDomain: String? = null,
 )
 
 /**

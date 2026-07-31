@@ -73,7 +73,26 @@ object NotificationFactory {
         // Left null for now rather than guessed, matching this file's own "decide deliberately,
         // don't silently drop" rule stated in the class doc above.
         is CoreEvent.TradingRecommendationIssued -> null
+
+        // "OS First": a message answered entirely by a local repository/service, no AI provider
+        // touched -- genuinely notification-worthy (unlike ChatMessageSent/ChatResponseReceived
+        // above, which are just the in-progress/complete pair for whatever branch actually ran),
+        // since "JARVIS answered this itself, locally" is a real fact about how the system just
+        // behaved, not a live-in-progress signal the chat UI already shows. LOW priority --
+        // routine, expected behavior for an OS-first system, not something requiring attention.
+        is CoreEvent.LocalIntentResolved -> fromLocalIntentResolved(event)
     }
+
+    private fun fromLocalIntentResolved(event: CoreEvent.LocalIntentResolved): Notification = Notification(
+        notificationId = UUID.randomUUID().toString(),
+        category = NotificationCategory.SYSTEM,
+        priority = NotificationPriority.LOW,
+        title = "Answered locally via ${event.domain}",
+        message = event.summary,
+        timestamp = Instant.now(),
+        source = "Local Intent Router",
+        relatedEntityId = null,
+    )
 
     private fun fromToolExecuted(event: CoreEvent.ToolExecuted): Notification {
         return Notification(

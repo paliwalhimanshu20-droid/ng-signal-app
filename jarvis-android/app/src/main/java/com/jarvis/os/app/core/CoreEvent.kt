@@ -74,4 +74,14 @@ sealed interface CoreEvent {
      * finding from building this, not deferred by oversight.
      */
     data class TradingRecommendationIssued(val recommendationId: Long, val instrumentId: Long) : CoreEvent
+
+    /**
+     * "OS First" Local Intent Router: published by JarvisCore.sendChatMessage whenever a turn
+     * was fully answered by [com.jarvis.os.app.core.intelligence.localintent.LocalIntentRouter] --
+     * i.e. NO AI provider was called this turn at all. [domain] is the LocalServiceDomain name
+     * (e.g. "TIDB", "SIGNALS") the answering handler declared. Mirrors ToolExecuted's shape
+     * (id + human summary) since both represent "a real, deterministic subsystem answered this
+     * turn", just with a local repository standing in for a connector tool.
+     */
+    data class LocalIntentResolved(val domain: String, val summary: String) : CoreEvent
 }

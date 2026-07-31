@@ -90,6 +90,10 @@ class JarvisCoreNotificationTest {
             briefingEngine = ExecutiveBriefingEngine(
                 projectsRepo, approvalsRepo, notificationsRepo, connectionsRepo, memoryRepo, agentRegistry, FakeNgSignalProStatusProvider(), settingsRepository, com.jarvis.os.app.testutil.FakeGitHubStatusProvider(),
             ),
+            // No handlers registered -- resolve() always returns null, so existing tests'
+            // AI-bound behavior is unaffected. A future test exercising the OS-first bypass
+            // path supplies its own handler set directly.
+            localIntentRouter = com.jarvis.os.app.core.intelligence.localintent.DefaultLocalIntentRouter(emptySet()),
             appScope = scope,
         )
     }

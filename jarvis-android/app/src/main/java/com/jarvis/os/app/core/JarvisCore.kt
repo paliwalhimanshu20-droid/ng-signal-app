@@ -8,6 +8,7 @@ import com.jarvis.os.app.core.intelligence.IntentClassification
 import com.jarvis.os.app.core.intelligence.IntentRouter
 import com.jarvis.os.app.core.intelligence.JarvisDecision
 import com.jarvis.os.app.core.intelligence.JarvisDecisionEngine
+import com.jarvis.os.app.core.intelligence.localintent.LocalIntentRouter
 import com.jarvis.os.app.core.tools.ToolResult
 import com.jarvis.os.app.core.trading.TradingIntelligenceOrchestrator
 import com.jarvis.os.app.data.model.ApprovalKind
@@ -130,6 +131,7 @@ class JarvisCore @Inject constructor(
     private val contextManager: ContextManager,
     private val decisionEngine: JarvisDecisionEngine,
     private val intentRouter: IntentRouter,
+    private val localIntentRouter: LocalIntentRouter,
     private val tradingIntelligenceOrchestrator: TradingIntelligenceOrchestrator,
     val watchTower: WatchTowerOrchestrator,
     val briefingEngine: ExecutiveBriefingEngine,
@@ -367,7 +369,18 @@ class JarvisCore @Inject constructor(
      * gets sent to ChatRepository.sendMessage, not the event-publishing
      * shape around it.
      *
-     * Routes to exactly one of four things, in priority order:
+     * Routes to exactly one of five things, in priority order:
+     *  0. JARVIS-OS-First "Local Intent Router" (see
+     *     core.intelligence.localintent.LocalIntentRouter): if the message can be answered
+     *     completely by a local repository/service -- Trading Intelligence Database, Signals,
+     *     Analytics, Mission Control, Connected Systems, Diagnostics, or Settings -- it is
+     *     answered from that real data DIRECTLY, via chat.sendLocalMessage, and NO AI provider
+     *     is ever called for this turn. This is deliberately checked first and is the literal
+     *     implementation of "JARVIS is an operating system first, an AI chatbot second" -- every
+     *     branch below this one still ends by calling chat.sendMessage, which always reaches a
+     *     real ChatProvider (see that interface's own contextHint docstring); this is the one
+     *     branch that doesn't. Returns from this method immediately on a match, so nothing below
+     *     runs for a locally-answered turn.
      *  1. needsBriefing -> ExecutiveBriefingEngine (Phase 3) -- a status
      *     roundup, not a reply about the owner's specific words.
      *  2. needsOrchestration -> WatchTowerOrchestrator.requestConvene
@@ -393,6 +406,14 @@ class JarvisCore @Inject constructor(
      *     that reasoning is exactly what step 3 above is a narrow,
      *     justified exception to, not a change to).
      *
+     * NOTE on trading recommendations (matchTradingInstrumentSymbol / tradingReply below): this
+     * predates the Local Intent Router and is intentionally left as its own, separate step --
+     * it is real reasoning over evidence (the 13-stage Decision Lifecycle), not a plain data
+     * lookup, so it still renders through the AI provider for final phrasing exactly as before.
+     * LocalIntentRouter's own TIDB handler is deliberately narrower than this -- raw recorded
+     * facts (price/candle/contract) only, never a recommendation -- so the two never compete for
+     * the same message; see TidbLocalIntentHandler's class docstring for that boundary.
+     *
      * The owner's own chat bubble is unaffected by any of this --
      * ChatRepository.sendMessage's contextHint parameter augments only
      * what the ChatProvider sees, never what's stored as the
@@ -400,6 +421,24 @@ class JarvisCore @Inject constructor(
      */
     suspend fun sendChatMessage(text: String) {
         publish(CoreEvent.ChatMessageSent(chat.activeSessionId, text))
+
+        // Step 0, "OS First": checked before anything else in this method, including before
+        // decisionEngine.decide/intentRouter.classifyAll even run -- a locally-answerable
+        // message never needs to reach the trading/briefing/orchestration/tool/conversational
+        // machinery below at all, and critically never reaches an AI provider. See this method's
+        // own docstring, LocalIntentRouter's docstring, and ChatRepository.sendLocalMessage for
+        // the full "why" -- this three-line block is where the product decision "OS First: do
+        // not call any AI provider when local services can satisfy the request" actually lives.
+        val localResult = localIntentRouter.resolve(text)
+        if (localResult != null) {
+            chat.sendLocalMessage(text, localResult.response, localResult.domain.name)
+            publish(CoreEvent.LocalIntentResolved(localResult.domain.name, localResult.response))
+            chat.messages.value.lastOrNull()?.let { lastMessage ->
+                publish(CoreEvent.ChatResponseReceived(chat.activeSessionId, lastMessage.messageId))
+            }
+            matchNavigationCommand(text)?.let { route -> requestNavigation(route) }
+            return
+        }
 
         val decision = decisionEngine.decide(text)
         val classification = intentRouter.classifyAll(text)

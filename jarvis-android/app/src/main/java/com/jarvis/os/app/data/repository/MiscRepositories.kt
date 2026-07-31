@@ -239,6 +239,17 @@ interface ChatRepository {
      * contextHint was when it was added.
      */
     suspend fun sendMessage(text: String, contextHint: String = "", sourceToolIds: List<String> = emptyList(), hadToolFailure: Boolean = false)
+
+    /**
+     * "OS First" Local Intent Router bypass: appends the owner's message to the transcript
+     * exactly like [sendMessage] does, but the JARVIS reply is [response] verbatim -- `router.active`
+     * / any ChatProvider is never touched for this turn. This is the literal mechanism behind the
+     * product decision "if a request can be answered completely by local services, do not call
+     * any AI provider" -- see LocalIntentRouter's own docstring and JarvisCore.sendChatMessage,
+     * the only caller. [sourceDomain] is stamped onto the resulting ChatMessage.sourceLocalDomain
+     * unchanged, the same "never guessed after the fact" discipline sourceToolIds already follows.
+     */
+    suspend fun sendLocalMessage(text: String, response: String, sourceDomain: String)
 }
 
 /**
@@ -347,5 +358,25 @@ class MockChatRepository @Inject constructor(
             if (alreadyAdded) current.map { if (it.messageId == messageId) message else it }
             else current + message
         }
+    }
+
+    /**
+     * "OS First" bypass -- see this method's interface docstring. Deliberately does NOT touch
+     * `router` at all (not even to log which provider "would have" run, since none does) --
+     * every other branch of this class exists to talk to a ChatProvider; this is the one that
+     * proves it is possible not to.
+     */
+    override suspend fun sendLocalMessage(text: String, response: String, sourceDomain: String) {
+        val sessionId = activeSessionId
+        val userMessage = ChatMessage(
+            UUID.randomUUID().toString(), MessageAuthor.OWNER, MessageContentKind.TEXT, text,
+            timestamp = Instant.now(), sessionId = sessionId,
+        )
+        val replyMessage = ChatMessage(
+            UUID.randomUUID().toString(), MessageAuthor.JARVIS, MessageContentKind.MARKDOWN, response,
+            timestamp = Instant.now(), sessionId = sessionId,
+            sourceLocalDomain = sourceDomain,
+        )
+        _messages.update { it + userMessage + replyMessage }
     }
 }
