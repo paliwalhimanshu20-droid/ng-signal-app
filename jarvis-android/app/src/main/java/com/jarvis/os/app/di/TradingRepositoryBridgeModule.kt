@@ -5,7 +5,10 @@ import com.jarvis.tidb.analytics.repository.PortfolioRepository
 import com.jarvis.tidb.analytics.repository.TimelineRepository
 import com.jarvis.tidb.analytics.repository.TradeRepository
 import com.jarvis.tidb.context.repository.MarketContextIntelligenceRepository
+import com.jarvis.tidb.core.repository.ContractRepository
+import com.jarvis.tidb.core.repository.HistoricalCandleRepository
 import com.jarvis.tidb.core.repository.InstrumentRepository
+import com.jarvis.tidb.core.repository.LiveMarketSnapshotRepository
 import com.jarvis.tidb.decision.repository.DecisionIntelligenceRepository
 import com.jarvis.tidb.di.TidbModule
 import com.jarvis.tidb.historical.evidence.repository.EvidenceRepository
@@ -62,6 +65,29 @@ object TradingRepositoryBridgeModule {
     @Singleton
     fun provideInstrumentRepository(): InstrumentRepository =
         TidbModule.instrumentRepository()
+
+    /**
+     * Local Intent Router addition: [TidbLocalIntentHandler][com.jarvis.os.app.core.intelligence.localintent.TidbLocalIntentHandler]
+     * is this module's first consumer outside the JARVIS-002 September Decision Lifecycle scope
+     * this class's own docstring describes -- it needs raw contract/candle/snapshot data, not
+     * decision-lifecycle evidence, so these three bindings extend the list rather than reuse an
+     * existing one. Same one-line-per-repository pattern as everything else here; [TidbModule]
+     * remains the sole owner of construction/lifetime.
+     */
+    @Provides
+    @Singleton
+    fun provideContractRepository(): ContractRepository =
+        TidbModule.contractRepository()
+
+    @Provides
+    @Singleton
+    fun provideHistoricalCandleRepository(): HistoricalCandleRepository =
+        TidbModule.historicalCandleRepository()
+
+    @Provides
+    @Singleton
+    fun provideLiveMarketSnapshotRepository(): LiveMarketSnapshotRepository =
+        TidbModule.liveMarketSnapshotRepository()
 
     @Provides
     @Singleton
