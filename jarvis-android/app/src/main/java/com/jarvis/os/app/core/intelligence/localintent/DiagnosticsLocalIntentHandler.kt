@@ -29,7 +29,9 @@ class DiagnosticsLocalIntentHandler @Inject constructor(
 
     override val domain = LocalServiceDomain.DIAGNOSTICS
 
-    override suspend fun tryHandle(text: String): String? {
+    override suspend fun tryHandle(text: String): LocalIntentAnswer? = answer(text)?.let { LocalIntentAnswer(it) }
+
+    private suspend fun answer(text: String): String? {
         val lower = text.lowercase()
         return when {
             AUDIT_KEYWORDS.any { it in lower } -> handleAuditLog()

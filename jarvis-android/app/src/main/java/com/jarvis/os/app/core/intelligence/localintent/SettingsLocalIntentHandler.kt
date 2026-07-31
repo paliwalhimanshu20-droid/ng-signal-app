@@ -18,7 +18,9 @@ class SettingsLocalIntentHandler @Inject constructor(
 
     override val domain = LocalServiceDomain.SETTINGS
 
-    override suspend fun tryHandle(text: String): String? {
+    override suspend fun tryHandle(text: String): LocalIntentAnswer? = answer(text)?.let { LocalIntentAnswer(it) }
+
+    private suspend fun answer(text: String): String? {
         val lower = text.lowercase()
         if (KEYWORDS.none { it in lower }) return null
 

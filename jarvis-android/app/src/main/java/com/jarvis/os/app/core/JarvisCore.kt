@@ -8,6 +8,7 @@ import com.jarvis.os.app.core.intelligence.IntentClassification
 import com.jarvis.os.app.core.intelligence.IntentRouter
 import com.jarvis.os.app.core.intelligence.JarvisDecision
 import com.jarvis.os.app.core.intelligence.JarvisDecisionEngine
+import com.jarvis.os.app.core.intelligence.localintent.LocalIntentOutcome
 import com.jarvis.os.app.core.intelligence.localintent.LocalIntentRouter
 import com.jarvis.os.app.core.tools.ToolResult
 import com.jarvis.os.app.core.trading.TradingIntelligenceOrchestrator
@@ -369,18 +370,40 @@ class JarvisCore @Inject constructor(
      * gets sent to ChatRepository.sendMessage, not the event-publishing
      * shape around it.
      *
-     * Routes to exactly one of five things, in priority order:
-     *  0. JARVIS-OS-First "Local Intent Router" (see
-     *     core.intelligence.localintent.LocalIntentRouter): if the message can be answered
-     *     completely by a local repository/service -- Trading Intelligence Database, Signals,
-     *     Analytics, Mission Control, Connected Systems, Diagnostics, or Settings -- it is
-     *     answered from that real data DIRECTLY, via chat.sendLocalMessage, and NO AI provider
-     *     is ever called for this turn. This is deliberately checked first and is the literal
-     *     implementation of "JARVIS is an operating system first, an AI chatbot second" -- every
-     *     branch below this one still ends by calling chat.sendMessage, which always reaches a
-     *     real ChatProvider (see that interface's own contextHint docstring); this is the one
-     *     branch that doesn't. Returns from this method immediately on a match, so nothing below
-     *     runs for a locally-answered turn.
+     * "LocalIntentRouter Offline Completion": routing now has two independent layers, checked in
+     * this order:
+     *
+     *  LAYER 1 -- what can answer this. [localIntentRouter.resolve] always returns a real
+     *  [LocalIntentOutcome], never null (see that class's own docstring for the full contract):
+     *   - LOCAL_ONLY: a local repository/service (Trading Intelligence Database, Signals,
+     *     Analytics, Mission Control, Connected Systems, Diagnostics, Settings, greetings, "who
+     *     are you"/"what can you do"/help/version/status, or the bundled trading glossary)
+     *     answered the message completely. Rendered via [ChatRepository.sendLocalMessage] and
+     *     this method returns immediately -- no AI provider is ever reached for this turn, not
+     *     even if one is configured.
+     *   - LOCAL_PLUS_AI: a handler found real local context worth reasoning over further. Folded
+     *     into `outcome` below as its own contextHint, same shape as a tool-backed reply. No
+     *     handler currently returns this (see LocalIntentRouter's own docstring for why), but the
+     *     branch is real, not a placeholder.
+     *   - NO_MATCH: nothing local recognized the message. Falls through to the original five-step
+     *     chain below unchanged: trading reply, briefing, orchestration, tool-backed, or
+     *     conversational.
+     *
+     *  LAYER 2 -- whether an AI provider can actually be reached. Every path that reaches the
+     *  bottom of this method (LOCAL_PLUS_AI or NO_MATCH) still needs SOME reply rendered, and
+     *  historically that always meant `chat.sendMessage`, which always calls the real active
+     *  ChatProvider -- including when no API key has been saved, which is exactly how a plain
+     *  greeting used to surface a raw "No Claude API key is configured" error before this
+     *  milestone. [ChatRepository.isAiProviderReady] is checked before ever calling
+     *  `chat.sendMessage`: if a provider IS ready, behavior is identical to before. If not, this
+     *  method still shows whatever real local content `outcome.contextHint` already contains
+     *  (a trading reply, a briefing, tool output -- nothing computed locally is ever thrown away
+     *  just because AI is unavailable) and only falls back to the fully generic
+     *  [NO_AI_PROVIDER_MESSAGE] when there is truly no local content to show either. Either way,
+     *  the reply is delivered via [ChatRepository.sendLocalMessage] -- `router.active.sendMessage`
+     *  is never invoked, so its raw error text can never reach the owner.
+     *
+     * Priority order below LAYER 1, unchanged from before this milestone:
      *  1. needsBriefing -> ExecutiveBriefingEngine (Phase 3) -- a status
      *     roundup, not a reply about the owner's specific words.
      *  2. needsOrchestration -> WatchTowerOrchestrator.requestConvene
@@ -409,34 +432,31 @@ class JarvisCore @Inject constructor(
      * NOTE on trading recommendations (matchTradingInstrumentSymbol / tradingReply below): this
      * predates the Local Intent Router and is intentionally left as its own, separate step --
      * it is real reasoning over evidence (the 13-stage Decision Lifecycle), not a plain data
-     * lookup, so it still renders through the AI provider for final phrasing exactly as before.
-     * LocalIntentRouter's own TIDB handler is deliberately narrower than this -- raw recorded
-     * facts (price/candle/contract) only, never a recommendation -- so the two never compete for
-     * the same message; see TidbLocalIntentHandler's class docstring for that boundary.
+     * lookup. LocalIntentRouter's own TIDB handler is deliberately narrower than this -- raw
+     * recorded facts (price/candle/contract) only, never a recommendation -- so the two never
+     * compete for the same message; see TidbLocalIntentHandler's class docstring for that
+     * boundary. Its reply is still subject to the LAYER 2 readiness gate like everything else
+     * that reaches the bottom of this method.
      *
      * The owner's own chat bubble is unaffected by any of this --
      * ChatRepository.sendMessage's contextHint parameter augments only
      * what the ChatProvider sees, never what's stored as the
-     * OWNER-authored ChatMessage (see that interface's docstring).
+     * OWNER-authored ChatMessage (see that interface's docstring). The
+     * same is true of ChatRepository.sendLocalMessage's [text] param.
      */
     suspend fun sendChatMessage(text: String) {
         publish(CoreEvent.ChatMessageSent(chat.activeSessionId, text))
 
-        // Step 0, "OS First": checked before anything else in this method, including before
-        // decisionEngine.decide/intentRouter.classifyAll even run -- a locally-answerable
-        // message never needs to reach the trading/briefing/orchestration/tool/conversational
-        // machinery below at all, and critically never reaches an AI provider. See this method's
-        // own docstring, LocalIntentRouter's docstring, and ChatRepository.sendLocalMessage for
-        // the full "why" -- this three-line block is where the product decision "OS First: do
-        // not call any AI provider when local services can satisfy the request" actually lives.
+        // LAYER 1: see this method's own docstring. Always returns a real LocalIntentOutcome,
+        // never null -- NO_MATCH is a real value here, not an absence this code has to remember
+        // to check for.
         val localResult = localIntentRouter.resolve(text)
-        if (localResult != null) {
-            chat.sendLocalMessage(text, localResult.response, localResult.domain.name)
-            publish(CoreEvent.LocalIntentResolved(localResult.domain.name, localResult.response))
-            chat.messages.value.lastOrNull()?.let { lastMessage ->
-                publish(CoreEvent.ChatResponseReceived(chat.activeSessionId, lastMessage.messageId))
-            }
-            matchNavigationCommand(text)?.let { route -> requestNavigation(route) }
+        if (localResult.outcome == LocalIntentOutcome.LOCAL_ONLY) {
+            val domainName = localResult.domain?.name ?: "LOCAL"
+            val response = localResult.response.orEmpty()
+            chat.sendLocalMessage(text, response, domainName)
+            publish(CoreEvent.LocalIntentResolved(domainName, response))
+            finishChatTurn(text)
             return
         }
 
@@ -444,6 +464,7 @@ class JarvisCore @Inject constructor(
         val classification = intentRouter.classifyAll(text)
         val tradingReply = matchTradingInstrumentSymbol(text)?.let { symbol -> tradingIntelligenceOrchestrator.askAbout(symbol) }
         val outcome = when {
+            localResult.outcome == LocalIntentOutcome.LOCAL_PLUS_AI -> ChatRoutingOutcome(localResult.response.orEmpty())
             tradingReply != null -> ChatRoutingOutcome(tradingReply)
             decision.needsBriefing -> ChatRoutingOutcome(renderBriefing(briefingEngine.generateMorningBriefing()))
             decision.needsOrchestration -> ChatRoutingOutcome(renderOrchestrationRequest(text))
@@ -451,7 +472,20 @@ class JarvisCore @Inject constructor(
             else -> ChatRoutingOutcome(buildConversationalContextHint(text, decision))
         }
 
-        chat.sendMessage(text, outcome.contextHint, outcome.sourceToolIds, outcome.hadToolFailure)
+        // LAYER 2: see this method's own docstring. Never call the real provider when it can't
+        // possibly succeed -- show whatever real local content already exists instead, and only
+        // the fully generic message when there truly is none.
+        if (chat.isAiProviderReady()) {
+            chat.sendMessage(text, outcome.contextHint, outcome.sourceToolIds, outcome.hadToolFailure)
+        } else {
+            val fallback = outcome.contextHint.ifBlank { NO_AI_PROVIDER_MESSAGE }
+            chat.sendLocalMessage(text, fallback, AI_UNAVAILABLE_DOMAIN)
+        }
+        finishChatTurn(text)
+    }
+
+    /** Shared tail of every [sendChatMessage] branch: publish the completion event and resolve any navigation command the owner's own text named -- factored out so LAYER 1's early return and LAYER 2's two branches don't each duplicate it. */
+    private suspend fun finishChatTurn(text: String) {
         chat.messages.value.lastOrNull()?.let { lastMessage ->
             publish(CoreEvent.ChatResponseReceived(chat.activeSessionId, lastMessage.messageId))
         }
@@ -671,5 +705,11 @@ class JarvisCore @Inject constructor(
             "open dashboard" to "dashboard",
             "go home" to "home",
         )
+
+        /** "Offline Completion" milestone LAYER 2 fallback -- see sendChatMessage's own docstring. Shown only when no AI provider is configured AND there is no local content at all to show instead. */
+        private const val NO_AI_PROVIDER_MESSAGE = "I can answer this once an AI provider is configured. Local capabilities remain available."
+
+        /** Stamped onto ChatMessage.sourceLocalDomain for a LAYER 2 fallback reply -- not a real [com.jarvis.os.app.core.intelligence.localintent.LocalServiceDomain], just an honest marker that no AI provider was called this turn either. */
+        private const val AI_UNAVAILABLE_DOMAIN = "AI_UNAVAILABLE"
     }
 }

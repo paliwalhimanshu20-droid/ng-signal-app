@@ -24,7 +24,9 @@ class AnalyticsLocalIntentHandler @Inject constructor(
 
     override val domain = LocalServiceDomain.ANALYTICS
 
-    override suspend fun tryHandle(text: String): String? {
+    override suspend fun tryHandle(text: String): LocalIntentAnswer? = answer(text)?.let { LocalIntentAnswer(it) }
+
+    private suspend fun answer(text: String): String? {
         val lower = text.lowercase()
         return when {
             OPEN_TRADE_KEYWORDS.any { it in lower } -> handleOpenTrades()

@@ -567,6 +567,22 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
     companion object {
         const val DATABASE_NAME = "jarvis_trading_intelligence.db"
 
+        /**
+         * Local Intent Router (DiagnosticsLocalIntentHandler/TidbLocalIntentHandler meta-
+         * questions, e.g. "what tables exist", "what databases exist"): a plain, explicit
+         * constant rather than reading it reflectively off this class's own [Database]
+         * annotation -- Room's annotations are Java-authored with no `@Retention` override,
+         * which defaults to CLASS retention (compile-time only, invisible to
+         * `Class.getAnnotation` at runtime); getting that assumption wrong would NPE-crash the
+         * chat pipeline on a trivial diagnostic question, a far worse failure than this constant
+         * occasionally drifting one version behind. MUST be kept in sync BY HAND with `version`
+         * and the `entities` list in the [Database] annotation above whenever either changes --
+         * there is no compiler enforcement of that, unlike most other single-source-of-truth
+         * values in this codebase, which is exactly why this paragraph exists.
+         */
+        const val SCHEMA_VERSION = 9
+        const val ENTITY_COUNT = 106
+
         @Volatile
         private var INSTANCE: TradingIntelligenceDatabase? = null
 

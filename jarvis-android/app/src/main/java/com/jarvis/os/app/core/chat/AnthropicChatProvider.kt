@@ -45,6 +45,9 @@ class AnthropicChatProvider @Inject constructor(
         AiCapability.CODE_GENERATION,
     )
 
+    /** Same condition [sendMessage] itself checks before emitting "No Claude API key is configured" -- see ChatProvider.isConfigured's own docstring. */
+    override fun isConfigured(): Boolean = keyStore.currentConfig() != null
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)

@@ -4,6 +4,9 @@ import com.jarvis.os.app.core.intelligence.localintent.AnalyticsLocalIntentHandl
 import com.jarvis.os.app.core.intelligence.localintent.ConnectedSystemsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.DefaultLocalIntentRouter
 import com.jarvis.os.app.core.intelligence.localintent.DiagnosticsLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.GreetingLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.HelpLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.KnowledgeBaseLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.LocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.LocalIntentRouter
 import com.jarvis.os.app.core.intelligence.localintent.MissionControlLocalIntentHandler
@@ -58,4 +61,16 @@ abstract class LocalIntentHandlerModule {
     @Binds
     @IntoSet
     abstract fun bindSettingsLocalIntentHandler(impl: SettingsLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindGreetingLocalIntentHandler(impl: GreetingLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindHelpLocalIntentHandler(impl: HelpLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindKnowledgeBaseLocalIntentHandler(impl: KnowledgeBaseLocalIntentHandler): LocalIntentHandler
 }

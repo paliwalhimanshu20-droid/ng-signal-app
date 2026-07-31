@@ -250,6 +250,19 @@ interface ChatRepository {
      * unchanged, the same "never guessed after the fact" discipline sourceToolIds already follows.
      */
     suspend fun sendLocalMessage(text: String, response: String, sourceDomain: String)
+
+    /**
+     * "Offline Completion" milestone: true if the currently active provider ([AiRouter.active])
+     * is actually ready to be called -- see [com.jarvis.os.app.core.chat.ChatProvider.isConfigured]
+     * for what "ready" means per provider. JarvisCore checks this BEFORE calling [sendMessage]
+     * whenever [LocalIntentRouter][com.jarvis.os.app.core.intelligence.localintent.LocalIntentRouter]
+     * didn't fully answer a turn on its own, so a real provider call -- and therefore a raw
+     * "No <provider> API key is configured" [ChatChunk.Error] -- is never attempted in the first
+     * place when nothing would come of it; JarvisCore shows a graceful local message instead. Not
+     * suspend: both `AiRouter.active` and `ChatProvider.isConfigured()` are synchronous in-memory
+     * / already-loaded checks, the same as everywhere else this codebase reads provider readiness.
+     */
+    fun isAiProviderReady(): Boolean
 }
 
 /**
@@ -379,4 +392,6 @@ class MockChatRepository @Inject constructor(
         )
         _messages.update { it + userMessage + replyMessage }
     }
+
+    override fun isAiProviderReady(): Boolean = router.active.isConfigured()
 }

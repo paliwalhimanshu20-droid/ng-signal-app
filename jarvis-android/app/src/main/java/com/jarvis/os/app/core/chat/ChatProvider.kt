@@ -40,6 +40,21 @@ interface ChatProvider {
      * provider is added.
      */
     fun sendMessage(sessionId: String, text: String): Flow<ChatChunk>
+
+    /**
+     * "Offline Completion" milestone: true if this provider is actually ready to be called right
+     * now -- for a real provider (Anthropic/Gemini/Groq/OpenAiCompatible) that means a saved API
+     * key exists (see each one's own override, checking its `ApiKeyStore.currentConfig() != null`
+     * -- the exact same condition that currently makes [sendMessage] emit a
+     * `ChatChunk.Error("No <provider> API key is configured...")`). Lets
+     * `ChatRepository.isAiProviderReady()` / JarvisCore check readiness WITHOUT calling
+     * [sendMessage] and parsing/guessing from a [ChatChunk.Error] -- matching this codebase's "no
+     * fake success, no guessing from text" discipline elsewhere (see ChatMessage.sourceToolIds's
+     * own docstring for the same reasoning applied to tool provenance). Defaults to true, which is
+     * correct for every mock provider (MockChatProvider/MockClaudeProvider/MockGptProvider) --
+     * none of them need a key to produce a reply, so none of them override this.
+     */
+    fun isConfigured(): Boolean = true
 }
 
 sealed interface ChatChunk {
