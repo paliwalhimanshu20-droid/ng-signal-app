@@ -278,7 +278,7 @@ class SettingsViewModel @Inject constructor(
             var succeeded = false
             if (provider != null) {
                 outcome = "No response received."
-                provider.sendMessage("settings-connection-test", "Reply with just the word OK.").collect { chunk ->
+                provider.sendMessage("settings-connection-test", com.jarvis.os.app.core.chat.ChatPrompt("Reply with just the word OK.")).collect { chunk ->
                     when (chunk) {
                         is ChatChunk.Complete -> {
                             outcome = "Connected: ${chunk.fullText.take(80)}"

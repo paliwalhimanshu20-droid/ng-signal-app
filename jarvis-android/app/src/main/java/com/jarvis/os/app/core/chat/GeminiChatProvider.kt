@@ -3,12 +3,14 @@ package com.jarvis.os.app.core.chat
 import android.util.Log
 import com.jarvis.os.app.data.model.AiCapability
 import com.jarvis.os.app.data.settings.GeminiKeyStore
+import com.jarvis.os.app.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.MediaType.Companion.toMediaType
@@ -46,6 +48,7 @@ import javax.inject.Singleton
 @Singleton
 class GeminiChatProvider @Inject constructor(
     private val keyStore: GeminiKeyStore,
+    private val settingsRepository: SettingsRepository,
 ) : ChatProvider {
     override val id: String = "gemini"
     override val displayName: String = "Gemini"
@@ -67,19 +70,38 @@ class GeminiChatProvider @Inject constructor(
     private val _lastOutcome = MutableStateFlow<ProviderConnectionState.AttemptOutcome?>(null)
     val lastOutcome: StateFlow<ProviderConnectionState.AttemptOutcome?> = _lastOutcome.asStateFlow()
 
-    override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
+    override fun sendMessage(sessionId: String, prompt: ChatPrompt): Flow<ChatChunk> = flow {
         val config = keyStore.currentConfig()
         if (config == null) {
             emit(ChatChunk.Error("No Gemini API key is configured. Add one in Settings under AI Provider to talk to Gemini."))
             return@flow
         }
 
+        // "Conversation Replay Bug Fix": this provider previously sent NO system prompt at all --
+        // JarvisPersona was never applied here, and the raw `text` parameter (upstream, always
+        // "$contextHint\n\n$realQuestion") was the entirety of Gemini's input with nothing telling
+        // it that the leading line was background, not the question. Both gaps are fixed together:
+        // a real systemInstruction (persona +, when present, the labeled background block) now
+        // carries memory/recentChat, and the one "user" content turn is prompt.userMessage alone.
+        val appearance = settingsRepository.appearance.first()
+        val systemInstructionText = buildString {
+            append(JarvisPersona.systemPrompt(appearance.language, appearance.personaDisplayName))
+            PromptBuilder.backgroundContextBlock(prompt)?.let { append("\n\n").append(it) }
+        }
+
         val requestJson = JSONObject().apply {
+            put(
+                "systemInstruction",
+                JSONObject().apply {
+                    put("parts", JSONArray().put(JSONObject().apply { put("text", systemInstructionText) }))
+                },
+            )
             put(
                 "contents",
                 JSONArray().put(
                     JSONObject().apply {
-                        put("parts", JSONArray().put(JSONObject().apply { put("text", text) }))
+                        put("role", "user")
+                        put("parts", JSONArray().put(JSONObject().apply { put("text", prompt.userMessage) }))
                     },
                 ),
             )

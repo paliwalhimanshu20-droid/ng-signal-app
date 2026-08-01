@@ -38,8 +38,17 @@ interface ChatProvider {
      * this same interface — see MockChatProvider — not a separate code
      * path that would need to be thrown away when a real streaming
      * provider is added.
+     *
+     * "Conversation Replay Bug Fix": [prompt] replaces what used to be a single flat `text: String`
+     * — see [ChatPrompt]'s own docstring for exactly why that was the root cause of JARVIS
+     * answering with recalled history instead of the Owner's actual question. Every implementation
+     * of this method MUST send [ChatPrompt.userMessage] as the real, current question — verbatim,
+     * never prefixed or blended with [ChatPrompt.memory] / [ChatPrompt.recentChat] — and, for any
+     * provider that calls a real model, MUST send memory/recent chat (when present) as its own
+     * separate background turn via [PromptBuilder.backgroundContextBlock], not folded into the
+     * user turn.
      */
-    fun sendMessage(sessionId: String, text: String): Flow<ChatChunk>
+    fun sendMessage(sessionId: String, prompt: ChatPrompt): Flow<ChatChunk>
 
     /**
      * "Offline Completion" milestone: true if this provider is actually ready to be called right

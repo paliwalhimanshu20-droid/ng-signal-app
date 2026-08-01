@@ -73,6 +73,7 @@ import javax.inject.Singleton
 enum class LocalServiceDomain {
     GREETING,
     HELP,
+    CONVERSATION_SUMMARY,
     TIDB,
     SIGNALS,
     ANALYTICS,

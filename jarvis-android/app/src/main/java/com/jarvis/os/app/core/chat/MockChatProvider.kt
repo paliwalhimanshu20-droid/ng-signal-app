@@ -44,7 +44,14 @@ class MockChatProvider @Inject constructor(
     /** Always-available fallback -- deliberately just GENERAL_CHAT so routeFor never has to treat "no provider matched" as a real failure mode when this one is bound. */
     override val capabilities: Set<AiCapability> = setOf(AiCapability.GENERAL_CHAT)
 
-    override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
+    override fun sendMessage(sessionId: String, prompt: ChatPrompt): Flow<ChatChunk> = flow {
+        // "Conversation Replay Bug Fix": echoes ONLY prompt.userMessage -- never prompt.memory or
+        // prompt.recentChat. This used to echo a flat `text` string that, upstream, was actually
+        // "$contextHint\n\n$realQuestion" -- so a Owner testing offline (no API key yet, exactly
+        // when this provider is active) would see JARVIS "hear" and quote back its own recalled
+        // conversation history verbatim, ahead of their real question. ChatPrompt makes that
+        // impossible here: there is no field on this class that could carry contextHint anymore.
+        val text = prompt.userMessage
         val language = settingsRepository.appearance.first().language
         val reply = when (language) {
             JarvisLanguage.Hinglish -> "Maine sun liya: \"$text\". Main abhi **offline mode** mein hoon kyunki koi AI provider connect nahi hua hai. " +

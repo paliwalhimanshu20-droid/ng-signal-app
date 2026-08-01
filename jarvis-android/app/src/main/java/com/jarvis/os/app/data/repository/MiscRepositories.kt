@@ -223,14 +223,27 @@ interface ChatRepository {
     val activeSessionId: String
 
     /**
-     * Sprint 12 "Context Engine": [contextHint], when non-blank, is
-     * prepended to what the active ChatProvider actually receives --
-     * NOT to the owner-authored ChatMessage stored in [messages], so
-     * the chat transcript still shows exactly what the owner typed.
-     * Defaults to "" so every pre-Sprint-12 call site (including every
-     * existing test) is source-compatible unchanged; JarvisCore is the
-     * only caller that passes a real one, built from
-     * ContextManager.buildContext -- see JarvisCore.sendChatMessage.
+     * Sprint 12 "Context Engine", rewritten for "Conversation Replay Bug Fix": three separate
+     * hints, never concatenated together before this point:
+     *  - [contextHint]: real, CURRENT-turn grounding (tool output, project status, a named
+     *    tool/agent) -- safe to fold directly onto the model's view of the question because it's
+     *    about right now, not a summary of the past. See [com.jarvis.os.app.core.chat.PromptBuilder.build].
+     *  - [memoryHint] / [recentChatHint]: durable personal memory and recent messages,
+     *    respectively -- handed to [com.jarvis.os.app.core.chat.PromptBuilder] to become the
+     *    active [com.jarvis.os.app.core.chat.ChatProvider]'s separate, clearly labeled background
+     *    context, NEVER folded onto the Owner's own message the way a single joined `contextHint`
+     *    param used to do. See [com.jarvis.os.app.core.chat.ChatPrompt]'s own docstring for
+     *    exactly why that old concatenation was the root cause of JARVIS answering with recalled
+     *    conversation history instead of the Owner's real question.
+     *
+     * [text] itself is untouched by any of the three hints -- it is both what's stored in
+     * [messages] AND the literal basis of what the ChatProvider receives; there is no longer a
+     * second, provider-only copy of the Owner's message with unrelated things blended into it
+     * beyond the one, current-turn-only exception [contextHint] documents above.
+     *
+     * All three default to "" so every pre-existing call site remains source-compatible;
+     * [com.jarvis.os.app.core.JarvisCore] is the only real caller, sourcing them separately from
+     * [com.jarvis.os.app.core.intelligence.ContextManager] -- see JarvisCore.sendChatMessage.
      *
      * Sprint 16 "Executive Conversation UI": [sourceToolIds] and
      * [hadToolFailure] are stamped onto the resulting JARVIS
@@ -238,7 +251,7 @@ interface ChatRepository {
      * default to empty/false so this is source-compatible the same way
      * contextHint was when it was added.
      */
-    suspend fun sendMessage(text: String, contextHint: String = "", sourceToolIds: List<String> = emptyList(), hadToolFailure: Boolean = false)
+    suspend fun sendMessage(text: String, contextHint: String = "", memoryHint: String = "", recentChatHint: String = "", sourceToolIds: List<String> = emptyList(), hadToolFailure: Boolean = false)
 
     /**
      * "OS First" Local Intent Router bypass: appends the owner's message to the transcript
@@ -288,8 +301,8 @@ class MockChatRepository @Inject constructor(
      * ChatMessage here ("I'm currently operating in offline mode...").
      * That message was never just UI decoration -- ContextManager.
      * buildContext() treats EVERY message in this list as real
-     * conversation history, and JarvisCore.buildConversationalContextHint()
-     * takes the last few of those and literally prepends "we recently
+     * conversation history, and JarvisCore.buildBaseContextParts() used
+     * to take the last few of those and literally prepend "we recently
      * touched on: ..." to every future message sent to a real provider.
      * Once a real provider (Groq, in the reported case) actually started
      * working, it was still being told on every single turn that JARVIS
@@ -301,16 +314,23 @@ class MockChatRepository @Inject constructor(
      * contaminated by stale seed content that never should have been
      * real conversation history in the first place.
      *
-     * Fixed by not seeding a ChatMessage at all -- the empty list here
+     * Fixed here by not seeding a ChatMessage at all -- the empty list here
      * is the honest starting state. The same helpful "not connected
      * yet" text now lives purely in ChatScreen's UI layer (see that
      * file), shown only when this list is empty, and is never a
      * ChatMessage that could be fed back into a real provider's context.
+     *
+     * "Conversation Replay Bug Fix" went further and removed the root cause outright:
+     * JarvisCore.buildBaseContextParts no longer reads recentConversation AT ALL for an
+     * ordinary turn, seeded ChatMessage or not -- see that method's own docstring. This
+     * class's seeding fix above remains correct and necessary (an empty starting
+     * transcript is still the honest state), it's just no longer the only thing standing
+     * between a stray seeded message and a contaminated reply.
      */
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     override val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
-    override suspend fun sendMessage(text: String, contextHint: String, sourceToolIds: List<String>, hadToolFailure: Boolean) {
+    override suspend fun sendMessage(text: String, contextHint: String, memoryHint: String, recentChatHint: String, sourceToolIds: List<String>, hadToolFailure: Boolean) {
         val sessionId = activeSessionId
         val userMessage = ChatMessage(
             UUID.randomUUID().toString(), MessageAuthor.OWNER, MessageContentKind.TEXT, text,
@@ -318,10 +338,14 @@ class MockChatRepository @Inject constructor(
         )
         _messages.update { it + userMessage }
 
-        // The provider sees context-augmented text; the transcript above
-        // (and therefore the owner's own chat bubble) keeps the exact
-        // words they typed -- see this interface's docstring for why.
-        val promptForProvider = if (contextHint.isBlank()) text else "$contextHint\n\n$text"
+        // "Conversation Replay Bug Fix": the provider now receives a structured ChatPrompt built
+        // by PromptBuilder -- contextHint (real, current-turn grounding) is the only thing still
+        // folded onto `text`; memoryHint/recentChatHint become their own separate, clearly labeled
+        // background fields, never concatenated onto the Owner's own message (see PromptBuilder/
+        // ChatPrompt's own docstrings for exactly why that string-smashing used to be the root
+        // cause of the replay bug). The transcript above (and therefore the owner's own chat
+        // bubble) already showed exactly what they typed even before this fix.
+        val prompt = com.jarvis.os.app.core.chat.PromptBuilder.build(text, contextHint, memoryHint, recentChatHint)
 
         // One fixed id reused across every Token/Complete chunk in this
         // turn: the LazyColumn in ChatScreen keys rows by messageId, so
@@ -340,7 +364,7 @@ class MockChatRepository @Inject constructor(
         // logs confirm what happened after.
         android.util.Log.d("MockChatRepository", "sendMessage: routing to activeProvider=${router.active.id} (${router.active.displayName})")
 
-        router.active.sendMessage(sessionId, promptForProvider).collect { chunk ->
+        router.active.sendMessage(sessionId, prompt).collect { chunk ->
             when (chunk) {
                 is ChatChunk.Token -> {
                     upsertReply(replyMessageId, chunk.text, sessionId, alreadyAdded = replyAdded, sourceToolIds = sourceToolIds, hadToolFailure = hadToolFailure)

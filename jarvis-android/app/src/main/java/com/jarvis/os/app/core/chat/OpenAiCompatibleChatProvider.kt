@@ -59,7 +59,7 @@ class OpenAiCompatibleChatProvider @Inject constructor(
     private val _lastOutcome = MutableStateFlow<ProviderConnectionState.AttemptOutcome?>(null)
     val lastOutcome: StateFlow<ProviderConnectionState.AttemptOutcome?> = _lastOutcome.asStateFlow()
 
-    override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
+    override fun sendMessage(sessionId: String, prompt: ChatPrompt): Flow<ChatChunk> = flow {
         val config = apiKeyStore.currentConfig()
         if (config == null || config.apiKey.isBlank()) {
             emit(ChatChunk.Error("No API key is configured. Add one in Settings under AI Provider to enable real AI conversation."))
@@ -69,25 +69,36 @@ class OpenAiCompatibleChatProvider @Inject constructor(
         val appearance = settingsRepository.appearance.first()
         val language = appearance.language
 
+        // "Conversation Replay Bug Fix": memory/recentChat, when present, become their own
+        // background system turn -- via PromptBuilder.backgroundContextBlock -- appended AFTER
+        // the persona prompt and BEFORE the user turn. The user turn below is always
+        // prompt.userMessage alone, never contextHint+text concatenated the way it used to be.
+        val messages = JSONArray()
+            .put(
+                JSONObject().apply {
+                    put("role", "system")
+                    put("content", JarvisPersona.systemPrompt(language, appearance.personaDisplayName))
+                },
+            )
+        PromptBuilder.backgroundContextBlock(prompt)?.let { background ->
+            messages.put(
+                JSONObject().apply {
+                    put("role", "system")
+                    put("content", background)
+                },
+            )
+        }
+        messages.put(
+            JSONObject().apply {
+                put("role", "user")
+                put("content", prompt.userMessage)
+            },
+        )
+
         val requestJson = JSONObject().apply {
             put("model", config.model)
             put("stream", false)
-            put(
-                "messages",
-                JSONArray()
-                    .put(
-                        JSONObject().apply {
-                            put("role", "system")
-                            put("content", JarvisPersona.systemPrompt(language, appearance.personaDisplayName))
-                        },
-                    )
-                    .put(
-                        JSONObject().apply {
-                            put("role", "user")
-                            put("content", text)
-                        },
-                    ),
-            )
+            put("messages", messages)
         }
         val requestBody = requestJson.toString().toRequestBody("application/json".toMediaType())
 

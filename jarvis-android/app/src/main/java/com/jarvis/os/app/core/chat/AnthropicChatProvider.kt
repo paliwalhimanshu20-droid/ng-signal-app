@@ -3,12 +3,14 @@ package com.jarvis.os.app.core.chat
 import android.util.Log
 import com.jarvis.os.app.data.model.AiCapability
 import com.jarvis.os.app.data.settings.AnthropicKeyStore
+import com.jarvis.os.app.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.MediaType.Companion.toMediaType
@@ -35,6 +37,7 @@ import javax.inject.Singleton
 @Singleton
 class AnthropicChatProvider @Inject constructor(
     private val keyStore: AnthropicKeyStore,
+    private val settingsRepository: SettingsRepository,
 ) : ChatProvider {
     override val id: String = "anthropic"
     override val displayName: String = "Claude"
@@ -56,22 +59,34 @@ class AnthropicChatProvider @Inject constructor(
     private val _lastOutcome = MutableStateFlow<ProviderConnectionState.AttemptOutcome?>(null)
     val lastOutcome: StateFlow<ProviderConnectionState.AttemptOutcome?> = _lastOutcome.asStateFlow()
 
-    override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
+    override fun sendMessage(sessionId: String, prompt: ChatPrompt): Flow<ChatChunk> = flow {
         val config = keyStore.currentConfig()
         if (config == null) {
             emit(ChatChunk.Error("No Claude API key is configured. Add one in AI Provider Settings to talk to Claude."))
             return@flow
         }
 
+        // "Conversation Replay Bug Fix": same fix as every other real provider -- see
+        // GroqChatProvider's docstring on this same change for the full history. Claude's
+        // `system` field is top-level (not a role inside `messages`, unlike OpenAI/Groq), so the
+        // persona + labeled background block are combined into that one field; the sole entry in
+        // `messages` is prompt.userMessage alone, never contextHint-contaminated.
+        val appearance = settingsRepository.appearance.first()
+        val systemText = buildString {
+            append(JarvisPersona.systemPrompt(appearance.language, appearance.personaDisplayName))
+            PromptBuilder.backgroundContextBlock(prompt)?.let { append("\n\n").append(it) }
+        }
+
         val requestJson = JSONObject().apply {
             put("model", config.model)
             put("max_tokens", 1024)
+            put("system", systemText)
             put(
                 "messages",
                 JSONArray().put(
                     JSONObject().apply {
                         put("role", "user")
-                        put("content", text)
+                        put("content", prompt.userMessage)
                     },
                 ),
             )

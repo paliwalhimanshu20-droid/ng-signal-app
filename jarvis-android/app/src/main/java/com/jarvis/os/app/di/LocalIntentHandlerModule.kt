@@ -2,6 +2,7 @@ package com.jarvis.os.app.di
 
 import com.jarvis.os.app.core.intelligence.localintent.AnalyticsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.ConnectedSystemsLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.ConversationLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.DefaultLocalIntentRouter
 import com.jarvis.os.app.core.intelligence.localintent.DiagnosticsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.GreetingLocalIntentHandler
@@ -69,6 +70,10 @@ abstract class LocalIntentHandlerModule {
     @Binds
     @IntoSet
     abstract fun bindHelpLocalIntentHandler(impl: HelpLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindConversationLocalIntentHandler(impl: ConversationLocalIntentHandler): LocalIntentHandler
 
     @Binds
     @IntoSet

@@ -3,12 +3,14 @@ package com.jarvis.os.app.core.chat
 import android.util.Log
 import com.jarvis.os.app.data.model.AiCapability
 import com.jarvis.os.app.data.settings.GroqKeyStore
+import com.jarvis.os.app.data.settings.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.MediaType.Companion.toMediaType
@@ -44,6 +46,7 @@ import javax.inject.Singleton
 @Singleton
 class GroqChatProvider @Inject constructor(
     private val keyStore: GroqKeyStore,
+    private val settingsRepository: SettingsRepository,
 ) : ChatProvider {
     override val id: String = "groq"
     override val displayName: String = "Groq"
@@ -64,25 +67,47 @@ class GroqChatProvider @Inject constructor(
     private val _lastOutcome = MutableStateFlow<ProviderConnectionState.AttemptOutcome?>(null)
     val lastOutcome: StateFlow<ProviderConnectionState.AttemptOutcome?> = _lastOutcome.asStateFlow()
 
-    override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
+    override fun sendMessage(sessionId: String, prompt: ChatPrompt): Flow<ChatChunk> = flow {
         val config = keyStore.currentConfig()
         if (config == null) {
             emit(ChatChunk.Error("No Groq API key is configured. Add one in Settings under AI Provider to talk to Groq."))
             return@flow
         }
 
+        // "Conversation Replay Bug Fix": this is the exact provider named in
+        // MockChatRepository's own history docstring as where the reported replay bug actually
+        // surfaced -- this class previously sent NO system prompt at all (only a bare "user" turn
+        // holding the raw, contextHint-contaminated `text`), so Groq's model had literally nothing
+        // telling it "we recently touched on: ..." was background rather than the start of what to
+        // respond to. Same fix as every other real provider: persona + labeled background block as
+        // a separate "system" turn, "user" turn is prompt.userMessage alone.
+        val appearance = settingsRepository.appearance.first()
+        val messages = JSONArray()
+            .put(
+                JSONObject().apply {
+                    put("role", "system")
+                    put("content", JarvisPersona.systemPrompt(appearance.language, appearance.personaDisplayName))
+                },
+            )
+        PromptBuilder.backgroundContextBlock(prompt)?.let { background ->
+            messages.put(
+                JSONObject().apply {
+                    put("role", "system")
+                    put("content", background)
+                },
+            )
+        }
+        messages.put(
+            JSONObject().apply {
+                put("role", "user")
+                put("content", prompt.userMessage)
+            },
+        )
+
         val requestJson = JSONObject().apply {
             put("model", config.model)
             put("stream", false)
-            put(
-                "messages",
-                JSONArray().put(
-                    JSONObject().apply {
-                        put("role", "user")
-                        put("content", text)
-                    },
-                ),
-            )
+            put("messages", messages)
         }
         val requestBody = requestJson.toString().toRequestBody("application/json".toMediaType())
 

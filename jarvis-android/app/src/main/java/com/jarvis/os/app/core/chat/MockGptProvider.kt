@@ -32,9 +32,11 @@ class MockGptProvider @Inject constructor() : ChatProvider {
         AiCapability.VISION,
     )
 
-    override fun sendMessage(sessionId: String, text: String): Flow<ChatChunk> = flow {
+    override fun sendMessage(sessionId: String, prompt: ChatPrompt): Flow<ChatChunk> = flow {
+        // "Conversation Replay Bug Fix": echoes prompt.userMessage only -- see MockChatProvider's
+        // own docstring on this same change for the exact bug this prevents.
         val reply = "I'm not connected to ChatGPT yet -- add an API key under Settings, AI Provider, " +
-            "and we can have a real conversation together. For now, here's what I heard: \"$text\"."
+            "and we can have a real conversation together. For now, here's what I heard: \"${prompt.userMessage}\"."
         emit(ChatChunk.Complete(reply))
     }
 }

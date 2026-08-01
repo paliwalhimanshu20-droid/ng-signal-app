@@ -61,7 +61,14 @@ class TidbLocalIntentHandler @Inject constructor(
 
         val parts = mutableListOf("${instrument.displayName} (${instrument.symbol}), ${instrument.assetClass.value.lowercase()}.")
 
-        if (PRICE_KEYWORDS.any { it in lower }) {
+        // "Conversation Replay Bug Fix", Requirement 7/9: a general "what do you have of X" style
+        // question (GENERAL_INVENTORY_KEYWORDS) doesn't name price/candle/contract specifically --
+        // it's asking for everything on record, so it gets all three sections, the same honest
+        // "datasets/signals/history" answer a real inventory question deserves rather than the bare
+        // one-line instrument identity a narrower query would otherwise get.
+        val wantsFullInventory = GENERAL_INVENTORY_KEYWORDS.any { it in lower }
+
+        if (wantsFullInventory || PRICE_KEYWORDS.any { it in lower }) {
             val snapshot = liveSnapshots.observeByInstrument(instrument.instrumentId).first()
             parts += if (snapshot != null) {
                 "Last recorded price: ${snapshot.lastPrice} (market ${snapshot.marketStatus.value.lowercase()})."
@@ -70,7 +77,7 @@ class TidbLocalIntentHandler @Inject constructor(
             }
         }
 
-        if (CANDLE_KEYWORDS.any { it in lower }) {
+        if (wantsFullInventory || CANDLE_KEYWORDS.any { it in lower }) {
             val latest = candles.getLatest(instrument.instrumentId, Timeframe.D1, limit = 1).firstOrNull()
             parts += if (latest != null) {
                 "Latest daily candle: open ${latest.open}, high ${latest.high}, low ${latest.low}, close ${latest.close}, recorded ${Instant.ofEpochMilli(latest.timestamp)}."
@@ -79,7 +86,7 @@ class TidbLocalIntentHandler @Inject constructor(
             }
         }
 
-        if (CONTRACT_KEYWORDS.any { it in lower }) {
+        if (wantsFullInventory || CONTRACT_KEYWORDS.any { it in lower }) {
             val contract = contracts.getNearestActiveContract(instrument.instrumentId)
             parts += if (contract != null) {
                 "Nearest active contract expires ${Instant.ofEpochMilli(contract.expiryDate)}, rolls ${Instant.ofEpochMilli(contract.rollDate)}."
@@ -94,7 +101,16 @@ class TidbLocalIntentHandler @Inject constructor(
         return parts.joinToString(" ")
     }
 
-    /** "Offline Completion" milestone, requirement 3: schema/inventory questions about TIDB itself, independent of any single instrument. */
+    /** "Offline Completion" milestone, requirement 3: schema/inventory questions about TIDB itself, independent of any single instrument.
+     *
+     * "Conversation Replay Bug Fix", Requirement 7: extended with the broader "what do you have"/
+     * "what's in the database"/"available instruments" phrasings a real Owner actually types --
+     * these used to fall through every handler here (none of the original phrasings matched them)
+     * and land in JarvisCore's AI-bound conversational path, which is exactly the path the
+     * now-removed unconditional history injection contaminated. Answering them locally and
+     * deterministically means these specific questions can never trigger that class of bug again,
+     * regardless of what any future AI-path change does.
+     */
     private suspend fun metaAnswer(lower: String): String? = when {
         "how many instrument" in lower -> {
             val count = instruments.observeAll().first().size
@@ -104,7 +120,8 @@ class TidbLocalIntentHandler @Inject constructor(
             val total = countAllCandles()
             "There ${if (total == 1) "is" else "are"} $total historical candle(s) recorded across all instruments and timeframes."
         }
-        "do you have data" in lower || "do you have any data" in lower -> {
+        "do you have data" in lower || "do you have any data" in lower ||
+            (("what do you have" in lower || "what's in" in lower || "whats in" in lower) && "database" in lower) -> {
             val instrumentCount = instruments.observeAll().first().size
             if (instrumentCount == 0) {
                 "No trading data has been imported yet -- the Trading Intelligence Database is currently empty."
@@ -121,7 +138,19 @@ class TidbLocalIntentHandler @Inject constructor(
             "TIDB is organized into 8 modules: Core Market Foundation, Signal Intelligence, Trading Analytics & Learning, " +
                 "Decision Intelligence, Historical Evidence, Market Intelligence (confidence/graph/pattern/regime/research), Market Context, and News."
         }
+        "show available instrument" in lower || "available instruments" in lower ||
+            "what instruments" in lower || "which instruments" in lower -> instrumentListSummary()
         else -> null
+    }
+
+    /** "Conversation Replay Bug Fix", Requirement 7: "show available instruments" / "what instruments" -- a real, current list, not a count. */
+    private suspend fun instrumentListSummary(): String {
+        val all = instruments.observeAll().first()
+        return if (all.isEmpty()) {
+            "No instruments are seeded in the Trading Intelligence Database yet."
+        } else {
+            "Available instruments: " + all.joinToString(", ") { "${it.displayName} (${it.symbol})" } + "."
+        }
     }
 
     /**
@@ -147,6 +176,13 @@ class TidbLocalIntentHandler @Inject constructor(
         private val PRICE_KEYWORDS = setOf("price", "quote", "trading at", "last traded")
         private val CANDLE_KEYWORDS = setOf("candle", "ohlc", "open high low close")
         private val CONTRACT_KEYWORDS = setOf("contract", "expiry", "expire", "roll date")
-        private val DATA_KEYWORDS = PRICE_KEYWORDS + CANDLE_KEYWORDS + CONTRACT_KEYWORDS + setOf("instrument data", "market data for", "tell me about")
+
+        /** "Conversation Replay Bug Fix", Requirement 7: broad "give me everything you have" phrasings -- distinct from the narrower PRICE/CANDLE/CONTRACT keyword sets since matching one of these means "all sections", not just one. */
+        private val GENERAL_INVENTORY_KEYWORDS = setOf(
+            "what do you have", "what data", "data exists", "dataset", "datasets",
+            "show me data", "available data", "signals for", "history for", "data on", "data for",
+        )
+        private val DATA_KEYWORDS = PRICE_KEYWORDS + CANDLE_KEYWORDS + CONTRACT_KEYWORDS + GENERAL_INVENTORY_KEYWORDS +
+            setOf("instrument data", "market data for", "tell me about")
     }
 }

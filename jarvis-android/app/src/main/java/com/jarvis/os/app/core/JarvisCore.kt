@@ -419,15 +419,16 @@ class JarvisCore @Inject constructor(
      *     buildToolBackedContextHint's own docstring for why this is
      *     safe to auto-run where JarvisDecisionEngine.matchedTool
      *     deliberately is not.
-     *  4. otherwise -> the Phase 1 conversational context hint: recalled
-     *     memory/conversation (ContextManager, consulted every turn --
-     *     Phase 3's "no repeated explanations" means memory is never
-     *     conditional on a keyword), project status if relevant, and an
-     *     honest, non-executing note about any tool or agent the
-     *     message named (see buildConversationalContextHint's own
-     *     docstring for why matched tools/agents are never auto-run --
-     *     that reasoning is exactly what step 3 above is a narrow,
-     *     justified exception to, not a change to).
+     *  4. otherwise -> the Phase 1 conversational context hint: project status if relevant, and an
+     *     honest, non-executing note about any tool or agent the message named (see
+     *     buildConversationalContextHint's own docstring for why matched tools/agents are never
+     *     auto-run -- that reasoning is exactly what step 3 above is a narrow, justified exception
+     *     to, not a change to). "Conversation Replay Bug Fix": this step (via
+     *     buildBaseContextParts) no longer includes recalled conversation history here at all --
+     *     durable personal memory is still consulted every turn but returned as its own separate
+     *     ChatRoutingOutcome.memoryHint, and recent conversation is sourced independently, below,
+     *     as its own recentChatHint -- see buildBaseContextParts' own docstring for the full
+     *     reasoning and why this was the actual root cause of the replay bug.
      *
      * NOTE on trading recommendations (matchTradingInstrumentSymbol / tradingReply below): this
      * predates the Local Intent Router and is intentionally left as its own, separate step --
@@ -469,14 +470,23 @@ class JarvisCore @Inject constructor(
             decision.needsBriefing -> ChatRoutingOutcome(renderBriefing(briefingEngine.generateMorningBriefing()))
             decision.needsOrchestration -> ChatRoutingOutcome(renderOrchestrationRequest(text))
             classification.isNotEmpty() -> buildToolBackedContextHint(text, decision, classification)
-            else -> ChatRoutingOutcome(buildConversationalContextHint(text, decision))
+            else -> buildConversationalContextHint(text, decision)
         }
 
         // LAYER 2: see this method's own docstring. Never call the real provider when it can't
         // possibly succeed -- show whatever real local content already exists instead, and only
         // the fully generic message when there truly is none.
         if (chat.isAiProviderReady()) {
-            chat.sendMessage(text, outcome.contextHint, outcome.sourceToolIds, outcome.hadToolFailure)
+            // "Conversation Replay Bug Fix": recentChatHint is sourced fresh here, independently of
+            // outcome.contextHint -- it is the one place a few real recent messages are still made
+            // available to a real AI provider (per this file's own requirement that recent chat stays
+            // "only for AI providers"), always as its own separate, clearly labeled channel -- see
+            // ChatRepository.sendMessage's own docstring. It is intentionally NOT computed for the
+            // isAiProviderReady()==false branch below, since sendLocalMessage never reaches a
+            // ChatProvider at all and has nothing that would ever read it.
+            val recentChatHint = contextManager.buildContext(sessionId = chat.activeSessionId, query = text)
+                .recentConversation.takeLast(RECENT_CHAT_MESSAGE_LIMIT).joinToString("\n")
+            chat.sendMessage(text, outcome.contextHint, outcome.memoryHint, recentChatHint, outcome.sourceToolIds, outcome.hadToolFailure)
         } else {
             val fallback = outcome.contextHint.ifBlank { NO_AI_PROVIDER_MESSAGE }
             chat.sendLocalMessage(text, fallback, AI_UNAVAILABLE_DOMAIN)
@@ -541,8 +551,9 @@ class JarvisCore @Inject constructor(
      * orchestration request plus owner approval, never as a side effect
      * of an ordinary message that happened to mention an agent's name.
      */
-    private suspend fun buildConversationalContextHint(text: String, decision: JarvisDecision): String {
-        val parts = buildBaseContextParts(text, decision)
+    private suspend fun buildConversationalContextHint(text: String, decision: JarvisDecision): ChatRoutingOutcome {
+        val base = buildBaseContextParts(text, decision)
+        val parts = base.parts
         decision.matchedTool?.let { tool ->
             parts += "${tool.name} looks relevant here -- it's available from the Tools screen whenever you'd like to run it"
         }
@@ -550,7 +561,8 @@ class JarvisCore @Inject constructor(
             parts += "${agent.name} specializes in ${agent.specialty.lowercase()} and could weigh in if you'd like to bring the team in"
         }
 
-        return if (parts.isEmpty()) "" else parts.joinToString(". ") + "."
+        val hint = if (parts.isEmpty()) "" else parts.joinToString(". ") + "."
+        return ChatRoutingOutcome(hint, memoryHint = base.memoryHint)
     }
 
     /**
@@ -563,11 +575,23 @@ class JarvisCore @Inject constructor(
      * new, both defaulting to "nothing tool-backed happened this turn"
      * so briefing/orchestration/plain-conversation replies are
      * unaffected.
+     *
+     * "Conversation Replay Bug Fix": [memoryHint] is new -- durable personal-memory facts,
+     * carried SEPARATELY from [contextHint] rather than folded into the same joined string.
+     * [contextHint] itself no longer carries recalled conversation history at all (see
+     * [buildBaseContextParts]'s own docstring for why that line was removed entirely, not just
+     * relabeled) -- it is now only ever real, actionable grounding: tool output, project status,
+     * a named tool/agent, a briefing, or a trading reply. Both flow into
+     * [ChatRepository.sendMessage] as distinct parameters and, from there, into
+     * [com.jarvis.os.app.core.chat.PromptBuilder] as distinct [com.jarvis.os.app.core.chat.ChatPrompt]
+     * fields -- there is no longer any single point downstream where they get concatenated with
+     * the Owner's own message.
      */
     private data class ChatRoutingOutcome(
         val contextHint: String,
         val sourceToolIds: List<String> = emptyList(),
         val hadToolFailure: Boolean = false,
+        val memoryHint: String = "",
     )
 
     /**
@@ -613,9 +637,10 @@ class JarvisCore @Inject constructor(
      * reconstructed later by guessing.
      */
     private suspend fun buildToolBackedContextHint(text: String, decision: JarvisDecision, classifications: List<IntentClassification>): ChatRoutingOutcome {
-        val parts = buildBaseContextParts(text, decision)
+        val base = buildBaseContextParts(text, decision)
+        val parts = base.parts
         val toolIds = classifications.mapNotNull { it.toolId }.distinct()
-        if (toolIds.isEmpty()) return ChatRoutingOutcome(buildConversationalContextHint(text, decision))
+        if (toolIds.isEmpty()) return buildConversationalContextHint(text, decision)
 
         var hadFailure = false
         for (toolId in toolIds) {
@@ -639,28 +664,62 @@ class JarvisCore @Inject constructor(
             parts += "${agent.name} specializes in ${agent.specialty.lowercase()} and could weigh in if you'd like to bring the team in"
         }
 
-        return ChatRoutingOutcome(parts.joinToString(". ") + ".", toolIds, hadFailure)
+        return ChatRoutingOutcome(parts.joinToString(". ") + ".", toolIds, hadFailure, base.memoryHint)
     }
 
-    /** Shared by buildConversationalContextHint and buildToolBackedContextHint -- recalled memory/conversation (unconditional every turn) plus project status when relevant. Neither tool-naming nor tool-running belongs here; each caller appends its own version of that. */
-    private suspend fun buildBaseContextParts(text: String, decision: JarvisDecision): MutableList<String> {
+    /**
+     * Shared by buildConversationalContextHint and buildToolBackedContextHint -- project status
+     * when relevant, plus (returned separately, see [BaseContextParts.memoryHint]) durable
+     * personal-memory facts. Neither tool-naming nor tool-running belongs here; each caller
+     * appends its own version of that.
+     *
+     * "Conversation Replay Bug Fix" -- ROOT CAUSE FIX: this method used to unconditionally add
+     * `"we recently touched on: ${context.recentConversation.takeLast(3)...}"` as the FIRST line
+     * of `parts` on every single AI-bound turn, regardless of whether the Owner's message had
+     * anything to do with earlier conversation. That line then flowed, still as plain text, all
+     * the way into what the active ChatProvider received as its entire prompt (see
+     * MockChatRepository.sendMessage's old `"$contextHint\n\n$text"` concatenation) -- so a model
+     * given "we recently touched on: X; Y; Z" as the first thing it reads naturally opened its
+     * reply by acknowledging that, instead of answering the real, current question that followed
+     * it. Two things fix this together, not one:
+     *  1. This method no longer reads or surfaces `context.recentConversation` AT ALL for an
+     *     ordinary turn. Nothing here re-adds it in a "safer" wrapper -- it is simply not part of
+     *     what an ordinary question's prompt contains anymore.
+     *  2. A message that's actually, explicitly ASKING to recall the conversation ("what did we
+     *     discuss", "summarize our conversation", "what do you remember") is now answered by
+     *     [com.jarvis.os.app.core.intelligence.localintent.ConversationLocalIntentHandler] at LAYER
+     *     1, deterministically and locally, before this method (or any AI provider) is ever
+     *     reached -- see that class's own docstring. That is the ONLY path by which recalled
+     *     conversation history can become part of a JARVIS reply, and it is never blended with an
+     *     unrelated question the way this method used to do unconditionally.
+     *
+     * `relevantPersonalMemory` (durable cross-session facts/preferences -- a genuinely different,
+     * lower-risk thing than raw conversation transcript) is still consulted every turn, but is
+     * returned as its own field ([BaseContextParts.memoryHint]) rather than appended into `parts`
+     * -- callers thread it into [ChatRoutingOutcome.memoryHint], which
+     * [com.jarvis.os.app.core.chat.PromptBuilder] renders as clearly labeled background context,
+     * never as something concatenated with -- or mistakable for -- the Owner's own message.
+     */
+    private suspend fun buildBaseContextParts(text: String, decision: JarvisDecision): BaseContextParts {
         val context = contextManager.buildContext(sessionId = chat.activeSessionId, query = text)
         val parts = mutableListOf<String>()
 
-        if (context.recentConversation.isNotEmpty()) {
-            parts += "we recently touched on: ${context.recentConversation.takeLast(3).joinToString("; ")}"
-        }
-        if (context.relevantPersonalMemory.isNotEmpty()) {
-            parts += "for context: ${context.relevantPersonalMemory.joinToString("; ")}"
-        }
         if (decision.needsProjectContext && projects.projects.value.isNotEmpty()) {
             val summary = projects.projects.value.joinToString("; ") { p ->
                 "${p.name} is ${p.status} at ${p.progressPercent}% with ${p.pendingTasks.count { !it.done }} open task(s)"
             }
             parts += summary
         }
-        return parts
+        val memoryHint = if (context.relevantPersonalMemory.isNotEmpty()) {
+            context.relevantPersonalMemory.joinToString("; ")
+        } else {
+            ""
+        }
+        return BaseContextParts(parts, memoryHint)
     }
+
+    /** Return type of [buildBaseContextParts] -- see that method's docstring for why `parts` (real, actionable grounding) and `memoryHint` (background-only personal memory) are kept as two separate fields rather than one joined list. */
+    private data class BaseContextParts(val parts: MutableList<String>, val memoryHint: String)
 
     /**
      * Explicit, deterministic, user-initiated -- typing "open
@@ -711,5 +770,8 @@ class JarvisCore @Inject constructor(
 
         /** Stamped onto ChatMessage.sourceLocalDomain for a LAYER 2 fallback reply -- not a real [com.jarvis.os.app.core.intelligence.localintent.LocalServiceDomain], just an honest marker that no AI provider was called this turn either. */
         private const val AI_UNAVAILABLE_DOMAIN = "AI_UNAVAILABLE"
+
+        /** "Conversation Replay Bug Fix": how many trailing messages of real, live recentConversation are made available to a real AI provider as background RECENT CHAT -- see sendChatMessage's own docstring for why this is sourced separately from, and kept out of, ChatRoutingOutcome.contextHint. */
+        private const val RECENT_CHAT_MESSAGE_LIMIT = 6
     }
 }
