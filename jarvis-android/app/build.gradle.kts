@@ -47,6 +47,24 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // "Conversation Replay Bug Fix": added because JarvisCoreConversationReplayTest is the first
+    // test in this codebase to actually drive JarvisCore.sendChatMessage() through the real
+    // AI-bound path -- MockChatRepository.sendMessage's own `android.util.Log.d(...)` call (a
+    // pre-existing line, unrelated to that fix's logic) throws
+    // `RuntimeException: Method d in android.util.Log not mocked` in a plain JVM unit test
+    // without this flag, since android.jar's unit-test stub throws by default rather than
+    // no-op-ing. This isn't Robolectric -- it doesn't make Log calls behave like a real device,
+    // it just makes every android.* stub method return its default value (0/false/null) instead
+    // of throwing, which is all a unit test needs from a stray Log.d. This also protects any
+    // future test that exercises GeminiChatProvider/GroqChatProvider/AnthropicChatProvider/
+    // OpenAiCompatibleChatProvider directly, all four of which log real request/response details
+    // the same way.
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
