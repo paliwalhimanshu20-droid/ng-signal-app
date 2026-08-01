@@ -1,5 +1,6 @@
 package com.jarvis.os.app.di
 
+import com.jarvis.tidb.analytics.repository.BacktestRepository
 import com.jarvis.tidb.analytics.repository.PerformanceRepository
 import com.jarvis.tidb.analytics.repository.PortfolioRepository
 import com.jarvis.tidb.analytics.repository.TimelineRepository
@@ -158,6 +159,21 @@ object TradingRepositoryBridgeModule {
     @Singleton
     fun providePortfolioRepository(): PortfolioRepository =
         TidbModule.portfolioRepository()
+
+    /**
+     * "Phase 3C, Section 1+2 -- Evidence Validation Engine + Hallucination Guard" addition:
+     * [com.jarvis.os.app.core.intelligence.localintent.EvidenceValidationLocalIntentHandler] and
+     * [com.jarvis.os.app.core.intelligence.localintent.SystemStatusLocalIntentHandler] are this
+     * binding's first Hilt-injected consumers -- [TidbLocalIntentHandler][com.jarvis.os.app.core.
+     * intelligence.localintent.TidbLocalIntentHandler] above needed raw market data, not backtest
+     * results, so this repository was never added to this module's curated list until now. Same
+     * one-line-per-repository pattern as everything else here; [TidbModule] remains the sole
+     * owner of construction/lifetime.
+     */
+    @Provides
+    @Singleton
+    fun provideBacktestRepository(): BacktestRepository =
+        TidbModule.backtestRepository()
 
     @Provides
     @Singleton
