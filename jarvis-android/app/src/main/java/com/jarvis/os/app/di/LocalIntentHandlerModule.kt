@@ -3,6 +3,7 @@ package com.jarvis.os.app.di
 import com.jarvis.os.app.core.intelligence.localintent.AnalyticsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.ConnectedSystemsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.ConversationLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.DatasetStatusLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.DefaultLocalIntentRouter
 import com.jarvis.os.app.core.intelligence.localintent.DeviceActionLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.DiagnosticsLocalIntentHandler
@@ -93,4 +94,8 @@ abstract class LocalIntentHandlerModule {
     @Binds
     @IntoSet
     abstract fun bindSystemStatusLocalIntentHandler(impl: SystemStatusLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindDatasetStatusLocalIntentHandler(impl: DatasetStatusLocalIntentHandler): LocalIntentHandler
 }

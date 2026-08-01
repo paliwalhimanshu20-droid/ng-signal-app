@@ -13,6 +13,12 @@ import com.jarvis.tidb.core.repository.LiveMarketSnapshotRepository
 import com.jarvis.tidb.decision.repository.DecisionIntelligenceRepository
 import com.jarvis.tidb.di.TidbModule
 import com.jarvis.tidb.historical.evidence.repository.EvidenceRepository
+import com.jarvis.tidb.historical.indicator.repository.IndicatorComputationRunRepository
+import com.jarvis.tidb.historical.indicator.repository.IndicatorDefinitionRepository
+import com.jarvis.tidb.historical.indicator.repository.IndicatorValueRepository
+import com.jarvis.tidb.historical.ingestion.repository.IngestionCheckpointRepository
+import com.jarvis.tidb.historical.ingestion.repository.IngestionJobRepository
+import com.jarvis.tidb.historical.quality.repository.QualityReportRepository
 import com.jarvis.tidb.intelligence.confidence.repository.ConfidenceRepository
 import com.jarvis.tidb.intelligence.evidence.repository.IntelligenceEvidenceRepository
 import com.jarvis.tidb.intelligence.graph.repository.GraphRepository
@@ -179,4 +185,41 @@ object TradingRepositoryBridgeModule {
     @Singleton
     fun providePerformanceRepository(): PerformanceRepository =
         TidbModule.performanceRepository()
+
+    /**
+     * "Phase 4A, Section 2+5+6+8 -- Data Import Pipeline / Historical Candle Storage / Indicator
+     * Population / Pipeline Orchestration": [com.jarvis.tidb.historical.ingestion.pipeline.
+     * HistoricalDataImportPipeline] is this batch of six bindings' first Hilt-injected consumer.
+     * Same one-line-per-repository pattern as everything above; [TidbModule] remains the sole
+     * owner of construction/lifetime for all six, exactly as for every other binding in this file.
+     */
+    @Provides
+    @Singleton
+    fun provideIndicatorDefinitionRepository(): IndicatorDefinitionRepository =
+        TidbModule.indicatorDefinitionRepository()
+
+    @Provides
+    @Singleton
+    fun provideIndicatorValueRepository(): IndicatorValueRepository =
+        TidbModule.indicatorValueRepository()
+
+    @Provides
+    @Singleton
+    fun provideIndicatorComputationRunRepository(): IndicatorComputationRunRepository =
+        TidbModule.indicatorComputationRunRepository()
+
+    @Provides
+    @Singleton
+    fun provideQualityReportRepository(): QualityReportRepository =
+        TidbModule.qualityReportRepository()
+
+    @Provides
+    @Singleton
+    fun provideIngestionJobRepository(): IngestionJobRepository =
+        TidbModule.ingestionJobRepository()
+
+    @Provides
+    @Singleton
+    fun provideIngestionCheckpointRepository(): IngestionCheckpointRepository =
+        TidbModule.ingestionCheckpointRepository()
 }

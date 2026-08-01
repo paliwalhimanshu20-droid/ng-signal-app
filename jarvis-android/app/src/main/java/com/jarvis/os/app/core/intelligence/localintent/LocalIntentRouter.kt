@@ -76,6 +76,7 @@ enum class LocalServiceDomain {
     CONVERSATION_SUMMARY,
     DEVICE_ACTION,
     EVIDENCE,
+    DATASET_STATUS,
     SYSTEM_STATUS,
     TIDB,
     SIGNALS,
