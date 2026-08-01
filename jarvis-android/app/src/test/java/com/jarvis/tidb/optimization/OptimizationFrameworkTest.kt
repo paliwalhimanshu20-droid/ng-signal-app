@@ -74,7 +74,7 @@ class OptimizationFrameworkTest {
     }
 
     @Test
-    fun `grid search over a zero-dimension space (e.g. VWAP, OBV) returns exactly one empty combination`() {
+    fun `grid search over a zero-dimension space such as VWAP or OBV returns exactly one empty combination`() {
         val space = SearchSpace("TEST:NOPARAMS", emptyList())
         val combinations = GridSearchAlgorithm().generateCombinations(space, budget = 10)
 
