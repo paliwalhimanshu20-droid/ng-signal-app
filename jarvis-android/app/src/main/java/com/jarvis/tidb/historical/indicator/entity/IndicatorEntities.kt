@@ -15,16 +15,27 @@ import com.jarvis.tidb.core.entity.InstrumentEntity
  *
  * A computation framework that STORES indicator output rather than recomputing it on every
  * read. [IndicatorValueEntity] is deliberately generic (up to 4 numeric output slots) so one
- * table serves every indicator type in the initial set — SMA/EMA/RSI/ATR/VWAP are single-output
+ * table serves every indicator type in the full set — SMA/EMA/RSI/ATR/VWAP are single-output
  * (value1), MACD is 3-output (line/signal/histogram), Bollinger Bands is 3-output
  * (upper/middle/lower), Stochastic is 2-output (%K/%D), ADX commonly ships with +DI/-DI
  * alongside it (up to 3). [IndicatorDefinitionEntity.outputLabels] documents what each slot
  * means for a given definition so consumers don't have to hardcode column meaning per type.
+ *
+ * "Universal Indicator Engine" Phase 2: expanded from the original 10 (SMA/EMA/RSI/ATR/MACD/
+ * BOLLINGER_BANDS/ADX/SUPERTREND/VWAP/STOCHASTIC) to the full 26-indicator set. Every addition
+ * fits the existing 4-slot [IndicatorValueEntity] shape with one deliberate exception: Ichimoku
+ * is a 5-line indicator (Tenkan-sen, Kijun-sen, Senkou Span A, Senkou Span B, Chikou Span), but
+ * only the first 4 are stored (value1-value4, see ICHIMOKU's own doc below) -- Chikou Span is
+ * just closing price shifted back by the indicator's displacement period, not an independently
+ * computed series, so storing it here would duplicate data [com.jarvis.tidb.core.repository.HistoricalCandleRepository]
+ * already holds. This is a real design decision, not a silent omission -- documented rather than
+ * adding a 5th column for a value that's a trivial shift of data already on record.
  */
-
 enum class IndicatorType(val value: String) {
     SMA("SMA"),
     EMA("EMA"),
+    WMA("WMA"),
+    VWMA("VWMA"),
     RSI("RSI"),
     ATR("ATR"),
     MACD("MACD"),
@@ -32,7 +43,22 @@ enum class IndicatorType(val value: String) {
     ADX("ADX"),
     SUPERTREND("SUPERTREND"),
     VWAP("VWAP"),
-    STOCHASTIC("STOCHASTIC");
+    STOCHASTIC("STOCHASTIC"),
+    CCI("CCI"),
+    ROC("ROC"),
+    MOMENTUM("MOMENTUM"),
+    WILLIAMS_R("WILLIAMS_R"),
+    PARABOLIC_SAR("PARABOLIC_SAR"),
+    /** value1=Tenkan-sen, value2=Kijun-sen, value3=Senkou Span A, value4=Senkou Span B. Chikou Span is deliberately not stored -- see this enum's own class docstring. */
+    ICHIMOKU("ICHIMOKU"),
+    DONCHIAN_CHANNEL("DONCHIAN_CHANNEL"),
+    KELTNER_CHANNEL("KELTNER_CHANNEL"),
+    OBV("OBV"),
+    CMF("CMF"),
+    MFI("MFI"),
+    AROON("AROON"),
+    TRIX("TRIX"),
+    DMI("DMI");
 
     companion object {
         fun from(value: String): IndicatorType = entries.firstOrNull { it.value == value } ?: SMA

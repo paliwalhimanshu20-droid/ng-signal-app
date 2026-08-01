@@ -55,9 +55,18 @@ enum class ContractTradingStatus(val value: String) {
     }
 }
 
+/**
+ * "Historical Market Data Platform" Phase 1: expanded from the original 9 (M1/M5/M15/M30/H1/H4/
+ * D1/W1/MN1) to the full 13-granularity set the platform spec requires. Safe as a pure enum
+ * addition -- no Room schema migration needed, since every persistence path round-trips through
+ * [value] (a String column via [com.jarvis.tidb.core.Converters]) rather than storing the
+ * ordinal, and nothing in the codebase does an exhaustive `when (timeframe)` over this type (the
+ * one iteration site, [com.jarvis.os.app.core.intelligence.localintent.TidbLocalIntentHandler]'s
+ * countAllCandles, walks [entries] generically and picks up new values automatically).
+ */
 enum class Timeframe(val value: String) {
-    M1("1m"), M5("5m"), M15("15m"), M30("30m"),
-    H1("1h"), H4("4h"),
+    M1("1m"), M3("3m"), M5("5m"), M10("10m"), M15("15m"), M30("30m"), M45("45m"),
+    H1("1h"), H2("2h"), H4("4h"),
     D1("1d"), W1("1w"), MN1("1M");
 
     companion object {
