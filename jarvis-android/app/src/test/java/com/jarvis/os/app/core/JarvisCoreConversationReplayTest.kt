@@ -102,6 +102,7 @@ class JarvisCoreConversationReplayTest {
                 FakeNgSignalProStatusProvider(), settingsRepository, FakeGitHubStatusProvider(),
             ),
             localIntentRouter = DefaultLocalIntentRouter(handlers),
+            languageManager = com.jarvis.os.app.core.intelligence.LanguageManager(settingsRepository),
             appScope = scope,
         )
     }

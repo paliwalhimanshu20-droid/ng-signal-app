@@ -404,9 +404,12 @@ import com.jarvis.tidb.news.entity.SentimentScoreEntity
         RecommendationRiskAssessmentEntity::class,
         RecommendationAlternativeEntity::class,
         RecommendationOutcomeEntity::class,
-        DecisionReviewEntity::class
+        DecisionReviewEntity::class,
+        // ---- optimization — Phase 3B Section 1: Optimization Persistence ----
+        com.jarvis.tidb.optimization.entity.OptimizationJobEntity::class,
+        com.jarvis.tidb.optimization.entity.OptimizationCombinationEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -442,6 +445,10 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
     abstract fun backtestRunDao(): BacktestRunDao
     abstract fun backtestTradeDao(): BacktestTradeDao
     abstract fun backtestResultDao(): BacktestResultDao
+
+    // ---- optimization: Phase 3B Section 1 ----
+    abstract fun optimizationJobDao(): com.jarvis.tidb.optimization.dao.OptimizationJobDao
+    abstract fun optimizationCombinationDao(): com.jarvis.tidb.optimization.dao.OptimizationCombinationDao
 
     // ---- analytics: performance ----
     abstract fun performanceSnapshotDao(): PerformanceSnapshotDao
@@ -580,8 +587,8 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
          * there is no compiler enforcement of that, unlike most other single-source-of-truth
          * values in this codebase, which is exactly why this paragraph exists.
          */
-        const val SCHEMA_VERSION = 9
-        const val ENTITY_COUNT = 106
+        const val SCHEMA_VERSION = 10
+        const val ENTITY_COUNT = 108
 
         @Volatile
         private var INSTANCE: TradingIntelligenceDatabase? = null

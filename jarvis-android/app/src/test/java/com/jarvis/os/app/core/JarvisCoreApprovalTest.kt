@@ -79,6 +79,7 @@ class JarvisCoreApprovalTest {
                 projectsRepo, approvalsRepo, notificationsRepo, connectionsRepo, memoryRepo, agentRegistry, FakeNgSignalProStatusProvider(), settingsRepository, com.jarvis.os.app.testutil.FakeGitHubStatusProvider(),
             ),
             localIntentRouter = com.jarvis.os.app.core.intelligence.localintent.DefaultLocalIntentRouter(emptySet()),
+            languageManager = com.jarvis.os.app.core.intelligence.LanguageManager(settingsRepository),
             appScope = scope,
         )
     }

@@ -60,6 +60,13 @@ object TidbMigrations {
      * (confidence), and `drift_metrics`/`calibration_metrics` (decision drift/calibration) via
      * additive enum values rather than duplicating any of them — see
      * docs/database/TRADING-007B-Decision-Intelligence-Engine-Architecture.md.
+     *
+     * v9 -> v10: [MIGRATION_9_10] — Phase 3B Section 1, Optimization Persistence.
+     * Purely additive (2 new tables: `optimization_jobs`, `optimization_combinations`).
+     * `optimization_combinations` links to the existing `backtest_runs`/`backtest_results`
+     * tables (nullable FKs, populated once a combination is actually evaluated) rather than
+     * duplicating any backtest schema — see [com.jarvis.tidb.optimization.entity.
+     * OptimizationCombinationEntity]'s own docstring.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
 }

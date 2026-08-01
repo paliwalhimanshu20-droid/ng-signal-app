@@ -133,6 +133,7 @@ class JarvisCore @Inject constructor(
     private val decisionEngine: JarvisDecisionEngine,
     private val intentRouter: IntentRouter,
     private val localIntentRouter: LocalIntentRouter,
+    private val languageManager: com.jarvis.os.app.core.intelligence.LanguageManager,
     private val tradingIntelligenceOrchestrator: TradingIntelligenceOrchestrator,
     val watchTower: WatchTowerOrchestrator,
     val briefingEngine: ExecutiveBriefingEngine,
@@ -448,11 +449,20 @@ class JarvisCore @Inject constructor(
     suspend fun sendChatMessage(text: String) {
         publish(CoreEvent.ChatMessageSent(chat.activeSessionId, text))
 
+        // "Phase 3C, Section 6+7 -- Language Manager + Conversation Language Memory": runs before
+        // ANY routing below, local or AI-bound, so every deterministic template and (via
+        // JarvisPersona.systemPrompt) every real AI provider call this turn sees the correct,
+        // just-updated conversation language -- never a stale one from before this message, and
+        // never left to the model to re-guess itself. See LanguageManager's own docstring for why
+        // an ambiguous turn deliberately leaves the current language untouched rather than
+        // resetting to English.
+        languageManager.observeAndUpdate(text)
+
         // LAYER 1: see this method's own docstring. Always returns a real LocalIntentOutcome,
         // never null -- NO_MATCH is a real value here, not an absence this code has to remember
         // to check for.
         val localResult = localIntentRouter.resolve(text)
-        if (localResult.outcome == LocalIntentOutcome.LOCAL_ONLY) {
+        if (localResult.outcome == LocalIntentOutcome.LOCAL_ONLY || localResult.outcome == LocalIntentOutcome.DEVICE_ACTION) {
             val domainName = localResult.domain?.name ?: "LOCAL"
             val response = localResult.response.orEmpty()
             chat.sendLocalMessage(text, response, domainName)

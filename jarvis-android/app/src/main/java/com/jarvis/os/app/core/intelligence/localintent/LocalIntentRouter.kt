@@ -74,6 +74,9 @@ enum class LocalServiceDomain {
     GREETING,
     HELP,
     CONVERSATION_SUMMARY,
+    DEVICE_ACTION,
+    EVIDENCE,
+    SYSTEM_STATUS,
     TIDB,
     SIGNALS,
     ANALYTICS,
@@ -84,9 +87,21 @@ enum class LocalServiceDomain {
     KNOWLEDGE_BASE,
 }
 
+/**
+ * "Phase 3C, requirement 7 -- DEVICE_ACTION routing": this outcome was deliberately deferred (see
+ * this file's earlier docstring) until a real Command Authority existed to back it. A
+ * [LocalIntentHandler] returns DEVICE_ACTION when it has both matched AND already executed a real
+ * side effect (a [com.jarvis.os.app.data.settings.SettingsRepository] setter, an
+ * [com.jarvis.os.app.core.chat.AiRouter] provider switch) -- JarvisCore renders
+ * [LocalIntentResult.response] the same way it renders LOCAL_ONLY (deterministic, no AI call,
+ * ever), but tags the resulting message with this distinct domain so the Response Source Engine
+ * (requirement 3) can report "executed a device action" rather than "answered from local
+ * knowledge" -- a real, meaningful difference even though the rendering path is shared.
+ */
 enum class LocalIntentOutcome {
     LOCAL_ONLY,
     LOCAL_PLUS_AI,
+    DEVICE_ACTION,
     NO_MATCH,
 }
 

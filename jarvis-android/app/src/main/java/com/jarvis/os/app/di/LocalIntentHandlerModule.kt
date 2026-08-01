@@ -4,7 +4,9 @@ import com.jarvis.os.app.core.intelligence.localintent.AnalyticsLocalIntentHandl
 import com.jarvis.os.app.core.intelligence.localintent.ConnectedSystemsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.ConversationLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.DefaultLocalIntentRouter
+import com.jarvis.os.app.core.intelligence.localintent.DeviceActionLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.DiagnosticsLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.EvidenceValidationLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.GreetingLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.HelpLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.KnowledgeBaseLocalIntentHandler
@@ -13,6 +15,7 @@ import com.jarvis.os.app.core.intelligence.localintent.LocalIntentRouter
 import com.jarvis.os.app.core.intelligence.localintent.MissionControlLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.SettingsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.SignalsLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.SystemStatusLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.TidbLocalIntentHandler
 import dagger.Binds
 import dagger.Module
@@ -78,4 +81,16 @@ abstract class LocalIntentHandlerModule {
     @Binds
     @IntoSet
     abstract fun bindKnowledgeBaseLocalIntentHandler(impl: KnowledgeBaseLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindDeviceActionLocalIntentHandler(impl: DeviceActionLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindEvidenceValidationLocalIntentHandler(impl: EvidenceValidationLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindSystemStatusLocalIntentHandler(impl: SystemStatusLocalIntentHandler): LocalIntentHandler
 }

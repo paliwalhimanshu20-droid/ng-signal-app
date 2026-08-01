@@ -94,6 +94,7 @@ class JarvisCoreNotificationTest {
             // AI-bound behavior is unaffected. A future test exercising the OS-first bypass
             // path supplies its own handler set directly.
             localIntentRouter = com.jarvis.os.app.core.intelligence.localintent.DefaultLocalIntentRouter(emptySet()),
+            languageManager = com.jarvis.os.app.core.intelligence.LanguageManager(settingsRepository),
             appScope = scope,
         )
     }
