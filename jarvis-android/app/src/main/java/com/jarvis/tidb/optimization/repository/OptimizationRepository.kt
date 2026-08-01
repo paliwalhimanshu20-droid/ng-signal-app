@@ -8,7 +8,6 @@ import com.jarvis.tidb.optimization.entity.OptimizationJobEntity
 import com.jarvis.tidb.optimization.entity.OptimizationJobStatus
 import com.jarvis.tidb.optimization.searchspace.SearchSpaceRegistry
 import kotlinx.coroutines.flow.Flow
-import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -183,9 +182,20 @@ class OptimizationRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun toJson(params: Map<String, Double>): String {
-        val json = JSONObject()
-        params.forEach { (key, value) -> json.put(key, value) }
-        return json.toString()
-    }
+    /**
+     * "Build Until Green" repair: this used to build the JSON string via `org.json.JSONObject`.
+     * That class is also an Android platform stub in this project's plain-JVM unit test
+     * environment (the same category of issue as `android.util.Log` -- see
+     * `app/build.gradle.kts`'s own `testOptions` comment) -- and with
+     * `isReturnDefaultValues = true` in effect (added earlier specifically so stub calls no
+     * longer throw), the stub's `toString()` silently returns null instead of a real JSON string,
+     * which Kotlin's non-null `String` return type then turns into exactly the
+     * `NullPointerException` CI reported here, at the point of assignment, not inside any business
+     * logic this class owns. `Map<String, Double>` with simple identifier keys has no escaping,
+     * nesting, or array cases to get wrong, so a three-line hand-built serializer is both correct
+     * and, unlike `JSONObject`, has zero Android-platform dependency -- identical behavior on a
+     * real device and in this JVM test environment, which `JSONObject` never actually was.
+     */
+    private fun toJson(params: Map<String, Double>): String =
+        params.entries.joinToString(prefix = "{", postfix = "}") { (key, value) -> "\"$key\":$value" }
 }
