@@ -8,12 +8,14 @@ import com.jarvis.os.app.core.intelligence.localintent.DefaultLocalIntentRouter
 import com.jarvis.os.app.core.intelligence.localintent.DeviceActionLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.DiagnosticsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.EvidenceValidationLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.ExecutiveReportLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.GreetingLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.HelpLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.KnowledgeBaseLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.LocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.LocalIntentRouter
 import com.jarvis.os.app.core.intelligence.localintent.MissionControlLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.SelfAwarenessLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.SettingsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.SignalsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.SystemStatusLocalIntentHandler
@@ -98,4 +100,12 @@ abstract class LocalIntentHandlerModule {
     @Binds
     @IntoSet
     abstract fun bindDatasetStatusLocalIntentHandler(impl: DatasetStatusLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindSelfAwarenessLocalIntentHandler(impl: SelfAwarenessLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindExecutiveReportLocalIntentHandler(impl: ExecutiveReportLocalIntentHandler): LocalIntentHandler
 }

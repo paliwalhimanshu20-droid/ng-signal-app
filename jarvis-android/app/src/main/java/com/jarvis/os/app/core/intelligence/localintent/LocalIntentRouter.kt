@@ -85,6 +85,13 @@ enum class LocalServiceDomain {
     CONNECTED_SYSTEMS,
     DIAGNOSTICS,
     SETTINGS,
+    // Phase 4B Slice 2 "Self-Awareness Engine + Executive Report Engine": declared after every
+    // other specific-subsystem domain and before KNOWLEDGE_BASE, same reasoning as this enum's
+    // own docstring for KNOWLEDGE_BASE's position -- "where are we / what's next / what can't
+    // you do" phrasing is broad and self-referential, so it should never win against a handler
+    // for a more specific subsystem question asked the same way.
+    SELF_AWARENESS,
+    EXECUTIVE_REPORT,
     KNOWLEDGE_BASE,
 }
 
