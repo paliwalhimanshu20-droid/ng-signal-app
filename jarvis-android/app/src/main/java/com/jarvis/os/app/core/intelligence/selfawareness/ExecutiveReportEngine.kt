@@ -1,10 +1,13 @@
 package com.jarvis.os.app.core.intelligence.selfawareness
 
 import com.jarvis.os.app.BuildConfig
+import com.jarvis.os.app.core.trading.reasoning.TrustScoreCalculator
 import com.jarvis.os.app.data.model.CapabilityStatus
 import com.jarvis.os.app.data.model.ExecutiveReport
 import com.jarvis.os.app.data.model.SystemCapabilityRecord
+import com.jarvis.tidb.core.repository.InstrumentRepository
 import com.jarvis.tidb.database.TradingIntelligenceDatabase
+import kotlinx.coroutines.flow.first
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,6 +22,13 @@ import javax.inject.Singleton
  * Mission Status answers read, so a report and a chat answer about the same subsystem can never
  * disagree with each other.
  *
+ * Runtime Integration milestone, Goal 3: the report must show the real "Current Trust Score" and
+ * "Recommendation status," not just the static Trust Layer capability row -- added here via the
+ * same [TrustScoreCalculator] (Phase 4B Slice 1) [com.jarvis.os.app.core.intelligence.localintent
+ * .TrustScoreLocalIntentHandler] already reuses, for the same default instrument
+ * (`NATURALGAS`, falling back to the first seeded instrument -- see that handler's own docstring
+ * for why this default, not a new one, is reused here).
+ *
  * Deliberately distinct from [com.jarvis.os.app.core.intelligence.ExecutiveBriefingEngine]: that
  * class answers "what should the owner know this morning" from personal/owner-facing state
  * (ProjectOS, Watch Tower, notifications, approvals). This class answers "what state is the
@@ -29,6 +39,8 @@ import javax.inject.Singleton
 @Singleton
 class ExecutiveReportEngine @Inject constructor(
     private val selfAwareness: SelfAwarenessEngine,
+    private val instruments: InstrumentRepository,
+    private val trustScoreCalculator: TrustScoreCalculator,
 ) {
     suspend fun generate(): ExecutiveReport {
         val capabilities = selfAwareness.capabilities()
@@ -52,10 +64,30 @@ class ExecutiveReportEngine @Inject constructor(
             recommendations = recommendations,
             nextMilestone = nextMilestone,
             repositoryHealth = selfAwareness.repositoryStatus(),
-            trustLayerSummary = capabilities.firstOrNull { it.name.startsWith("Trust Layer") }
-                ?.let { "${it.status}, ${it.completionPercent}% -- ${it.verificationState}" }
-                ?: "Trust Layer capability not found in inventory.",
+            trustLayerSummary = trustLayerSummary(capabilities),
         )
+    }
+
+    /** Goal 3: "Current Trust Score" + "Recommendation status" -- the real number, not just the static capability row's text. */
+    private suspend fun trustLayerSummary(capabilities: List<SystemCapabilityRecord>): String {
+        val capabilityRow = capabilities.firstOrNull { it.name.startsWith("Trust Layer") }
+            ?.let { "${it.status}, ${it.completionPercent}% built -- ${it.verificationState}" }
+            ?: "Trust Layer capability not found in inventory."
+
+        val all = instruments.observeAll().first()
+        if (all.isEmpty()) {
+            return "$capabilityRow Current Trust Score: No Trust Score has been calculated -- no instrument is seeded yet."
+        }
+        val instrument = all.firstOrNull { it.symbol == DEFAULT_SYMBOL } ?: all.first()
+        val assessment = trustScoreCalculator.assess(instrument.instrumentId, DEFAULT_TIMEFRAME)
+        val recommendationStatus = if (assessment.meetsMinimum) {
+            "clears the minimum -- eligible for a recommendation pass"
+        } else {
+            "below the minimum -- recommendations are blocked (fail-closed, by design)"
+        }
+        return "$capabilityRow Current Trust Score for ${instrument.displayName} (${instrument.symbol}): " +
+            "${"%.2f".format(assessment.overallScore)} of ${"%.2f".format(TrustScoreCalculator.MINIMUM_TRUST_SCORE)} minimum. " +
+            "Recommendation status: $recommendationStatus."
     }
 
     /**
@@ -95,4 +127,9 @@ class ExecutiveReportEngine @Inject constructor(
         }
         appendLine("Next Milestone: ${report.nextMilestone}")
     }.trim()
+
+    companion object {
+        private const val DEFAULT_SYMBOL = "NATURALGAS"
+        private const val DEFAULT_TIMEFRAME = "1D"
+    }
 }

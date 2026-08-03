@@ -437,8 +437,12 @@ class JarvisCore @Inject constructor(
      * lookup. LocalIntentRouter's own TIDB handler is deliberately narrower than this -- raw
      * recorded facts (price/candle/contract) only, never a recommendation -- so the two never
      * compete for the same message; see TidbLocalIntentHandler's class docstring for that
-     * boundary. Its reply is still subject to the LAYER 2 readiness gate like everything else
-     * that reaches the bottom of this method.
+     * boundary. RUNTIME INTEGRATION MILESTONE UPDATE: a non-null tradingReply is now returned
+     * directly, the same way LAYER 1 returns a LOCAL_ONLY answer -- it no longer reaches LAYER 2
+     * or the AI provider at all (see the short-circuit immediately below where tradingReply is
+     * computed, and that block's own comment for why the prior "still subject to the LAYER 2
+     * readiness gate" behavior was the root cause of real trading answers reading as generic AI
+     * conversation).
      *
      * The owner's own chat bubble is unaffected by any of this --
      * ChatRepository.sendMessage's contextHint parameter augments only
@@ -474,9 +478,30 @@ class JarvisCore @Inject constructor(
         val decision = decisionEngine.decide(text)
         val classification = intentRouter.classifyAll(text)
         val tradingReply = matchTradingInstrumentSymbol(text)?.let { symbol -> tradingIntelligenceOrchestrator.askAbout(symbol) }
+
+        // RUNTIME INTEGRATION MILESTONE FIX (Goal 2/3): tradingReply is not a hint -- it is the
+        // complete output of the 13-stage Decision Lifecycle, already including the real Trust
+        // Score, dimension breakdown, and recommendation/rejection reasoning (see
+        // TradingIntelligenceOrchestrator.askAbout / DecisionLifecycleRunner). Before this fix it
+        // was passed to the AI provider as ChatRoutingOutcome.contextHint -- a mere grounding hint
+        // the model was free to paraphrase, dilute, or override with generic conversation, which
+        // is exactly the "chat still answers using generic conversational responses despite the
+        // new systems existing" symptom this milestone was opened to fix. A repository-backed,
+        // already-complete answer must never be handed to a model for optional rewriting -- same
+        // "no fake success, no silent dilution of a real answer" reasoning LAYER 1 already applies
+        // to every LocalIntentHandler. This is the one deliberate behavior change this milestone
+        // makes to sendChatMessage's prior, documented priority chain (see this method's own
+        // docstring's now-outdated "NOTE on trading recommendations" paragraph above); every other
+        // branch below (briefing/orchestration/tool-backed/conversational) is unchanged.
+        if (tradingReply != null) {
+            chat.sendLocalMessage(text, tradingReply, TRADING_REPLY_DOMAIN)
+            publish(CoreEvent.LocalIntentResolved(TRADING_REPLY_DOMAIN, tradingReply))
+            finishChatTurn(text)
+            return
+        }
+
         val outcome = when {
             localResult.outcome == LocalIntentOutcome.LOCAL_PLUS_AI -> ChatRoutingOutcome(localResult.response.orEmpty())
-            tradingReply != null -> ChatRoutingOutcome(tradingReply)
             decision.needsBriefing -> ChatRoutingOutcome(renderBriefing(briefingEngine.generateMorningBriefing()))
             decision.needsOrchestration -> ChatRoutingOutcome(renderOrchestrationRequest(text))
             classification.isNotEmpty() -> buildToolBackedContextHint(text, decision, classification)
@@ -780,6 +805,9 @@ class JarvisCore @Inject constructor(
 
         /** Stamped onto ChatMessage.sourceLocalDomain for a LAYER 2 fallback reply -- not a real [com.jarvis.os.app.core.intelligence.localintent.LocalServiceDomain], just an honest marker that no AI provider was called this turn either. */
         private const val AI_UNAVAILABLE_DOMAIN = "AI_UNAVAILABLE"
+
+        /** Runtime Integration milestone: stamped onto ChatMessage.sourceLocalDomain when [tradingIntelligenceOrchestrator]'s real Decision Lifecycle output is shown directly, bypassing the AI provider entirely -- not a real [com.jarvis.os.app.core.intelligence.localintent.LocalServiceDomain] (this path predates and sits outside LocalIntentRouter, see sendChatMessage's own docstring), but [ResponseSourceEngine] should still be able to recognize it as real, repository-backed, HIGH-confidence content rather than an AI completion. */
+        private const val TRADING_REPLY_DOMAIN = "TRADING_INTELLIGENCE"
 
         /** "Conversation Replay Bug Fix": how many trailing messages of real, live recentConversation are made available to a real AI provider as background RECENT CHAT -- see sendChatMessage's own docstring for why this is sourced separately from, and kept out of, ChatRoutingOutcome.contextHint. */
         private const val RECENT_CHAT_MESSAGE_LIMIT = 6

@@ -13,7 +13,6 @@ import com.jarvis.os.app.data.model.WorkflowRunRecord
 import com.jarvis.os.app.data.model.WorkflowStep
 import com.jarvis.os.app.data.repository.ConnectionRepository
 import com.jarvis.os.app.data.repository.ConnectionTransition
-import com.jarvis.os.app.data.repository.GitHubFetchResult
 import com.jarvis.os.app.data.repository.GitHubStatusProvider
 import com.jarvis.os.app.data.repository.ToolRepository
 import com.jarvis.tidb.analytics.entity.BacktestConfigurationEntity
@@ -24,9 +23,14 @@ import com.jarvis.tidb.analytics.entity.BacktestRunWithDetails
 import com.jarvis.tidb.analytics.entity.BacktestStatus
 import com.jarvis.tidb.analytics.entity.BacktestTradeEntity
 import com.jarvis.tidb.analytics.entity.CapitalMovementEntity
+import com.jarvis.tidb.analytics.entity.EvidenceSourceType
+import com.jarvis.tidb.analytics.entity.FailureAnalysisEntity
+import com.jarvis.tidb.analytics.entity.LearningEntityType
+import com.jarvis.tidb.analytics.entity.LearningEvidenceLinkEntity
 import com.jarvis.tidb.analytics.entity.LearningInsightEntity
 import com.jarvis.tidb.analytics.entity.LearningObservationEntity
 import com.jarvis.tidb.analytics.entity.OptimizationSuggestionEntity
+import com.jarvis.tidb.analytics.entity.PatternDiscoveryEntity
 import com.jarvis.tidb.analytics.entity.PortfolioAllocationEntity
 import com.jarvis.tidb.analytics.entity.PortfolioEntity
 import com.jarvis.tidb.analytics.entity.PortfolioPositionEntity
@@ -52,12 +56,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 
 /**
- * Phase 4B Slice 2: shared "all real subsystems, empty/default state" fakes for
- * [CapabilityInventory]-dependent tests -- [com.jarvis.os.app.core.intelligence.selfawareness
- * .SelfAwarenessEngineTest] and the two new local intent handler tests all need the exact same
- * seven-dependency wiring; kept here once rather than duplicated per file.
+ * Phase 4B Slice 2/3: shared fakes for [CapabilityInventory]-dependent tests.
+ *
+ * Runtime Integration milestone fix: this file previously declared its OWN `FakeGitHubStatusProvider`
+ * -- a duplicate, same-package redeclaration of the ALREADY-EXISTING [FakeGitHubStatusProvider] in
+ * this same `testutil` package (a genuine compile error: two public top-level classes, one name,
+ * one package). Removed here; every fake in this file now reuses the pre-existing canonical one
+ * instead, per this codebase's own "search, reuse, extend" rule -- the exact rule this bug was a
+ * failure to follow the first time.
+ *
+ * Also fixes [FakeLearningRepository]: it implemented an earlier, smaller version of
+ * [LearningRepository] and was never updated when that interface grew Pattern Discovery and
+ * Failure Analysis methods (`recordPattern`, `observeFailureAnalysesByCategory`, `linkEvidence`,
+ * etc.) -- a real "interface moved, fake didn't" break, not a hypothetical one; every member below
+ * is checked against the CURRENT interface as of this repair pass, not copied from memory.
+ *
+ * Internal (not private) so [CapabilityInventoryTest] can inject its own data into the SAME fake
+ * classes via [capabilityInventory] rather than maintaining a second, independently-drifting copy
+ * -- the maintenance shape that produced this file's own bugs in the first place.
  */
-private class FakeInstrumentRepository(private val all: List<InstrumentEntity> = emptyList()) : InstrumentRepository {
+internal class FakeInstrumentRepository(private val all: List<InstrumentEntity> = emptyList()) : InstrumentRepository {
     override suspend fun upsert(instrument: InstrumentEntity) = 0L
     override suspend fun getById(instrumentId: Long) = all.firstOrNull { it.instrumentId == instrumentId }
     override suspend fun getByUuid(uuid: String) = all.firstOrNull { it.uuid == uuid }
@@ -71,7 +89,7 @@ private class FakeInstrumentRepository(private val all: List<InstrumentEntity> =
     override suspend fun softDelete(instrumentId: Long) = Unit
 }
 
-private class FakeOptimizationRepository(private val jobs: List<OptimizationJobEntity> = emptyList()) : OptimizationRepository {
+internal class FakeOptimizationRepository(private val jobs: List<OptimizationJobEntity> = emptyList()) : OptimizationRepository {
     override suspend fun createJob(componentId: String, algorithmId: String, instrumentId: Long, timeframeValue: String, periodStart: Long, periodEnd: Long, budget: Int, randomSeed: Long?) = throw NotImplementedError()
     override suspend fun getJob(jobRowId: Long) = jobs.firstOrNull { it.rowId == jobRowId }
     override fun observeJob(jobRowId: Long): Flow<OptimizationJobEntity?> = flowOf(jobs.firstOrNull { it.rowId == jobRowId })
@@ -87,7 +105,7 @@ private class FakeOptimizationRepository(private val jobs: List<OptimizationJobE
     override suspend fun rankCombinations(jobRowId: Long, rankedRowIdsBestFirst: List<Long>) {}
 }
 
-private class FakeBacktestRepository(private val backtests: List<BacktestEntity> = emptyList()) : BacktestRepository {
+internal class FakeBacktestRepository(private val backtests: List<BacktestEntity> = emptyList()) : BacktestRepository {
     override suspend fun createBacktest(backtest: BacktestEntity) = 1L
     override suspend fun updateBacktest(backtest: BacktestEntity) {}
     override suspend fun getBacktest(rowId: Long) = backtests.firstOrNull { it.rowId == rowId }
@@ -107,7 +125,8 @@ private class FakeBacktestRepository(private val backtests: List<BacktestEntity>
     override fun observeResultsByBacktest(backtestRowId: Long): Flow<List<BacktestResultEntity>> = flowOf(emptyList())
 }
 
-private class FakeLearningRepository(private val observations: List<LearningObservationEntity> = emptyList()) : LearningRepository {
+/** Checked against the FULL current [LearningRepository] interface (18 members) as of this repair -- see this file's class docstring. */
+internal class FakeLearningRepository(private val observations: List<LearningObservationEntity> = emptyList()) : LearningRepository {
     override suspend fun recordObservation(observation: LearningObservationEntity) = 1L
     override fun observeObservations(): Flow<List<LearningObservationEntity>> = flowOf(observations)
     override fun observeObservationsByTrade(tradeRowId: Long) = flowOf(emptyList<LearningObservationEntity>())
@@ -120,9 +139,20 @@ private class FakeLearningRepository(private val observations: List<LearningObse
     override suspend fun proposeSuggestion(suggestion: OptimizationSuggestionEntity) = 1L
     override suspend fun updateSuggestionStatus(rowId: Long, status: SuggestionStatus, reviewedBy: String) {}
     override fun observeSuggestions() = flowOf(emptyList<OptimizationSuggestionEntity>())
+    override fun observeSuggestionsByStatus(status: SuggestionStatus) = flowOf(emptyList<OptimizationSuggestionEntity>())
+    override suspend fun recordPattern(pattern: PatternDiscoveryEntity) = 1L
+    override suspend fun latestPattern(patternKey: String): PatternDiscoveryEntity? = null
+    override fun observePatterns() = flowOf(emptyList<PatternDiscoveryEntity>())
+    override suspend fun recordFailureAnalysis(analysis: FailureAnalysisEntity) = 1L
+    override fun observeFailureAnalysesByTrade(tradeRowId: Long) = flowOf(emptyList<FailureAnalysisEntity>())
+    override fun observeFailureAnalysesByBacktestRun(runRowId: Long) = flowOf(emptyList<FailureAnalysisEntity>())
+    override fun observeFailureAnalysesByCategory(category: String) = flowOf(emptyList<FailureAnalysisEntity>())
+    override suspend fun linkEvidence(linkedEntityType: LearningEntityType, linkedEntityRowId: Long, sourceType: EvidenceSourceType, sourceRowId: Long, note: String?) = 1L
+    override fun observeEvidenceFor(linkedEntityType: LearningEntityType, linkedEntityRowId: Long) = flowOf(emptyList<LearningEvidenceLinkEntity>())
+    override fun observeEntitiesSupportedBy(sourceType: EvidenceSourceType, sourceRowId: Long) = flowOf(emptyList<LearningEvidenceLinkEntity>())
 }
 
-private class FakePortfolioRepository(
+internal class FakePortfolioRepository(
     private val portfolios: List<PortfolioEntity> = emptyList(),
     private val positionsByPortfolio: Map<Long, List<PortfolioPositionEntity>> = emptyMap(),
 ) : PortfolioRepository {
@@ -152,7 +182,7 @@ private class FakePortfolioRepository(
     override suspend fun latestSnapshot(portfolioRowId: Long): PortfolioSnapshotEntity? = null
 }
 
-private class FakeConnectionRepository : ConnectionRepository {
+internal class FakeConnectionRepository : ConnectionRepository {
     override val connections: StateFlow<List<Connection>> = MutableStateFlow(emptyList())
     override val transitions: SharedFlow<ConnectionTransition> = MutableSharedFlow()
     override fun requestConnection(providerId: String, providerName: String, requestedPermissions: Set<com.jarvis.os.app.data.model.PermissionScope>, maximumPermission: com.jarvis.os.app.data.model.PermissionScope, profileTags: Set<String>) = throw NotImplementedError()
@@ -168,7 +198,7 @@ private class FakeConnectionRepository : ConnectionRepository {
     override fun testConnection(connectionId: String) = throw NotImplementedError()
 }
 
-private class FakeToolRepository : ToolRepository {
+internal class FakeToolRepository : ToolRepository {
     override val tools: StateFlow<List<ToolDefinition>> = MutableStateFlow(emptyList())
     override val health: StateFlow<Map<String, ToolHealthStatus>> = MutableStateFlow(emptyMap())
     override val executionLog: StateFlow<List<ToolExecutionRecord>> = MutableStateFlow(emptyList())
@@ -176,23 +206,80 @@ private class FakeToolRepository : ToolRepository {
     override suspend fun execute(toolId: String, input: String, approvalId: String?): ToolResult = throw NotImplementedError()
 }
 
-private class FakeWorkflowEngine : WorkflowEngine {
+internal class FakeWorkflowEngine : WorkflowEngine {
     override val runs: StateFlow<List<WorkflowRunRecord>> = MutableStateFlow(emptyList())
     override suspend fun run(definition: WorkflowDefinition, execute: suspend (WorkflowStep) -> Boolean): WorkflowRunRecord = throw NotImplementedError()
 }
 
-class FakeGitHubStatusProvider(result: GitHubFetchResult? = null) : GitHubStatusProvider {
-    override val status: StateFlow<GitHubFetchResult?> = MutableStateFlow(result)
-    override suspend fun refresh() {}
+/** [TrustScoreCalculator]'s three dependencies not already faked above -- all empty/default state, so [fakeTrustScoreCalculator] composes an honest "no evidence yet" assessment for any instrument, matching TrustScoreCalculator's own documented fail-closed default. */
+internal class FakeQualityReportRepository : com.jarvis.tidb.historical.quality.repository.QualityReportRepository {
+    override suspend fun publishReport(report: com.jarvis.tidb.historical.quality.entity.CandleQualityReportEntity, issues: List<com.jarvis.tidb.historical.quality.entity.QualityIssueEntity>) = 1L
+    override suspend fun getLatest(instrumentId: Long, timeframe: String): com.jarvis.tidb.historical.quality.entity.CandleQualityReportEntity? = null
+    override fun observeByInstrument(instrumentId: Long) = flowOf(emptyList<com.jarvis.tidb.historical.quality.entity.CandleQualityReportEntity>())
+    override fun observeBelowThreshold(threshold: Double) = flowOf(emptyList<com.jarvis.tidb.historical.quality.entity.CandleQualityReportEntity>())
+    override fun observeIssues(reportId: Long) = flowOf(emptyList<com.jarvis.tidb.historical.quality.entity.QualityIssueEntity>())
+    override fun observeUnresolvedCritical() = flowOf(emptyList<com.jarvis.tidb.historical.quality.entity.QualityIssueEntity>())
+    override suspend fun resolveIssue(issueId: Long) {}
 }
 
-/** An empty-state, all-real-signatures [CapabilityInventory] -- every capability reads as its honest "not yet built/no data" default. */
-fun emptyCapabilityInventory(gitHub: GitHubStatusProvider = FakeGitHubStatusProvider()): CapabilityInventory = CapabilityInventory(
-    FakeInstrumentRepository(),
-    FakeOptimizationRepository(),
-    FakeBacktestRepository(),
-    FakeLearningRepository(),
-    FakePortfolioRepository(),
-    SystemHealthMonitor(FakeConnectionRepository(), FakeToolRepository(), FakeWorkflowEngine()),
+internal class FakeIndicatorDefinitionRepository : com.jarvis.tidb.historical.indicator.repository.IndicatorDefinitionRepository {
+    override suspend fun define(definition: com.jarvis.tidb.historical.indicator.entity.IndicatorDefinitionEntity) = 1L
+    override suspend fun getById(id: Long): com.jarvis.tidb.historical.indicator.entity.IndicatorDefinitionEntity? = null
+    override suspend fun getLatestByName(name: String): com.jarvis.tidb.historical.indicator.entity.IndicatorDefinitionEntity? = null
+    override fun observeByType(type: String) = flowOf(emptyList<com.jarvis.tidb.historical.indicator.entity.IndicatorDefinitionEntity>())
+    override fun observeActive() = flowOf(emptyList<com.jarvis.tidb.historical.indicator.entity.IndicatorDefinitionEntity>())
+    override suspend fun createNewVersion(definition: com.jarvis.tidb.historical.indicator.entity.IndicatorDefinitionEntity, newParamsJson: String) = 1L
+}
+
+internal class FakeIndicatorValueRepository : com.jarvis.tidb.historical.indicator.repository.IndicatorValueRepository {
+    override suspend fun storeValues(values: List<com.jarvis.tidb.historical.indicator.entity.IndicatorValueEntity>) = emptyList<Long>()
+    override fun observeRange(indicatorDefId: Long, instrumentId: Long, timeframe: String, fromTs: Long, toTs: Long) = flowOf(emptyList<com.jarvis.tidb.historical.indicator.entity.IndicatorValueEntity>())
+    override suspend fun getLatest(indicatorDefId: Long, instrumentId: Long, timeframe: String, limit: Int) = emptyList<com.jarvis.tidb.historical.indicator.entity.IndicatorValueEntity>()
+    override suspend fun countInRange(indicatorDefId: Long, instrumentId: Long, timeframe: String, fromTs: Long, toTs: Long) = 0
+    override suspend fun discardVersion(indicatorDefId: Long, instrumentId: Long, timeframe: String, version: Int) {}
+}
+
+/** A real [TrustScoreCalculator] wired to empty-state fakes -- every dimension honestly scores 0.0/"no evidence yet", the correct fail-closed default this class documents for a fresh repository. Reuses the SAME Optimization/Backtest/Learning/Portfolio fakes [capabilityInventory] uses, so a test asserting on both never sees two different "empty state" shapes. */
+fun fakeTrustScoreCalculator(
+    jobs: List<OptimizationJobEntity> = emptyList(),
+    backtests: List<BacktestEntity> = emptyList(),
+    observations: List<LearningObservationEntity> = emptyList(),
+    portfolios: List<PortfolioEntity> = emptyList(),
+    positions: Map<Long, List<PortfolioPositionEntity>> = emptyMap(),
+): com.jarvis.os.app.core.trading.reasoning.TrustScoreCalculator = com.jarvis.os.app.core.trading.reasoning.TrustScoreCalculator(
+    FakeOptimizationRepository(jobs),
+    FakeBacktestRepository(backtests),
+    FakeLearningRepository(observations),
+    FakePortfolioRepository(portfolios, positions),
+    FakeQualityReportRepository(),
+    FakeIndicatorDefinitionRepository(),
+    FakeIndicatorValueRepository(),
+)
+
+private fun healthMonitor() = SystemHealthMonitor(FakeConnectionRepository(), FakeToolRepository(), FakeWorkflowEngine())
+
+/**
+ * Fully-parameterized [CapabilityInventory] factory -- the ONE place every CapabilityInventory
+ * test builds its dependency graph, so a future interface change (like the one this repair pass
+ * just fixed) only ever needs updating here, not once per test file.
+ */
+fun capabilityInventory(
+    instruments: List<InstrumentEntity> = emptyList(),
+    jobs: List<OptimizationJobEntity> = emptyList(),
+    backtests: List<BacktestEntity> = emptyList(),
+    observations: List<LearningObservationEntity> = emptyList(),
+    portfolios: List<PortfolioEntity> = emptyList(),
+    positions: Map<Long, List<PortfolioPositionEntity>> = emptyMap(),
+    gitHub: GitHubStatusProvider = FakeGitHubStatusProvider(),
+): CapabilityInventory = CapabilityInventory(
+    FakeInstrumentRepository(instruments),
+    FakeOptimizationRepository(jobs),
+    FakeBacktestRepository(backtests),
+    FakeLearningRepository(observations),
+    FakePortfolioRepository(portfolios, positions),
+    healthMonitor(),
     gitHub,
 )
+
+/** An empty-state, all-real-signatures [CapabilityInventory] -- every capability reads as its honest "not yet built/no data" default. */
+fun emptyCapabilityInventory(gitHub: GitHubStatusProvider = FakeGitHubStatusProvider()): CapabilityInventory = capabilityInventory(gitHub = gitHub)

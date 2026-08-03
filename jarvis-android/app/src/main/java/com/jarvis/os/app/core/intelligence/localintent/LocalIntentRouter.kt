@@ -79,6 +79,12 @@ enum class LocalServiceDomain {
     DATASET_STATUS,
     SYSTEM_STATUS,
     TIDB,
+    // Runtime Integration milestone: direct "what is your trust score" / "how confident are you"
+    // queries, resolved against a real instrument via TrustScoreCalculator -- declared right after
+    // TIDB/SYSTEM_STATUS (same "specific subsystem, real repository data" tier) and well before
+    // SELF_AWARENESS/EXECUTIVE_REPORT (broad, self-referential phrasing) so it always wins a
+    // message that names the trust score specifically.
+    TRUST_SCORE,
     SIGNALS,
     ANALYTICS,
     MISSION_CONTROL,

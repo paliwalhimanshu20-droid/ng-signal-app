@@ -27,7 +27,8 @@ class ExecutiveReportLocalIntentHandler @Inject constructor(
 
     companion object {
         private val KEYWORDS = setOf(
-            "executive report", "generate executive report", "give me an executive report",
+            "executive report", "executive trading intelligence report", "trading intelligence report",
+            "generate executive report", "give me an executive report", "generate a report", "generate report",
             "project dashboard", "capability inventory", "capability discovery",
         )
     }

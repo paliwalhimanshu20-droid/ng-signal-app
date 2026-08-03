@@ -20,6 +20,7 @@ import com.jarvis.os.app.core.intelligence.localintent.SettingsLocalIntentHandle
 import com.jarvis.os.app.core.intelligence.localintent.SignalsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.SystemStatusLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.TidbLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.TrustScoreLocalIntentHandler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -108,4 +109,8 @@ abstract class LocalIntentHandlerModule {
     @Binds
     @IntoSet
     abstract fun bindExecutiveReportLocalIntentHandler(impl: ExecutiveReportLocalIntentHandler): LocalIntentHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindTrustScoreLocalIntentHandler(impl: TrustScoreLocalIntentHandler): LocalIntentHandler
 }

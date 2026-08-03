@@ -54,6 +54,11 @@ object ResponseSourceEngine {
             domain == LocalServiceDomain.DEVICE_ACTION.name -> ResponseProvenance(ResponseSource.DEVICE_ACTION, ResponseConfidence.HIGH)
             domain == LocalServiceDomain.EVIDENCE.name -> ResponseProvenance(ResponseSource.EVIDENCE_ENGINE, ResponseConfidence.HIGH)
             domain == LocalServiceDomain.TIDB.name || domain == LocalServiceDomain.SYSTEM_STATUS.name -> ResponseProvenance(ResponseSource.TRADING_INTELLIGENCE_DATABASE, ResponseConfidence.HIGH)
+            // Runtime Integration milestone: JarvisCore's own real Decision Lifecycle short-circuit
+            // (see its "TRADING_REPLY_DOMAIN" constant) -- not a LocalServiceDomain since it
+            // predates LocalIntentRouter, but the same real, repository-backed, HIGH-confidence
+            // provenance TIDB/SYSTEM_STATUS already get, not the generic catch-all below.
+            domain == "TRADING_INTELLIGENCE" -> ResponseProvenance(ResponseSource.TRADING_INTELLIGENCE_DATABASE, ResponseConfidence.HIGH)
             domain == LocalServiceDomain.CONVERSATION_SUMMARY.name -> ResponseProvenance(ResponseSource.LOCAL_KNOWLEDGE, ResponseConfidence.HIGH)
             domain == LocalServiceDomain.GREETING.name || domain == LocalServiceDomain.HELP.name -> ResponseProvenance(ResponseSource.LOCAL_KNOWLEDGE, ResponseConfidence.HIGH)
             domain == LocalServiceDomain.KNOWLEDGE_BASE.name -> ResponseProvenance(ResponseSource.LOCAL_KNOWLEDGE, ResponseConfidence.MEDIUM)

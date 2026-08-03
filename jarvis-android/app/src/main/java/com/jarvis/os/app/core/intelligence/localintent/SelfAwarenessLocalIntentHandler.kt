@@ -49,10 +49,20 @@ class SelfAwarenessLocalIntentHandler @Inject constructor(
 
     companion object {
         private val WHERE_PHRASES = setOf("where are we", "repository reality report", "self awareness report", "self-awareness report", "mission status", "give me a status report")
-        private val WHATS_COMPLETE_PHRASES = setOf("what is complete", "what's complete", "whats complete", "what has been built")
-        private val WHATS_MISSING_PHRASES = setOf("what is missing", "what's missing", "whats missing", "what hasn't been built", "what has not been built")
-        private val WHATS_NEXT_PHRASES = setOf("what is next", "what's next", "whats next", "what should we build next")
-        private val BLOCKING_LIVE_TRADING_PHRASES = setOf("what is blocking live trading", "what's blocking live trading", "whats blocking live trading", "blocking live trading")
+        private val WHATS_COMPLETE_PHRASES = setOf("what is complete", "what's complete", "whats complete", "what has been built", "what's done", "what is done")
+        // Runtime Integration milestone: broadened from exact multi-word phrases to shorter
+        // fragments after "What is still missing before you can recommend trades?" failed to
+        // match "what is missing" (the word "still" breaks contiguous-substring matching) -- see
+        // this handler's class docstring. Short fragments are deliberately still literal
+        // substring checks (this codebase's established, auditable matching style -- see
+        // TidbLocalIntentHandler's own DATA_KEYWORDS), just narrow enough not to require an exact
+        // canned sentence.
+        private val WHATS_MISSING_PHRASES = setOf("is missing", "still missing", "what's missing", "whats missing", "hasn't been built", "has not been built", "not yet built", "not been built")
+        private val WHATS_NEXT_PHRASES = setOf("what is next", "what's next", "whats next", "what should we build next", "build next")
+        private val BLOCKING_LIVE_TRADING_PHRASES = setOf(
+            "blocking live trading", "prevents you from recommending", "prevents a live trade", "what prevents you",
+            "stops you from recommending", "before you can recommend", "before recommending a trade",
+        )
         private val CANT_DO_PHRASES = setOf("what can't you do", "what cant you do", "what can you not do", "your limitations", "current limitations")
     }
 }
