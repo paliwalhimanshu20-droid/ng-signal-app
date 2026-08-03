@@ -409,7 +409,7 @@ import com.jarvis.tidb.news.entity.SentimentScoreEntity
         com.jarvis.tidb.optimization.entity.OptimizationJobEntity::class,
         com.jarvis.tidb.optimization.entity.OptimizationCombinationEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -587,7 +587,7 @@ abstract class TradingIntelligenceDatabase : RoomDatabase() {
          * there is no compiler enforcement of that, unlike most other single-source-of-truth
          * values in this codebase, which is exactly why this paragraph exists.
          */
-        const val SCHEMA_VERSION = 10
+        const val SCHEMA_VERSION = 11
         const val ENTITY_COUNT = 108
 
         @Volatile

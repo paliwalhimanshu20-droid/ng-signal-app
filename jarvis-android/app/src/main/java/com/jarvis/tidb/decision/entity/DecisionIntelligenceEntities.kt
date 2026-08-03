@@ -146,6 +146,20 @@ data class RecommendationEntity(
     @ColumnInfo(name = "status") val status: RecommendationStatus = RecommendationStatus.DRAFT,
     /** Logical-only reference to `confidence_scores.scoreId` (`ScoredEntityType.DECISION`) — the composed confidence for this recommendation. Not a Room `@ForeignKey`: `intelligence.confidence` does not depend on `decision`, and this module reads/writes confidence scores through the existing confidence machinery rather than owning the relationship structurally. */
     @ColumnInfo(name = "confidenceScoreId") val confidenceScoreId: Long? = null,
+    /**
+     * Phase 4B, Section 1+7+8 — Trust Layer (schema v11, additive `ALTER TABLE`, see
+     * `database/migration/TrustLayerMigration.kt`). Logical-only reference to
+     * `confidence_scores.scoreId` (`ScoredEntityType.TRUST_ASSESSMENT`) — same non-FK treatment
+     * as [confidenceScoreId] and for the same reason (this module reads/writes through the
+     * existing confidence machinery rather than owning the relationship structurally). Distinct
+     * from [confidenceScoreId]: that field is how strongly the collected evidence leans; this
+     * one is how complete the six-dimension evidence base behind the recommendation is
+     * (historical data, indicators, optimization, backtests, learning, paper trading) — see
+     * `com.jarvis.os.app.core.trading.reasoning.TrustScoreCalculator`. Null only for
+     * pre-Phase-4B rows and for the transient DRAFT row `DecisionLifecycleRunner` inserts before
+     * either score exists yet.
+     */
+    @ColumnInfo(name = "trustScoreId") val trustScoreId: Long? = null,
     /** How large/aggressive the recommendation is (e.g. a conviction or suggested-size multiplier), independent of [confidenceScoreId] — a high-confidence WATCH and a high-confidence ENTRY_LONG can share a confidence score while differing entirely in strength. */
     @ColumnInfo(name = "strength") val strength: Double? = null,
     @ColumnInfo(name = "timeHorizon") val timeHorizon: DecisionTimeHorizon = DecisionTimeHorizon.SWING,

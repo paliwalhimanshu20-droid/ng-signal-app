@@ -67,6 +67,13 @@ object TidbMigrations {
      * tables (nullable FKs, populated once a combination is actually evaluated) rather than
      * duplicating any backtest schema — see [com.jarvis.tidb.optimization.entity.
      * OptimizationCombinationEntity]'s own docstring.
+     *
+     * v10 -> v11: [MIGRATION_10_11] — Phase 4B, Section 1+7+8: Trust Layer.
+     * Purely additive (1 new nullable column: `decision_recommendations.trustScoreId`). No new
+     * tables — the Trust Score itself reuses `confidence_scores` via the additive
+     * `ScoredEntityType.TRUST_ASSESSMENT` enum value, the same polymorphic mechanism
+     * `confidenceScoreId`/`ScoredEntityType.DECISION` already established — see
+     * [com.jarvis.tidb.database.migration.MIGRATION_10_11]'s own docstring.
      */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
 }

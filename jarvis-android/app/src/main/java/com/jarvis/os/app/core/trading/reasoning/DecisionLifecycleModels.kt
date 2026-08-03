@@ -25,13 +25,25 @@ data class DecisionLifecycleRequest(
  */
 sealed interface DecisionLifecycleResult {
 
-    /** Stages 1-11 completed and a recommendation was persisted (stage 9) and monitored (stage 11). */
+    /**
+     * Stages 1-11 completed and a recommendation was persisted (stage 9) and monitored (stage 11).
+     *
+     * [trustAssessment] plus this class's own [confidenceScore], [recommendation.decidedAt], and
+     * [recommendation.generatedBy] together ARE Phase 4B Section 7's "Evidence Chain" — Historical
+     * Evidence, Indicator Evidence, Optimization Evidence, Backtest Evidence, Learning Evidence,
+     * and Paper Trading Evidence are [TrustAssessment.dimensions]; Confidence is [confidenceScore];
+     * Source is [recommendation.generatedBy]; Timestamp is [recommendation.decidedAt]. Deliberately
+     * not a separate wrapper type — every field Section 7 asks for already exists on this class or
+     * [recommendation], per this phase's own "reuse before build" rule.
+     */
     data class Recommended(
         val recommendationId: Long,
         val recommendation: RecommendationEntity,
         val riskAssessments: List<RecommendationRiskAssessmentEntity>,
         /** The stage-6 composed confidence score, in [0.0, 1.0] -- null only if stage 6 itself could not compose one, in which case [Recommended] should not normally have been reached (see stage 2's VALIDATE gate). */
         val confidenceScore: Double?,
+        /** Phase 4B, Section 1+7+8: the Trust Score assessed during VALIDATE and re-attached to [recommendation] as its `trustScoreId` at stage 9 -- see [TrustScoreCalculator]. Always present and always [TrustScoreCalculator.TrustAssessment.meetsMinimum] for a [Recommended] result, since a below-minimum assessment halts the pipeline as [TrustScoreBelowThreshold] instead. */
+        val trustAssessment: TrustScoreCalculator.TrustAssessment,
         /** Stage 10's rendering of the evidence graph -- structural explanation first (the graph itself, resolvable independently via `IntelligenceEvidenceRepository`), this string second, per TRADING-007B Principle 2. Deterministic in this first implementation -- see [DecisionLifecycleRunner] class doc. */
         val explanation: String,
     ) : DecisionLifecycleResult
@@ -40,6 +52,19 @@ sealed interface DecisionLifecycleResult {
     data class InsufficientEvidence(
         val instrumentId: Long,
         val reason: String,
+    ) : DecisionLifecycleResult
+
+    /**
+     * Phase 4B, Section 1+8: stage 2 (VALIDATE) found real evidence/signals (so this is NOT
+     * [InsufficientEvidence] -- that halts on nothing at all) but the composed [TrustScoreCalculator.
+     * TrustAssessment] didn't clear [TrustScoreCalculator.MINIMUM_TRUST_SCORE]. Fail-closed, same
+     * as [InsufficientEvidence] -- nothing is persisted -- but a distinct, honest outcome tag
+     * because the underlying reason is different: real evidence exists, it just isn't complete
+     * enough across the six required dimensions yet.
+     */
+    data class TrustScoreBelowThreshold(
+        val instrumentId: Long,
+        val trustAssessment: TrustScoreCalculator.TrustAssessment,
     ) : DecisionLifecycleResult
 
     /** A stage other than VALIDATE failed after exhausting WorkflowEngine's retries -- surfaced honestly rather than silently swallowed. Nothing past the failed stage was persisted; whatever stage(s) before it already wrote (e.g. stage 6's confidence score) remain, since those are individually valid, standalone records per this schema's own insert-only conventions -- there is no partial-pipeline rollback, matching stage 6/9's persistence-point analysis in the JARVIS-001A blueprint. */

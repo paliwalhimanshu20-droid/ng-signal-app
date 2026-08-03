@@ -23,23 +23,6 @@ import javax.inject.Singleton
  * pass rather than being rushed alongside the runtime bridge. [askAbout] takes an instrument
  * symbol directly; wiring a real parser in front of it is additive and does not change this
  * class's contract.
- */
-/**
- * JARVIS-002 Layer 3 (Conversation-facing wrapper) -- single entry point for trading-shaped
- * questions, matching the "one entry point per subsystem, never bypassed" rule this app already
- * follows for [com.jarvis.os.app.core.JarvisCore] itself. Only [DecisionLifecycleRunner] is
- * fanned out to in this first implementation; `InsightEngine`/`TradingBriefingEngine` remain
- * Section 6 (September Mission) items not yet built -- see the JARVIS-002 plan's Section 5
- * integration sequence, which deliberately orders this class after the pipeline is proven
- * standalone.
- *
- * SCOPE NOTE: full `TradingIntentRouter`/`TradingQuestionParser` (turning arbitrary natural
- * language into a [DecisionLifecycleRequest]) is deliberately NOT built in this first pass --
- * that is real, separate scope (keyword/pattern classification, matching this codebase's
- * existing `IntentRouter`/`JarvisDecisionEngine` convention) that deserves its own implementation
- * pass rather than being rushed alongside the runtime bridge. [askAbout] takes an instrument
- * symbol directly; wiring a real parser in front of it is additive and does not change this
- * class's contract.
  *
  * Split into an interface + [DefaultTradingIntelligenceOrchestrator], matching this codebase's
  * existing `WorkflowEngine`/`DefaultWorkflowEngine` convention (`core.workflow.WorkflowEngine`),
@@ -73,10 +56,15 @@ class DefaultTradingIntelligenceOrchestrator @Inject constructor(
     private fun render(result: DecisionLifecycleResult): String = when (result) {
         is DecisionLifecycleResult.Recommended ->
             "${result.explanation} (Recommendation #${result.recommendationId}, " +
-                "confidence ${result.confidenceScore?.let { "%.0f%%".format(it * 100) } ?: "unknown"}.)"
+                "confidence ${result.confidenceScore?.let { "%.0f%%".format(it * 100) } ?: "unknown"}, " +
+                "trust ${"%.0f%%".format(result.trustAssessment.overallScore * 100)}.)"
         is DecisionLifecycleResult.InsufficientEvidence ->
             "I don't have enough evidence yet to give you a real recommendation on this instrument. ${result.reason} " +
                 "I'd rather tell you that honestly than guess."
+        is DecisionLifecycleResult.TrustScoreBelowThreshold ->
+            "I have some evidence on this instrument, but not enough spread across historical data, indicators, " +
+                "optimization, backtests, learning, and paper trading to trust a recommendation yet. " +
+                "${result.trustAssessment.explanation} I'd rather tell you that honestly than guess."
         is DecisionLifecycleResult.PipelineFailed ->
             "Something went wrong while working through this — the ${result.failedStage} stage didn't complete" +
                 (result.detail?.let { ": $it" } ?: ".") + " Nothing incomplete was saved."

@@ -19,6 +19,7 @@ import com.jarvis.tidb.historical.indicator.repository.IndicatorValueRepository
 import com.jarvis.tidb.historical.ingestion.repository.IngestionCheckpointRepository
 import com.jarvis.tidb.historical.ingestion.repository.IngestionJobRepository
 import com.jarvis.tidb.historical.quality.repository.QualityReportRepository
+import com.jarvis.tidb.analytics.repository.LearningRepository
 import com.jarvis.tidb.intelligence.confidence.repository.ConfidenceRepository
 import com.jarvis.tidb.intelligence.evidence.repository.IntelligenceEvidenceRepository
 import com.jarvis.tidb.intelligence.graph.repository.GraphRepository
@@ -222,4 +223,17 @@ object TradingRepositoryBridgeModule {
     @Singleton
     fun provideIngestionCheckpointRepository(): IngestionCheckpointRepository =
         TidbModule.ingestionCheckpointRepository()
+
+    /**
+     * "Phase 4B, Section 1+7+8 -- Trust Layer": [com.jarvis.os.app.core.trading.reasoning.
+     * TrustScoreCalculator] is this binding's first Hilt-injected consumer (its Learning
+     * dimension) -- every other repository the six-dimension Trust Score needs
+     * (Optimization, Backtest, Portfolio, Quality, Indicator) was already bridged above for an
+     * earlier consumer; this was the one gap. Same one-line-per-repository pattern as
+     * everything else in this file; [TidbModule] remains the sole owner of construction/lifetime.
+     */
+    @Provides
+    @Singleton
+    fun provideLearningRepository(): LearningRepository =
+        TidbModule.learningRepository()
 }

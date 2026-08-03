@@ -66,7 +66,20 @@ enum class ScoredEntityType(val value: String) {
     TRADE("TRADE"),
     SIGNAL("SIGNAL"),
     /** TRADING-007B (schema v9) — Decision Intelligence Engine. A `decision.entity.RecommendationEntity`'s composed confidence is a `ConfidenceScoreEntity` row scored against this type — no separate confidence column/table on the recommendation itself. */
-    DECISION("DECISION");
+    DECISION("DECISION"),
+
+    /**
+     * Phase 4B, Section 1+7+8 — Trust Layer. A `decision.entity.RecommendationEntity`'s Trust
+     * Score (distinct from its [DECISION]-typed confidence score — confidence composes how
+     * strongly the *collected* evidence leans, Trust Score composes how *complete* the
+     * six-dimension evidence base backing it is: historical data, indicators, optimization,
+     * backtests, learning, paper trading) is a `ConfidenceScoreEntity` row scored against this
+     * type, with the six-dimension breakdown in [ConfidenceScoreEntity.breakdownJson] — the
+     * same reuse of this table's existing polymorphic shape [DECISION] itself already uses, per
+     * this phase's own "reuse the polymorphic scoring mechanism, do not add a new table"
+     * finding. See `com.jarvis.os.app.core.trading.reasoning.TrustScoreCalculator`.
+     */
+    TRUST_ASSESSMENT("TRUST_ASSESSMENT");
 
     companion object {
         fun from(value: String): ScoredEntityType = entries.firstOrNull { it.value == value } ?: EVIDENCE_RECORD

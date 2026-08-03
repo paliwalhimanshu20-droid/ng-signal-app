@@ -105,6 +105,8 @@ class DecisionLifecycleRunner @Inject constructor(
     private val signalRepository: SignalRepository,
     private val regimeRepository: RegimeRepository,
     private val timelineRepository: TimelineRepository,
+    /** Phase 4B, Section 1+7+8 -- Trust Layer. See [TrustScoreCalculator] class doc for what it composes and why it's a distinct number from this class's own [composeConfidence]. */
+    private val trustScoreCalculator: TrustScoreCalculator,
 ) {
     /** Runs stages 1-11 for one instrument. See class doc for exactly what each stage does and does not do in this first implementation. */
     suspend fun run(request: DecisionLifecycleRequest): DecisionLifecycleResult {
@@ -112,6 +114,10 @@ class DecisionLifecycleRunner @Inject constructor(
         var collectedSignals: List<SignalEntity> = emptyList()
         var activeRegime: MarketRegimeEntity? = null
         var composedScore: Double? = null
+        // Phase 4B, Section 1+7+8 -- Trust Layer. Computed in "validate" (independent of collected
+        // evidence -- it queries instrument-scoped repositories directly, see TrustScoreCalculator),
+        // gated there, then re-attached to the finalized recommendation in "recommend_finalize".
+        var trustAssessment: TrustScoreCalculator.TrustAssessment? = null
         var draftRecommendationId: Long? = null
         var draftRecommendation: RecommendationEntity? = null
         var riskAssessments: List<RecommendationRiskAssessmentEntity> = emptyList()
@@ -151,7 +157,15 @@ class DecisionLifecycleRunner @Inject constructor(
                             insufficientReason = "No evidence and no active signals found for instrument ${request.instrumentId}."
                             false
                         } else {
-                            true
+                            // Phase 4B, Section 1: "Query database -> Validate evidence -> Check
+                            // optimization -> Check backtests -> Check paper trading -> Then decide."
+                            // The evidence/signal check above is the first half; this is the rest --
+                            // extending VALIDATE rather than adding a new stage, since gating before a
+                            // recommendation is drafted is exactly VALIDATE's existing job (see
+                            // InsufficientEvidence's own doc).
+                            val assessment = trustScoreCalculator.assess(request.instrumentId, request.timeframe)
+                            trustAssessment = assessment
+                            assessment.meetsMinimum
                         }
                     }
                     "score" -> {
@@ -236,9 +250,27 @@ class DecisionLifecycleRunner @Inject constructor(
                             )
                         }
 
+                        // Phase 4B, Section 1+7+8 -- Trust Layer. VALIDATE already computed and gated
+                        // on this; here it's persisted against the now-real recommendation id, same
+                        // "compose early, attach late" ordering the confidence score above already
+                        // uses (see class doc's "IMPLEMENTATION NOTE ON STAGE 6/9 ORDERING").
+                        val assessment = trustAssessment ?: return@run false
+                        val trustModel = ensureBaselineTrustModel()
+                        val trustScoreId = confidenceRepository.recordScore(
+                            ConfidenceScoreEntity(
+                                modelId = trustModel.modelId,
+                                scoredEntityType = ScoredEntityType.TRUST_ASSESSMENT,
+                                scoredEntityRowId = id,
+                                score = assessment.overallScore,
+                                breakdownJson = trustBreakdownJson(assessment),
+                                notes = "Six-dimension Trust Score — see TrustScoreCalculator.",
+                            ),
+                        )
+
                         val revision = draft.copy(
                             recommendationId = 0L,
                             confidenceScoreId = scoreId,
+                            trustScoreId = trustScoreId,
                             status = RecommendationStatus.ACTIVE,
                             revisesRecommendationId = id,
                         )
@@ -249,7 +281,8 @@ class DecisionLifecycleRunner @Inject constructor(
                     }
                     "explain" -> {
                         val rec = finalRecommendation ?: return@run false
-                        explanation = renderExplanation(rec, collectedEvidence, collectedSignals, activeRegime, composedScore)
+                        val assessment = trustAssessment ?: return@run false
+                        explanation = renderExplanation(rec, collectedEvidence, collectedSignals, activeRegime, composedScore, assessment)
                         true
                     }
                     "monitor" -> {
@@ -276,12 +309,18 @@ class DecisionLifecycleRunner @Inject constructor(
         return when {
             insufficientReason != null && finalRecommendationId == null && runRecord.stepStatuses["validate"] != WorkflowStepStatus.SUCCEEDED ->
                 DecisionLifecycleResult.InsufficientEvidence(request.instrumentId, insufficientReason!!)
+            // Phase 4B, Section 1+8: VALIDATE ran (unlike the branch above) but the composed Trust
+            // Score didn't clear the minimum -- checked before the generic PipelineFailed fallback
+            // below so this gets its own honest, distinct outcome rather than looking like a crash.
+            trustAssessment != null && !trustAssessment!!.meetsMinimum && finalRecommendationId == null ->
+                DecisionLifecycleResult.TrustScoreBelowThreshold(request.instrumentId, trustAssessment!!)
             finalRecommendationId != null && finalRecommendation != null ->
                 DecisionLifecycleResult.Recommended(
                     recommendationId = finalRecommendationId!!,
                     recommendation = finalRecommendation!!,
                     riskAssessments = riskAssessments,
                     confidenceScore = composedScore,
+                    trustAssessment = trustAssessment!!,
                     explanation = explanation.orEmpty(),
                 )
             else -> {
@@ -337,12 +376,46 @@ class DecisionLifecycleRunner @Inject constructor(
             ?: error("ConfidenceModelEntity was just inserted (id=$modelId) but could not be re-read.")
     }
 
+    /** Phase 4B, Section 1+7+8 -- Trust Layer. Same lazily-defined-once convention as [ensureBaselineConfidenceModel], distinct modelKey/type since this is a genuinely different methodology (six-dimension coverage, not evidence-strength average). */
+    private suspend fun ensureBaselineTrustModel(): ConfidenceModelEntity {
+        val key = "jarvis_trust_score_v1"
+        confidenceRepository.getModelByKey(key)?.let { return it }
+        val modelId = confidenceRepository.defineModel(
+            ConfidenceModelEntity(
+                modelKey = key,
+                displayName = "JARVIS Trust Score — v1 (six-dimension equal-weight)",
+                modelType = ConfidenceModelType.WEIGHTED_SUM,
+                description = "First-pass composition: equal-weighted average of six dimension scores " +
+                    "(historical data, indicators, optimization, backtests, learning, paper trading). " +
+                    "See TrustScoreCalculator.assess.",
+            ),
+        )
+        return confidenceRepository.getModel(modelId)
+            ?: error("ConfidenceModelEntity was just inserted (id=$modelId) but could not be re-read.")
+    }
+
+    /** Renders a [TrustScoreCalculator.TrustAssessment]'s per-dimension breakdown into the same `[{"component":...,"weight":...,"score":...}]` shape [ConfidenceScoreEntity.breakdownJson] already documents itself as using. Hand-rolled (no JSON library import here) since the shape is fixed and small -- consistent with this file's existing `parametersJson`-adjacent style elsewhere in this schema. */
+    private fun trustBreakdownJson(assessment: TrustScoreCalculator.TrustAssessment): String {
+        val entries = assessment.dimensions.joinToString(",") { dim ->
+            val escapedDetail = dim.detail.replace("\\", "\\\\").replace("\"", "\\\"")
+            val metadataJson = if (dim.metadata.isEmpty()) {
+                "{}"
+            } else {
+                dim.metadata.entries.joinToString(",", prefix = "{", postfix = "}") { (k, v) -> "\"$k\":${"%.4f".format(v)}" }
+            }
+            "{\"component\":\"${dim.name}\",\"weight\":${"%.4f".format(dim.weight)},\"score\":${"%.4f".format(dim.score)}," +
+                "\"detail\":\"$escapedDetail\",\"metadata\":$metadataJson}"
+        }
+        return "[$entries]"
+    }
+
     private fun renderExplanation(
         recommendation: RecommendationEntity,
         evidence: List<EvidenceRecordEntity>,
         signals: List<SignalEntity>,
         regime: MarketRegimeEntity?,
         confidenceScore: Double?,
+        trustAssessment: TrustScoreCalculator.TrustAssessment,
     ): String {
         val evidenceLine = if (evidence.isEmpty()) {
             "No stored evidence records were found; this recommendation rests on ${signals.size} active signal(s) only."
@@ -351,7 +424,10 @@ class DecisionLifecycleRunner @Inject constructor(
         }
         val regimeLine = regime?.let { "Current regime: ${it.regimeType} (classification confidence ${"%.2f".format(it.confidence)})." }
             ?: "No active market regime was found for this instrument/timeframe."
-        return "Recommendation: ${recommendation.recommendationType} (${recommendation.timeHorizon}). $evidenceLine $regimeLine " +
+        // Phase 4B, Section 1+7+8 -- Trust Layer: the six-dimension chain that gated this recommendation.
+        val trustLine = "Trust Score ${"%.2f".format(trustAssessment.overallScore)}: " +
+            trustAssessment.dimensions.joinToString(", ") { "${it.name} ${"%.2f".format(it.score)}" } + "."
+        return "Recommendation: ${recommendation.recommendationType} (${recommendation.timeHorizon}). $evidenceLine $regimeLine $trustLine " +
             "This is a first-pass, deterministic rendering of the evidence graph — the graph itself, not this sentence, is the authoritative explanation (see EvidenceLinkEntity rows linked to this recommendation)."
     }
 }
