@@ -4,6 +4,8 @@ import com.jarvis.os.app.core.intelligence.selfawareness.ExecutiveReportEngine
 import com.jarvis.os.app.core.intelligence.selfawareness.SelfAwarenessEngine
 import com.jarvis.os.app.testutil.FakeGitHubStatusProvider
 import com.jarvis.os.app.testutil.FakeInstrumentRepository
+import com.jarvis.os.app.testutil.FakeBacktestRepository
+import com.jarvis.os.app.testutil.FakeOptimizationRepository
 import com.jarvis.os.app.testutil.emptyCapabilityInventory
 import com.jarvis.os.app.testutil.fakeTrustScoreCalculator
 import kotlinx.coroutines.test.runTest
@@ -16,7 +18,10 @@ class ExecutiveReportLocalIntentHandlerTest {
 
     private fun handler(): ExecutiveReportLocalIntentHandler {
         val selfAwareness = SelfAwarenessEngine(emptyCapabilityInventory(), FakeGitHubStatusProvider())
-        val engine = ExecutiveReportEngine(selfAwareness, FakeInstrumentRepository(), fakeTrustScoreCalculator())
+        val engine = ExecutiveReportEngine(
+            selfAwareness, FakeInstrumentRepository(), fakeTrustScoreCalculator(),
+            FakeBacktestRepository(), FakeOptimizationRepository(),
+        )
         return ExecutiveReportLocalIntentHandler(engine)
     }
 

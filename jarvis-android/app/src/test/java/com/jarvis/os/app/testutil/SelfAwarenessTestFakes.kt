@@ -101,8 +101,10 @@ internal class FakeOptimizationRepository(private val jobs: List<OptimizationJob
     override suspend fun markJobFailed(jobRowId: Long, errorMessage: String) {}
     override suspend fun markCombinationEvaluated(combinationRowId: Long, backtestRunRowId: Long?, backtestResultRowId: Long?) {}
     override suspend fun markCombinationFailed(combinationRowId: Long, errorMessage: String) {}
+    override suspend fun linkBacktest(jobRowId: Long, backtestRowId: Long) {}
     override suspend fun rankedCombinations(jobRowId: Long) = emptyList<OptimizationCombinationEntity>()
     override suspend fun rankCombinations(jobRowId: Long, rankedRowIdsBestFirst: List<Long>) {}
+    override suspend fun completedCombinations(jobRowId: Long) = emptyList<OptimizationCombinationEntity>()
 }
 
 internal class FakeBacktestRepository(private val backtests: List<BacktestEntity> = emptyList()) : BacktestRepository {

@@ -47,8 +47,10 @@ class EvidenceValidationLocalIntentHandlerTest {
         override suspend fun markJobFailed(jobRowId: Long, errorMessage: String) {}
         override suspend fun markCombinationEvaluated(combinationRowId: Long, backtestRunRowId: Long?, backtestResultRowId: Long?) {}
         override suspend fun markCombinationFailed(combinationRowId: Long, errorMessage: String) {}
+        override suspend fun linkBacktest(jobRowId: Long, backtestRowId: Long) {}
         override suspend fun rankedCombinations(jobRowId: Long): List<OptimizationCombinationEntity> = rankedByJob[jobRowId].orEmpty()
         override suspend fun rankCombinations(jobRowId: Long, rankedRowIdsBestFirst: List<Long>) {}
+        override suspend fun completedCombinations(jobRowId: Long): List<OptimizationCombinationEntity> = emptyList()
     }
 
     private class FakeBacktestRepository(

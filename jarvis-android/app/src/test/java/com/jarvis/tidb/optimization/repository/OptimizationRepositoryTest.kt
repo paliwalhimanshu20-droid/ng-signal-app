@@ -76,6 +76,8 @@ class OptimizationRepositoryTest {
             store.values.filter { it.jobRowId == jobRowId && it.statusValue == "PENDING" }.sortedBy { it.combinationIndex }
         override suspend fun findCompletedRanked(jobRowId: Long): List<OptimizationCombinationEntity> =
             store.values.filter { it.jobRowId == jobRowId && it.statusValue == "COMPLETED" }.sortedBy { it.rank ?: Int.MAX_VALUE }
+        override suspend fun findCompletedByJob(jobRowId: Long): List<OptimizationCombinationEntity> =
+            store.values.filter { it.jobRowId == jobRowId && it.statusValue == "COMPLETED" }.sortedBy { it.combinationIndex }
         override suspend fun markEvaluated(rowId: Long, status: String, backtestRunRowId: Long?, backtestResultRowId: Long?, updatedAt: Long) {
             store[rowId] = store.getValue(rowId).copy(statusValue = status, backtestRunRowId = backtestRunRowId, backtestResultRowId = backtestResultRowId)
         }
