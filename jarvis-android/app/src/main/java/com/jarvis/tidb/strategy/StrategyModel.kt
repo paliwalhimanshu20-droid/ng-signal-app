@@ -95,11 +95,17 @@ sealed class RuleCondition {
     }
 
     data class Above(val alias: String, val threshold: Double) : RuleCondition() {
-        override fun evaluate(context: BarContext): Boolean = (context.valueNow(alias) ?: return false) > threshold
+        override fun evaluate(context: BarContext): Boolean {
+            val value = context.valueNow(alias) ?: return false
+            return value > threshold
+        }
     }
 
     data class Below(val alias: String, val threshold: Double) : RuleCondition() {
-        override fun evaluate(context: BarContext): Boolean = (context.valueNow(alias) ?: return false) < threshold
+        override fun evaluate(context: BarContext): Boolean {
+            val value = context.valueNow(alias) ?: return false
+            return value < threshold
+        }
     }
 
     data class All(val conditions: List<RuleCondition>) : RuleCondition() {
