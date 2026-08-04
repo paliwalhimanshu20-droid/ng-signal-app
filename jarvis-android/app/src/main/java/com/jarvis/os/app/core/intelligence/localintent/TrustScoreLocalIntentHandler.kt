@@ -29,16 +29,16 @@ import javax.inject.Singleton
  * Phrasing per this milestone's explicit Goal 3 requirement: "No Trust Score has been
  * calculated." (not "we didn't establish one"), and a zero-scoring dimension is labeled
  * NOT_IMPLEMENTED only when the underlying engine genuinely doesn't exist in this repository
- * ([NOT_IMPLEMENTED_DIMENSIONS] -- BACKTESTS and PAPER_TRADING, confirmed by the same "no
- * execution-engine class found" search [com.jarvis.os.app.core.intelligence.selfawareness
- * .CapabilityInventory] itself relies on); every other dimension (HISTORICAL_DATA, INDICATORS,
- * OPTIMIZATION, LEARNING) has a real, working engine that has simply produced no data for this
- * instrument yet, which is labeled NO_DATA instead. An earlier version of this handler
- * cross-referenced [com.jarvis.os.app.core.intelligence.selfawareness.CapabilityInventory]'s
- * capability STATUS for this decision, which was wrong: that inventory reports Optimization as
- * MISSING whenever zero jobs have run (a data-state fact), not because the Optimization Engine
- * class is absent (it is not) -- conflating the two would have mislabeled a real, working engine
- * as NOT_IMPLEMENTED. Caught while writing this handler's own test.
+ * ([NOT_IMPLEMENTED_DIMENSIONS] -- PAPER_TRADING only, as of Phase 4B Slice 3; BACKTESTS moved
+ * out of this set once the Backtest Execution Engine was built, see that constant's own doc);
+ * every other dimension (HISTORICAL_DATA, INDICATORS, OPTIMIZATION, BACKTESTS, LEARNING) has a
+ * real, working engine that has simply produced no data for this instrument yet, which is
+ * labeled NO_DATA instead. An earlier version of this handler cross-referenced
+ * [com.jarvis.os.app.core.intelligence.selfawareness.CapabilityInventory]'s capability STATUS for
+ * this decision, which was wrong: that inventory reports Optimization as MISSING whenever zero
+ * jobs have run (a data-state fact), not because the Optimization Engine class is absent (it is
+ * not) -- conflating the two would have mislabeled a real, working engine as NOT_IMPLEMENTED.
+ * Caught while writing this handler's own test.
  */
 @Singleton
 class TrustScoreLocalIntentHandler @Inject constructor(
@@ -89,7 +89,12 @@ class TrustScoreLocalIntentHandler @Inject constructor(
         private const val DEFAULT_SYMBOL = "NATURALGAS"
         private const val DEFAULT_TIMEFRAME = "1D"
 
-        /** The only two [TrustScoreCalculator] dimensions backed by an engine that structurally does not exist in this repository yet -- see this class's own docstring for why every other dimension is NO_DATA, not NOT_IMPLEMENTED, when it scores zero. */
-        private val NOT_IMPLEMENTED_DIMENSIONS = setOf(TrustScoreCalculator.BACKTESTS, TrustScoreCalculator.PAPER_TRADING)
+        /**
+         * Phase 4B Slice 3 built the Backtest Execution Engine -- BACKTESTS is no longer
+         * structurally absent, only PAPER_TRADING still is. A zero BACKTESTS score is now
+         * NO_DATA (a real engine that simply hasn't been run for this instrument), matching
+         * [TrustScoreCalculator.backtestDimension]'s own updated wording.
+         */
+        private val NOT_IMPLEMENTED_DIMENSIONS = setOf(TrustScoreCalculator.PAPER_TRADING)
     }
 }

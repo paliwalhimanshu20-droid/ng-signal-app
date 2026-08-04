@@ -64,6 +64,10 @@ interface OptimizationCombinationDao {
     @Query("SELECT * FROM optimization_combinations WHERE jobRowId = :jobRowId AND status = 'COMPLETED' ORDER BY rank ASC")
     suspend fun findCompletedRanked(jobRowId: Long): List<OptimizationCombinationEntity>
 
+    /** Phase 4B Slice 3, Step 4 addition: every COMPLETED combination regardless of rank, in deterministic [OptimizationCombinationEntity.combinationIndex] order -- the raw candidate list a ranking engine consumes, distinct from [findCompletedRanked]'s "already ranked" scope (see [com.jarvis.tidb.optimization.repository.OptimizationRepository.completedCombinations]'s own doc). */
+    @Query("SELECT * FROM optimization_combinations WHERE jobRowId = :jobRowId AND status = 'COMPLETED' ORDER BY combinationIndex ASC")
+    suspend fun findCompletedByJob(jobRowId: Long): List<OptimizationCombinationEntity>
+
     @Query("UPDATE optimization_combinations SET status = :status, backtestRunRowId = :backtestRunRowId, backtestResultRowId = :backtestResultRowId, updatedAt = :updatedAt WHERE rowId = :rowId")
     suspend fun markEvaluated(rowId: Long, status: String, backtestRunRowId: Long?, backtestResultRowId: Long?, updatedAt: Long = System.currentTimeMillis())
 

@@ -21,13 +21,13 @@ import javax.inject.Singleton
  * parameter combination" means the full plan exists in the database before anything is evaluated
  * against it, not that combinations get written as a side effect of evaluation later.
  *
- * Evaluating a combination (actually running a backtest for it) is intentionally NOT this
- * interface's job -- that needs Module 5's backtest simulator, which does not exist yet (see the
- * Phase 3 delivery notes). [markCombinationEvaluated] is this repository's side of that future
- * handoff: whatever runs a backtest for a combination calls this with the resulting
- * `backtestRunRowId`/`backtestResultRowId`, and this repository's job is only to record that
- * honestly and keep progress/checkpoint state correct -- not to fabricate what evaluation would
- * have produced.
+ * Evaluating a combination (actually running a backtest for it) was, as of Phase 3B, intentionally
+ * NOT this interface's job -- that needed a backtest simulator, which didn't exist yet. Phase 4B
+ * Slice 3 built [com.jarvis.os.app.core.trading.backtest.BacktestExecutionEngine] and
+ * [com.jarvis.os.app.core.trading.optimization.OptimizationExecutionEngine] to be that caller;
+ * this interface's own persistence contract (create the full plan up front, record evaluation
+ * honestly, never fabricate) did not need to change for that -- [markCombinationEvaluated] is
+ * still this repository's side of that handoff, called by a real evaluator now instead of no one.
  */
 interface OptimizationRepository {
 
@@ -57,6 +57,15 @@ interface OptimizationRepository {
     suspend fun markJobCancelled(jobRowId: Long)
     suspend fun markJobFailed(jobRowId: Long, errorMessage: String)
 
+    /**
+     * Phase 4B Slice 3, Step 3 addition: sets [OptimizationJobEntity.backtestRowId] once a real
+     * `BacktestEntity` exists to group this job's combinations under -- the write side of the
+     * reuse point that entity's own field doc already described but this interface had no writer
+     * for until [com.jarvis.os.app.core.trading.optimization.OptimizationExecutionEngine] needed
+     * one. A no-op if [jobRowId] doesn't exist, matching this interface's other mark* methods.
+     */
+    suspend fun linkBacktest(jobRowId: Long, backtestRowId: Long)
+
     /** Marks one combination as actually evaluated (see this interface's own class docstring), and rolls the job's completedCombinations/checkpointCombinationIndex forward -- also marks the job COMPLETED automatically once every combination is done. */
     suspend fun markCombinationEvaluated(combinationRowId: Long, backtestRunRowId: Long?, backtestResultRowId: Long?)
 
@@ -67,6 +76,16 @@ interface OptimizationRepository {
 
     /** "Persist rankings": [rankedRowIdsBestFirst] is the caller's own ranking decision (e.g. by Sharpe ratio, once real results exist) -- this repository only persists the ordering it's given, rank 1 = best, matching [OptimizationCombinationEntity.rank]'s own doc. */
     suspend fun rankCombinations(jobRowId: Long, rankedRowIdsBestFirst: List<Long>)
+
+    /**
+     * Phase 4B Slice 3, Step 4 addition: every COMPLETED combination for this job, in
+     * [OptimizationCombinationEntity.combinationIndex] order, regardless of whether it has been
+     * ranked yet -- the raw candidate list a ranking engine needs. Deliberately distinct from
+     * [rankedCombinations], which is scoped to "already-ranked evidence" for Evidence Validation
+     * consumers, not "not-yet-ranked candidates to rank" -- reusing that method here would
+     * conflate two different callers' needs rather than serve either honestly.
+     */
+    suspend fun completedCombinations(jobRowId: Long): List<OptimizationCombinationEntity>
 }
 
 @Singleton
@@ -149,6 +168,11 @@ class OptimizationRepositoryImpl @Inject constructor(
         jobDao.update(job.copy(errorMessage = errorMessage))
     }
 
+    override suspend fun linkBacktest(jobRowId: Long, backtestRowId: Long) {
+        val job = jobDao.findByRowId(jobRowId) ?: return
+        jobDao.update(job.copy(backtestRowId = backtestRowId))
+    }
+
     override suspend fun markCombinationEvaluated(combinationRowId: Long, backtestRunRowId: Long?, backtestResultRowId: Long?) {
         combinationDao.markEvaluated(combinationRowId, OptimizationCombinationStatus.COMPLETED.name, backtestRunRowId, backtestResultRowId)
         advanceJobProgress(combinationRowId)
@@ -167,6 +191,9 @@ class OptimizationRepositoryImpl @Inject constructor(
             combinationDao.setRank(rowId, index + 1)
         }
     }
+
+    override suspend fun completedCombinations(jobRowId: Long): List<OptimizationCombinationEntity> =
+        combinationDao.findCompletedByJob(jobRowId)
 
     /** Shared by markCombinationEvaluated/markCombinationFailed: rolls the parent job's completedCombinations/checkpointCombinationIndex forward, and marks the job COMPLETED once every combination is out of PENDING/RUNNING. */
     private suspend fun advanceJobProgress(combinationRowId: Long) {

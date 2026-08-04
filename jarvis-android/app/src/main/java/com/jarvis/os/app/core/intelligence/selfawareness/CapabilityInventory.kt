@@ -44,11 +44,12 @@ import javax.inject.Singleton
  * [com.jarvis.os.app.core.intelligence.localintent.SystemStatusLocalIntentHandler] and
  * [com.jarvis.os.app.core.trading.reasoning.TrustScoreCalculator] already trust.
  *
- * A capability whose engine class genuinely does not exist yet in this compiled module (Backtest
- * Execution Engine, autonomous Paper Trading loop) is reported [CapabilityStatus.MISSING] even if
- * rows happen to exist in its table from manual/external entry -- rows in a table are not the
- * same claim as "an engine automatically produces them," and Section 5 (Owner Transparency)
- * requires the honest, stronger claim never be implied by the weaker one.
+ * A capability whose engine class genuinely does not exist yet in this compiled module
+ * (autonomous Paper Trading loop, as of Phase 4B Slice 3 -- Backtest/Optimization Execution
+ * Engines now exist) is reported [CapabilityStatus.MISSING] even if rows happen to exist in its
+ * table from manual/external entry -- rows in a table are not the same claim as "an engine
+ * automatically produces them," and Section 5 (Owner Transparency) requires the honest, stronger
+ * claim never be implied by the weaker one.
  */
 @Singleton
 class CapabilityInventory @Inject constructor(
@@ -138,20 +139,37 @@ class CapabilityInventory @Inject constructor(
         )
     }
 
+    /**
+     * Phase 4B Slice 3 built [com.jarvis.os.app.core.trading.backtest.BacktestExecutionEngine] --
+     * this row's status is now computed the same way [optimizationEngine]'s always was (real
+     * result-bearing rows vs. total rows), not a hardcoded [CapabilityStatus.MISSING]. A backtest
+     * row with no result still means the engine hasn't been *run* for it yet -- nothing here
+     * claims completion nothing produced.
+     */
     private suspend fun backtestExecutionEngine(): SystemCapabilityRecord {
         val backtests = backtestRepository.observeAllBacktests().first()
         val withResults = backtests.count { backtestRepository.observeResultsByBacktest(it.rowId).first().isNotEmpty() }
+        val status = when {
+            backtests.isEmpty() -> CapabilityStatus.MISSING
+            withResults == 0 -> CapabilityStatus.PARTIAL
+            else -> CapabilityStatus.COMPLETE
+        }
+        val percent = if (backtests.isEmpty()) 0 else ((withResults.toDouble() / backtests.size) * 100).toInt().coerceAtLeast(15)
         return SystemCapabilityRecord(
             name = "Backtest Execution Engine",
             description = "Runs a strategy against stored historical candles and produces a scored result.",
-            status = CapabilityStatus.MISSING,
+            status = status,
             dependency = "Historical Market Data Platform, Optimization Engine",
-            completionPercent = 0,
-            nextMilestone = "Build the execution engine that replays a strategy against historical candles (flagged as missing since Phase 3C).",
-            risk = "TrustScoreCalculator's BACKTESTS dimension stays at 0.0 for every instrument until this exists -- directly blocks live trading.",
-            verificationState = "No BacktestEngine/execution class found in this repository. ${backtests.size} backtest record(s) exist " +
-                "in the table ($withResults with a stored result) -- table rows are not evidence of an automated engine; see this " +
-                "class's docstring for why that distinction is reported honestly.",
+            completionPercent = percent,
+            nextMilestone = if (status != CapabilityStatus.COMPLETE) {
+                "Run the Backtest Execution Engine (or an Optimization job through it) against at least one tracked instrument."
+            } else null,
+            risk = if (status != CapabilityStatus.COMPLETE) {
+                "TrustScoreCalculator's BACKTESTS dimension stays at 0.0 for any instrument with no result-bearing " +
+                    "run yet -- the engine exists (Phase 4B Slice 3) but nothing schedules it automatically."
+            } else null,
+            verificationState = "BacktestExecutionEngine exists (Phase 4B Slice 3). " +
+                "BacktestRepository.observeAllBacktests() returned ${backtests.size} backtest(s), $withResults with a stored result.",
         )
     }
 

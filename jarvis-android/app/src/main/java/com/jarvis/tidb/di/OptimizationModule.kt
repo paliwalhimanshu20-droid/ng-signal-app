@@ -11,6 +11,7 @@ import com.jarvis.tidb.optimization.searchspace.CciSearchSpaceProvider
 import com.jarvis.tidb.optimization.searchspace.CmfSearchSpaceProvider
 import com.jarvis.tidb.optimization.searchspace.DmiSearchSpaceProvider
 import com.jarvis.tidb.optimization.searchspace.DonchianChannelSearchSpaceProvider
+import com.jarvis.tidb.optimization.searchspace.EmaCrossoverSearchSpaceProvider
 import com.jarvis.tidb.optimization.searchspace.EmaSearchSpaceProvider
 import com.jarvis.tidb.optimization.searchspace.IchimokuSearchSpaceProvider
 import com.jarvis.tidb.optimization.searchspace.KeltnerChannelSearchSpaceProvider
@@ -150,6 +151,20 @@ abstract class OptimizationModule {
     @Binds
     @IntoSet
     abstract fun bindMfiSearchSpaceProvider(impl: MfiSearchSpaceProvider): SearchSpaceProvider
+
+    /**
+     * Phase 4B Slice 3, Step 3: [EmaCrossoverSearchSpaceProvider] is not an indicator -- it's
+     * this milestone's validation strategy's own search space -- but it registers into this same
+     * [com.jarvis.tidb.optimization.searchspace.SearchSpaceRegistry] via the identical
+     * `@Binds @IntoSet` mechanism, exactly per [com.jarvis.tidb.optimization.searchspace
+     * .SearchSpace]'s own class doc ("Module 4's future non-indicator components ... can share
+     * this same registry without colliding on names"). Kept in this module rather than a new one
+     * since it binds the same [com.jarvis.tidb.optimization.searchspace.SearchSpaceProvider]
+     * type as every other binding here.
+     */
+    @Binds
+    @IntoSet
+    abstract fun bindEmaCrossoverSearchSpaceProvider(impl: EmaCrossoverSearchSpaceProvider): SearchSpaceProvider
 
     @Binds
     @IntoSet

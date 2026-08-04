@@ -47,12 +47,17 @@ import javax.inject.Singleton
  *    accumulates.
  *
  * HONEST DEFAULT STATE, stated plainly rather than left implicit (matching
- * [EvidenceValidationLocalIntentHandler]'s own framing): as of this milestone, the backtest
- * execution engine and any scheduled optimization/paper-trading loop do not exist yet (see
- * Repository Reality Report). Most instruments will therefore score 0.0 on OPTIMIZATION,
- * BACKTESTS, and PAPER_TRADING today, and [assess] will correctly, honestly gate most
- * recommendations below [MINIMUM_TRUST_SCORE] — that is this milestone's fail-closed contract
- * working as designed (Rule 3, No Hallucinations), not a bug to work around by lowering the bar.
+ * [EvidenceValidationLocalIntentHandler]'s own framing): Phase 4B Slice 3 built the Backtest
+ * Execution Engine and Optimization Execution Engine
+ * ([com.jarvis.os.app.core.trading.backtest.BacktestExecutionEngine],
+ * [com.jarvis.os.app.core.trading.optimization.OptimizationExecutionEngine]), so OPTIMIZATION and
+ * BACKTESTS now score real, non-zero values once a job/backtest has actually been *run* for an
+ * instrument — but nothing schedules either engine automatically yet, and the paper-trading loop
+ * still does not exist. An instrument with no job or backtest run against it yet still honestly
+ * scores 0.0 on those dimensions — that is not this section being stale, it is the fail-closed
+ * contract correctly reporting "no evidence exists" until someone (or a future scheduler) actually
+ * runs one. [assess] will therefore still gate most never-yet-evaluated instruments below
+ * [MINIMUM_TRUST_SCORE] — working as designed (Rule 3, No Hallucinations), not a bug.
  *
  * EXTENSIBILITY NOTE (docs/architecture/JARVIS/JARVIS-005-Trust-Score-v2-Professional-Trading-
  * Trust-Framework.md): this is Trust Score v1. That spec records eight professional-grade
@@ -209,8 +214,9 @@ class TrustScoreCalculator @Inject constructor(
         }
         return TrustDimension(
             BACKTESTS, 0.0,
-            "No backtest result exists for this instrument yet — the backtest execution engine that " +
-                "evaluates strategies against historical data isn't built yet (flagged since Phase 3C).",
+            "No backtest result exists for this instrument yet. The Backtest Execution Engine " +
+                "(Phase 4B Slice 3) exists and can produce one — nothing has scheduled a run for this " +
+                "instrument yet, which is why this dimension is still honestly 0.0 rather than fabricated.",
         )
     }
 
@@ -294,10 +300,11 @@ class TrustScoreCalculator @Inject constructor(
          * clearing this requires real evidence in more than two of them on average. Documented
          * as tunable, not a claimed methodology, same honesty framing as every other first-pass
          * scoring constant in this codebase (see [DecisionLifecycleRunner.composeConfidence]).
-         * Given today's real system state (no backtest execution engine, no scheduled
-         * optimization/paper-trading loop — see this class's own doc), most instruments will
-         * NOT clear this yet. That is the correct, honest, fail-closed behavior at this stage
-         * of the project.
+         * Given today's real system state (Backtest/Optimization Execution Engines exist as of
+         * Phase 4B Slice 3, but nothing schedules them automatically, and no paper-trading loop
+         * exists — see this class's own doc), most never-yet-evaluated instruments will still NOT
+         * clear this. That is the correct, honest, fail-closed behavior at this stage of the
+         * project, not a reason to lower the bar.
          */
         const val MINIMUM_TRUST_SCORE = 0.35
     }

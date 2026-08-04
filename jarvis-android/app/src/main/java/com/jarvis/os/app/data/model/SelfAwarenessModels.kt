@@ -51,4 +51,13 @@ data class ExecutiveReport(
     val nextMilestone: String,
     val repositoryHealth: String,
     val trustLayerSummary: String,
+    /**
+     * Phase 4B Slice 3, Step 6 addition: "Completed Backtests, Optimization Jobs, Winning
+     * Strategy, Best Metrics, Evidence Summary." Deliberately a single rendered string, not five
+     * new typed fields -- see [ExecutiveReportEngine.backtestOptimizationSummary]'s own doc for
+     * why one composed summary, matching every other field in this data class, is the right shape
+     * here rather than a parallel structured model this report's [ExecutiveReportEngine.render]
+     * would need bespoke handling for.
+     */
+    val backtestOptimizationSummary: String,
 )

@@ -5,8 +5,12 @@ import com.jarvis.os.app.core.trading.reasoning.TrustScoreCalculator
 import com.jarvis.os.app.data.model.CapabilityStatus
 import com.jarvis.os.app.data.model.ExecutiveReport
 import com.jarvis.os.app.data.model.SystemCapabilityRecord
+import com.jarvis.tidb.analytics.entity.BacktestResultEntity
+import com.jarvis.tidb.analytics.repository.BacktestRepository
 import com.jarvis.tidb.core.repository.InstrumentRepository
 import com.jarvis.tidb.database.TradingIntelligenceDatabase
+import com.jarvis.tidb.optimization.entity.OptimizationJobStatus
+import com.jarvis.tidb.optimization.repository.OptimizationRepository
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 import javax.inject.Inject
@@ -41,6 +45,8 @@ class ExecutiveReportEngine @Inject constructor(
     private val selfAwareness: SelfAwarenessEngine,
     private val instruments: InstrumentRepository,
     private val trustScoreCalculator: TrustScoreCalculator,
+    private val backtestRepository: BacktestRepository,
+    private val optimizationRepository: OptimizationRepository,
 ) {
     suspend fun generate(): ExecutiveReport {
         val capabilities = selfAwareness.capabilities()
@@ -55,8 +61,8 @@ class ExecutiveReportEngine @Inject constructor(
 
         return ExecutiveReport(
             generatedAtEpochMillis = Instant.now().toEpochMilli(),
-            currentBuild = "JARVIS OS ${BuildConfig.VERSION_NAME} -- Phase 4B Slice 2",
-            currentMilestone = "Self-Awareness Engine + Executive Report Engine (this slice)",
+            currentBuild = "JARVIS OS ${BuildConfig.VERSION_NAME} -- Phase 4B Slice 3",
+            currentMilestone = "Backtest & Optimization Intelligence Engine (this slice)",
             completedWork = complete.map { it.name },
             partialWork = partial.map { "${it.name} (${it.completionPercent}%)" },
             missingWork = missing.map { it.name },
@@ -65,6 +71,7 @@ class ExecutiveReportEngine @Inject constructor(
             nextMilestone = nextMilestone,
             repositoryHealth = selfAwareness.repositoryStatus(),
             trustLayerSummary = trustLayerSummary(capabilities),
+            backtestOptimizationSummary = backtestOptimizationSummary(),
         )
     }
 
@@ -91,6 +98,61 @@ class ExecutiveReportEngine @Inject constructor(
     }
 
     /**
+     * Phase 4B Slice 3, Step 6: "Executive Reports should now include: Completed Backtests,
+     * Optimization Jobs, Winning Strategy, Best Metrics, Evidence Summary, Updated Trust Score."
+     * Trust Score is already covered by [trustLayerSummary]; every other clause here reads the
+     * same [BacktestRepository]/[OptimizationRepository] state
+     * [CapabilityInventory]'s own `optimizationEngine()`/`backtestExecutionEngine()` rows already
+     * trust -- composed into one string, matching this class's existing single-string
+     * [trustLayerSummary]/[SelfAwarenessEngine.repositoryStatus] shape, rather than five new
+     * typed fields [render] would need bespoke handling for.
+     *
+     * "Winning Strategy"/"Best Metrics" come from the single best-ranked combination (rank 1, by
+     * [com.jarvis.os.app.core.trading.optimization.CombinationRankingEngine]'s own definition)
+     * found across every job that has at least one ranked combination, compared by Sharpe ratio --
+     * never a generic aggregate across unranked or unrelated runs that could misrepresent which
+     * specific run actually produced the number.
+     */
+    private suspend fun backtestOptimizationSummary(): String {
+        val backtests = backtestRepository.observeAllBacktests().first()
+        val completedBacktests = backtests.count { backtestRepository.observeResultsByBacktest(it.rowId).first().isNotEmpty() }
+
+        val jobs = optimizationRepository.observeAllJobs().first()
+        val completedJobs = jobs.count { it.statusValue == OptimizationJobStatus.COMPLETED.name }
+
+        val best = bestRankedRun(jobs)
+        val winningStrategyLine = if (best != null) {
+            "Winning strategy: ${best.strategyId} -- Sharpe ${"%.2f".format(best.result.sharpeRatio ?: 0.0)}, " +
+                "win rate ${"%.0f".format(best.result.winRate * 100)}%, net profit ${"%.2f".format(best.result.netProfit)}, " +
+                "max drawdown ${"%.2f".format(best.result.maxDrawdownPercent)}%."
+        } else {
+            "Winning strategy: none yet -- no optimization job has both completed and been ranked " +
+                "(see CombinationRankingEngine; ranking does not run automatically)."
+        }
+
+        return "Completed backtests: $completedBacktests of ${backtests.size} total. " +
+            "Optimization jobs: $completedJobs of ${jobs.size} completed. $winningStrategyLine"
+    }
+
+    private data class BestRankedRun(val strategyId: String, val result: BacktestResultEntity)
+
+    private suspend fun bestRankedRun(jobs: List<com.jarvis.tidb.optimization.entity.OptimizationJobEntity>): BestRankedRun? {
+        var best: BestRankedRun? = null
+        for (job in jobs) {
+            val ranked = optimizationRepository.rankedCombinations(job.rowId)
+            val top = ranked.firstOrNull { it.rank == 1 } ?: continue
+            val runRowId = top.backtestRunRowId ?: continue
+            val result = backtestRepository.getResultForRun(runRowId) ?: continue
+            val candidateSharpe = result.sharpeRatio ?: Double.NEGATIVE_INFINITY
+            val currentBestSharpe = best?.result?.sharpeRatio ?: Double.NEGATIVE_INFINITY
+            if (best == null || candidateSharpe > currentBestSharpe) {
+                best = BestRankedRun(job.componentId, result)
+            }
+        }
+        return best
+    }
+
+    /**
      * Section 3: "Recommendations." One line per non-COMPLETE capability that has a real
      * [com.jarvis.os.app.data.model.SystemCapabilityRecord.nextMilestone] recorded -- never a
      * generic "keep working on it," always the specific next concrete step that capability's own
@@ -110,6 +172,7 @@ class ExecutiveReportEngine @Inject constructor(
         appendLine()
         appendLine("Repository Health: ${report.repositoryHealth}")
         appendLine("Trust Layer: ${report.trustLayerSummary}")
+        appendLine("Backtest & Optimization: ${report.backtestOptimizationSummary}")
         appendLine()
         appendLine("Completed (${report.completedWork.size}): ${report.completedWork.joinToString(", ").ifEmpty { "none" }}")
         appendLine("Partial (${report.partialWork.size}): ${report.partialWork.joinToString(", ").ifEmpty { "none" }}")

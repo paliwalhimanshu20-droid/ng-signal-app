@@ -87,6 +87,11 @@ enum class LocalServiceDomain {
     TRUST_SCORE,
     SIGNALS,
     ANALYTICS,
+    // Phase 4B Slice 3 -- manual trigger for the Backtest Execution Engine. Placed alongside
+    // TIDB/SIGNALS/ANALYTICS/TRUST_SCORE (same "specific subsystem, real repository data, real
+    // side effect" tier) and well before SELF_AWARENESS/EXECUTIVE_REPORT, matching this enum's
+    // own established reasoning for that same ordering rule elsewhere.
+    BACKTEST,
     MISSION_CONTROL,
     CONNECTED_SYSTEMS,
     DIAGNOSTICS,

@@ -1,6 +1,7 @@
 package com.jarvis.os.app.di
 
 import com.jarvis.os.app.core.intelligence.localintent.AnalyticsLocalIntentHandler
+import com.jarvis.os.app.core.intelligence.localintent.BacktestLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.ConnectedSystemsLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.ConversationLocalIntentHandler
 import com.jarvis.os.app.core.intelligence.localintent.DatasetStatusLocalIntentHandler
@@ -53,6 +54,11 @@ abstract class LocalIntentHandlerModule {
     @Binds
     @IntoSet
     abstract fun bindAnalyticsLocalIntentHandler(impl: AnalyticsLocalIntentHandler): LocalIntentHandler
+
+    /** Phase 4B Slice 3 -- "Manual trigger for first validation": see [BacktestLocalIntentHandler]'s own class doc. */
+    @Binds
+    @IntoSet
+    abstract fun bindBacktestLocalIntentHandler(impl: BacktestLocalIntentHandler): LocalIntentHandler
 
     @Binds
     @IntoSet
