@@ -107,7 +107,10 @@ internal class FakeOptimizationRepository(private val jobs: List<OptimizationJob
     override suspend fun completedCombinations(jobRowId: Long) = emptyList<OptimizationCombinationEntity>()
 }
 
-internal class FakeBacktestRepository(private val backtests: List<BacktestEntity> = emptyList()) : BacktestRepository {
+internal class FakeBacktestRepository(
+    private val backtests: List<BacktestEntity> = emptyList(),
+    private val resultsByBacktest: Map<Long, List<BacktestResultEntity>> = emptyMap(),
+) : BacktestRepository {
     override suspend fun createBacktest(backtest: BacktestEntity) = 1L
     override suspend fun updateBacktest(backtest: BacktestEntity) {}
     override suspend fun getBacktest(rowId: Long) = backtests.firstOrNull { it.rowId == rowId }
@@ -124,7 +127,8 @@ internal class FakeBacktestRepository(private val backtests: List<BacktestEntity
     override fun observeTradesByRun(runRowId: Long): Flow<List<BacktestTradeEntity>> = flowOf(emptyList())
     override suspend fun recordResult(result: BacktestResultEntity) = 1L
     override suspend fun getResultForRun(runRowId: Long): BacktestResultEntity? = null
-    override fun observeResultsByBacktest(backtestRowId: Long): Flow<List<BacktestResultEntity>> = flowOf(emptyList())
+    override fun observeResultsByBacktest(backtestRowId: Long): Flow<List<BacktestResultEntity>> =
+        flowOf(resultsByBacktest[backtestRowId].orEmpty())
 }
 
 /** Checked against the FULL current [LearningRepository] interface (18 members) as of this repair -- see this file's class docstring. */
@@ -269,6 +273,7 @@ fun capabilityInventory(
     instruments: List<InstrumentEntity> = emptyList(),
     jobs: List<OptimizationJobEntity> = emptyList(),
     backtests: List<BacktestEntity> = emptyList(),
+    backtestResultsByBacktest: Map<Long, List<BacktestResultEntity>> = emptyMap(),
     observations: List<LearningObservationEntity> = emptyList(),
     portfolios: List<PortfolioEntity> = emptyList(),
     positions: Map<Long, List<PortfolioPositionEntity>> = emptyMap(),
@@ -276,7 +281,7 @@ fun capabilityInventory(
 ): CapabilityInventory = CapabilityInventory(
     FakeInstrumentRepository(instruments),
     FakeOptimizationRepository(jobs),
-    FakeBacktestRepository(backtests),
+    FakeBacktestRepository(backtests, backtestResultsByBacktest),
     FakeLearningRepository(observations),
     FakePortfolioRepository(portfolios, positions),
     healthMonitor(),

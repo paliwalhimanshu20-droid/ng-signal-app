@@ -32,17 +32,18 @@ class TrustScoreLocalIntentHandlerTest {
     }
 
     @Test
-    fun `an empty repository labels only the structurally-missing engines NOT_IMPLEMENTED`() = runTest {
+    fun `an empty repository labels only the structurally-missing engine NOT_IMPLEMENTED`() = runTest {
         val handler = TrustScoreLocalIntentHandler(FakeInstrumentRepository(listOf(naturalGas)), fakeTrustScoreCalculator())
 
         val text = handler.tryHandle("What is your current trust score?")!!.response
 
-        // Backtests and Paper Trading: no execution-engine class exists at all -> NOT_IMPLEMENTED.
-        assertTrue(text.contains("BACKTESTS: NOT_IMPLEMENTED"))
+        // Paper Trading: no execution-engine class exists at all -> NOT_IMPLEMENTED.
         assertTrue(text.contains("PAPER_TRADING: NOT_IMPLEMENTED"))
-        // Optimization: the engine class is real and works, it has simply run zero jobs -- must
-        // be NO_DATA, never NOT_IMPLEMENTED (regression guard for the bug caught while writing
-        // this test -- see TrustScoreLocalIntentHandler's own class docstring).
+        // Backtests and Optimization: both engine classes are real and work (Phase 4B Slice 3),
+        // they have simply run zero jobs/backtests -- must be NO_DATA, never NOT_IMPLEMENTED
+        // (regression guard for the bug caught while writing this test -- see
+        // TrustScoreLocalIntentHandler's own class docstring).
+        assertTrue(text.contains("BACKTESTS: NO_DATA"))
         assertTrue(text.contains("OPTIMIZATION: NO_DATA"))
         assertTrue(text.contains("HISTORICAL_DATA: NO_DATA"))
         assertTrue(text.contains("LEARNING: NO_DATA"))

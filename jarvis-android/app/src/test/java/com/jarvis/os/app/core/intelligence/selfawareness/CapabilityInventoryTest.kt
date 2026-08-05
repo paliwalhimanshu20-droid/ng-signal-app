@@ -35,14 +35,48 @@ class CapabilityInventoryTest {
     )
 
     @Test
-    fun `backtest engine is reported MISSING even when rows exist, since no execution engine class exists`() = runTest {
-        val backtest = com.jarvis.tidb.analytics.entity.BacktestEntity(rowId = 1L, uuid = "u1", name = "manual", strategyId = "s1", periodStart = 0L, periodEnd = 100L, instrumentIdsCsv = "1")
-        val caps = capabilityInventory(backtests = listOf(backtest)).snapshot()
+    fun `backtest engine is reported MISSING when no backtest exists at all`() = runTest {
+        val caps = capabilityInventory().snapshot()
         val backtestCap = caps.first { it.name == "Backtest Execution Engine" }
 
         assertEquals(CapabilityStatus.MISSING, backtestCap.status)
         assertEquals(0, backtestCap.completionPercent)
-        assertTrue(backtestCap.verificationState.contains("1 backtest record"))
+    }
+
+    /**
+     * Phase 4B Slice 3 built the real Backtest Execution Engine -- a backtest row with no result
+     * yet means the engine hasn't been *run* for it (PARTIAL, real but idle), never MISSING
+     * (which would falsely claim the engine class itself doesn't exist) and never COMPLETE
+     * (which would falsely claim it produced something it hasn't). Regression guard for the bug
+     * this test previously encoded: it used to assert MISSING here, back when
+     * [com.jarvis.os.app.core.intelligence.selfawareness.CapabilityInventory
+     * .backtestExecutionEngine] hardcoded that status regardless of real data.
+     */
+    @Test
+    fun `backtest engine is reported PARTIAL when a backtest exists with no result yet`() = runTest {
+        val backtest = com.jarvis.tidb.analytics.entity.BacktestEntity(rowId = 1L, uuid = "u1", name = "manual", strategyId = "s1", periodStart = 0L, periodEnd = 100L, instrumentIdsCsv = "1")
+        val caps = capabilityInventory(backtests = listOf(backtest)).snapshot()
+        val backtestCap = caps.first { it.name == "Backtest Execution Engine" }
+
+        assertEquals(CapabilityStatus.PARTIAL, backtestCap.status)
+        assertTrue(backtestCap.completionPercent > 0)
+        assertTrue(backtestCap.verificationState.contains("1 backtest(s)"))
+        assertTrue(backtestCap.verificationState.contains("0 with a stored result"))
+    }
+
+    @Test
+    fun `backtest engine is reported COMPLETE once every backtest has a stored result`() = runTest {
+        val backtest = com.jarvis.tidb.analytics.entity.BacktestEntity(rowId = 1L, uuid = "u1", name = "manual", strategyId = "s1", periodStart = 0L, periodEnd = 100L, instrumentIdsCsv = "1")
+        val result = com.jarvis.tidb.analytics.entity.BacktestResultEntity(
+            rowId = 1L, runRowId = 1L, totalTrades = 3, winningTrades = 2, losingTrades = 1,
+            netProfit = 500.0, winRate = 0.66, maxDrawdown = 50.0, maxDrawdownPercent = 5.0,
+            startingCapital = 100000.0, endingCapital = 100500.0,
+        )
+        val caps = capabilityInventory(backtests = listOf(backtest), backtestResultsByBacktest = mapOf(1L to listOf(result))).snapshot()
+        val backtestCap = caps.first { it.name == "Backtest Execution Engine" }
+
+        assertEquals(CapabilityStatus.COMPLETE, backtestCap.status)
+        assertTrue(backtestCap.verificationState.contains("1 with a stored result"))
     }
 
     @Test
