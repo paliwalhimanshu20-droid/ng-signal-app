@@ -1,19 +1,19 @@
 {
-  "generated_at": "2026-09-08T06:59:57Z",
-  "execution_seconds": 4.627,
+  "generated_at": "2026-09-09T07:09:00Z",
+  "execution_seconds": 4.724,
   "schema_version": 4,
   "sync": {
-    "total_source_records": 118705,
-    "new": 379,
-    "updated": 104,
-    "unchanged": 118222,
-    "deactivated": 32708,
-    "download_started_at": "2026-09-08T06:59:52Z"
+    "total_source_records": 119270,
+    "new": 665,
+    "updated": 100,
+    "unchanged": 118505,
+    "deactivated": 32808,
+    "download_started_at": "2026-09-09T07:08:55Z"
   },
-  "row_count_before": 151034,
-  "row_count_after": 151413,
+  "row_count_before": 151413,
+  "row_count_after": 152078,
   "validation": {
-    "total_rows": 151413,
+    "total_rows": 152078,
     "rules_run": 12,
     "info_count": 0,
     "warning_count": 26,
